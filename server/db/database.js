@@ -1,6 +1,18 @@
-﻿require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }); // no-op se .env não existir (produção usa env vars do serviço de hospedagem)
+﻿// Só carrega o .env local se o arquivo realmente existir (evita qualquer interferência em produção,
+// onde a variável DATABASE_URL já vem configurada pelo serviço de hospedagem, ex: Render).
+const fs = require('fs');
+const path = require('path');
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  require('dotenv').config({ path: envPath });
+}
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+
+// Diagnóstico seguro: mostra só o início da connection string (sem senha) para conferir
+// se a variável de ambiente está chegando corretamente no processo.
+const urlDiag = process.env.DATABASE_URL || '(vazio)';
+console.log('[DIAG] DATABASE_URL length:', urlDiag.length, '| início:', urlDiag.slice(0, 15));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
