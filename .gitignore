@@ -1,0 +1,23 @@
+node_modules/
+server/node_modules/
+client/node_modules/
+
+# builds
+client/dist/
+
+# dados locais / segredos
+server/.env
+data/*
+!data/comprovantes/
+data/comprovantes/*
+!data/comprovantes/.gitkeep
+backups/*
+!backups/.gitkeep
+
+# logs
+npm-debug.log*
+*.log
+
+# editor
+.vscode/
+.DS_Store
