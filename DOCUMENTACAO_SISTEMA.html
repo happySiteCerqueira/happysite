@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>HappySite - Documentação do Sistema</title>
+<style>
+  @page { size: A4; margin: 2cm; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #1f2937;
+    line-height: 1.6;
+    max-width: 850px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  h1 {
+    color: #1e3a8a;
+    border-bottom: 4px solid #2563eb;
+    padding-bottom: 10px;
+    font-size: 28px;
+  }
+  h2 {
+    color: #1e40af;
+    margin-top: 36px;
+    background: #eff6ff;
+    padding: 10px 14px;
+    border-left: 5px solid #2563eb;
+    font-size: 19px;
+  }
+  h3 {
+    color: #0f172a;
+    margin-top: 20px;
+    font-size: 15px;
+  }
+  .box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 12px 0;
+  }
+  .link-box {
+    background: #ecfdf5;
+    border: 1px solid #10b981;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 10px 0;
+  }
+  .link-box a { color: #047857; font-weight: bold; word-break: break-all; }
+  .warn-box {
+    background: #fffbeb;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 10px 0;
+  }
+  .step-box {
+    background: #f0f9ff;
+    border: 1px solid #7dd3fc;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 10px 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+  }
+  th, td {
+    border: 1px solid #d1d5db;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 13.5px;
+  }
+  th { background: #dbeafe; color: #1e3a8a; }
+  code {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 14px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+  }
+  .fluxo {
+    text-align: center;
+    background: #f1f5f9;
+    padding: 16px;
+    border-radius: 8px;
+    font-weight: bold;
+    margin: 14px 0;
+  }
+  .cover {
+    text-align: center;
+    padding: 60px 0 40px 0;
+  }
+  .cover img { max-width: 320px; margin-bottom: 20px; }
+  .cover h1 { border: none; font-size: 34px; }
+  .cover p { color: #64748b; font-size: 15px; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <img src="client/public/logo.png" alt="Logo Cerqueira Engenharia">
+  <h1>Sistema HappySite</h1>
+  <p>Documentação técnica e guia de acesso</p>
+  <p>Administração de Obras — Cerqueira Engenharia</p>
+  <p>Gerado em: Agosto de 2026</p>
+</div>
+
+<div class="page-break"></div>
+
+<h2>1. O que é o HappySite</h2>
+<p>O HappySite é um sistema de administração de obras desenvolvido sob medida, para controle de colaboradores, empreiteiros, medições mensais e pagamentos, com um desenho esquemático visual do prédio (por andar/apartamento) para acompanhamento dos serviços executados em cada etapa da obra.</p>
+
+<p>O sistema funciona <strong>pela internet</strong>, acessível de qualquer computador, celular ou tablet com navegador — não precisa instalar nada. Todos os dados ficam centralizados em um único banco de dados na nuvem, então qualquer alteração feita por um usuário aparece automaticamente para todos os outros.</p>
+
+<div class="fluxo">
+  Navegador (qualquer computador) &nbsp;→&nbsp; Render (roda o sistema) &nbsp;→&nbsp; Neon (banco de dados)
+</div>
+
+<h2>2. Como acessar o sistema (uso diário)</h2>
+
+<div class="link-box">
+  <strong>Link do sistema:</strong><br>
+  <a href="https://happysite-6oi6.onrender.com">https://happysite-6oi6.onrender.com</a>
+</div>
+
+<table>
+  <tr><th>Usuário padrão inicial</th><td><code>admin</code></td></tr>
+  <tr><th>Senha</th><td>definida por você no primeiro acesso (troca obrigatória)</td></tr>
+</table>
+
+<div class="warn-box">
+  <strong>Atenção — Plano gratuito:</strong> o servidor "dorme" após 15 minutos sem uso.
+  Quando alguém acessa depois desse período, a primeira tela pode demorar de 30 a 50 segundos
+  para carregar (o servidor está "acordando"). Isso é normal e não é erro. Se quiser eliminar
+  essa espera, é possível migrar para um plano pago do Render (a partir de ~US$ 7/mês).
+</div>
+
+<h2>3. Estrutura técnica — os 3 serviços usados</h2>
+
+<h3>3.1. GitHub — onde fica o código-fonte</h3>
+<div class="box">
+  <p>É um "cofre" na internet que guarda todo o código do sistema (frontend + backend) e o histórico
+  de todas as alterações já feitas. Toda vez que uma alteração é enviada para lá, o Render é avisado
+  automaticamente e atualiza o site sozinho.</p>
+  <div class="link-box">
+    <strong>Repositório:</strong><br>
+    <a href="https://github.com/happySiteCerqueira/happysite">https://github.com/happySiteCerqueira/happysite</a>
+  </div>
+  <p><strong>Login de acesso:</strong> conta GitHub da organização/usuário <code>happySiteCerqueira</code>
+  (login e senha configurados por você ao criar a conta).</p>
+</div>
+
+<h3>3.2. Render — onde o sistema "roda" (hospedagem)</h3>
+<div class="box">
+  <p>É o serviço que pega o código do GitHub, "liga" o sistema e o deixa disponível 24 horas por dia
+  no link público. É aqui que ficam os logs (para diagnosticar problemas), as variáveis de ambiente
+  (como a senha de conexão do banco de dados) e as configurações de deploy.</p>
+  <div class="link-box">
+    <strong>Painel de controle:</strong><br>
+    <a href="https://dashboard.render.com">https://dashboard.render.com</a>
+  </div>
+  <p><strong>Login de acesso:</strong> conta usada para criar o serviço no Render (e-mail/senha ou login
+  via GitHub).</p>
+  <p><strong>Nome do serviço dentro do Render:</strong> <code>happysite</code> (ou nome similar — aparece
+  na lista principal do dashboard após login).</p>
+</div>
+
+<h3>3.3. Neon — onde ficam os dados (banco de dados PostgreSQL)</h3>
+<div class="box">
+  <p>É onde ficam armazenadas de fato todas as informações reais do sistema: obras cadastradas,
+  colaboradores, empreiteiros, medições, valores, pagamentos, usuários, etc. O Render se conecta
+  a esse banco toda vez que alguém usa o sistema.</p>
+  <div class="link-box">
+    <strong>Painel de controle:</strong><br>
+    <a href="https://console.neon.tech">https://console.neon.tech</a>
+  </div>
+  <p><strong>Login de acesso:</strong> conta usada para criar o banco de dados na Neon.</p>
+  <p><strong>Nome do projeto/banco:</strong> <code>neondb</code> (região: sa-east-1 — São Paulo).</p>
+</div>
+
+<h2>4. Resumo de acessos (preencher e guardar em local seguro)</h2>
+<table>
+  <tr>
+    <th>Serviço</th><th>Link</th><th>Usuário/E-mail</th><th>Senha</th>
+  </tr>
+  <tr><td>Sistema (uso diário)</td><td>happysite-6oi6.onrender.com</td><td>admin</td><td>____________</td></tr>
+  <tr><td>GitHub</td><td>github.com</td><td>____________</td><td>____________</td></tr>
+  <tr><td>Render</td><td>dashboard.render.com</td><td>____________</td><td>____________</td></tr>
+  <tr><td>Neon</td><td>console.neon.tech</td><td>____________</td><td>____________</td></tr>
+</table>
+<p><em>Recomendação: guarde essas senhas em um gerenciador de senhas ou em um documento protegido
+(não deixe em texto simples em qualquer lugar).</em></p>
+
+<div class="page-break"></div>
+
+<h2>5. Como acessar e editar o projeto em outro computador (usando o Cline/IA)</h2>
+
+<p>O código-fonte do sistema não está "preso" a este computador — ele está salvo no GitHub
+(item 3.1). Isso significa que qualquer computador com acesso à internet e às credenciais corretas
+consegue baixar o projeto e continuar o desenvolvimento, inclusive usando uma ferramenta de
+IA como o Cline (a mesma usada para criar este sistema).</p>
+
+<h3>Passo a passo para configurar em um novo computador:</h3>
+
+<div class="step-box">
+  <strong>Passo 1 — Instalar os programas necessários</strong>
+  <ul>
+    <li><a href="https://nodejs.org">Node.js</a> (versão 18 ou superior)</li>
+    <li><a href="https://git-scm.com">Git</a></li>
+    <li><a href="https://code.visualstudio.com">Visual Studio Code</a></li>
+    <li>Extensão <strong>Cline</strong> instalada dentro do VS Code (na aba de Extensões)</li>
+  </ul>
+</div>
+
+<div class="step-box">
+  <strong>Passo 2 — Baixar o código do projeto (clonar o repositório)</strong>
+  <p>Abra o terminal (Prompt de Comando/PowerShell) na pasta onde deseja salvar o projeto e rode:</p>
+  <pre>git clone https://github.com/happySiteCerqueira/happysite.git</pre>
+  <p>Isso vai criar uma pasta chamada <code>happysite</code> com todo o código atualizado
+  (a versão mais recente que está publicada no GitHub).</p>
+</div>
+
+<div class="step-box">
+  <strong>Passo 3 — Abrir a pasta no VS Code</strong>
+  <p>Abra o Visual Studio Code, use "Arquivo → Abrir Pasta" e selecione a pasta <code>happysite</code>
+  que acabou de ser baixada.</p>
+</div>
+
+<div class="step-box">
+  <strong>Passo 4 — Configurar a conexão com o banco de dados</strong>
+  <p>Dentro da pasta <code>server</code>, crie um arquivo chamado <code>.env</code> (baseado no
+  arquivo de exemplo <code>server/.env.example</code>) e cole a mesma <code>DATABASE_URL</code>
+  do banco Neon (disponível no painel da Neon, item 3.3, em "Connection string").</p>
+</div>
+
+<div class="step-box">
+  <strong>Passo 5 — Instalar as dependências e testar localmente (opcional)</strong>
+  <pre>npm run install:all
+npm run dev</pre>
+  <p>Isso liga uma cópia do sistema rodando localmente no computador, útil para testar mudanças
+  antes de publicá-las.</p>
+</div>
+
+<div class="step-box">
+  <strong>Passo 6 — Abrir o Cline e pedir alterações</strong>
+  <p>Na barra lateral do VS Code, clique no ícone do Cline. Ele vai automaticamente identificar
+  que está dentro da pasta do projeto HappySite (reconhece a estrutura de arquivos, o
+  <code>package.json</code>, o repositório Git conectado etc.) e já estará "apto" a fazer alterações,
+  criar novas telas, corrigir bugs ou adicionar funcionalidades — exatamente como foi feito
+  durante o desenvolvimento inicial.</p>
+</div>
+
+<div class="step-box">
+  <strong>Passo 7 — Publicar as alterações (deploy automático)</strong>
+  <p>Depois que o Cline (ou você) fizer as alterações desejadas, basta rodar no terminal:</p>
+  <pre>git add -A
+git commit -m "descrição da alteração feita"
+git push</pre>
+  <p>Isso envia as mudanças para o GitHub. O Render detecta automaticamente o novo envio e
+  atualiza o sistema publicado em poucos minutos — sem precisar fazer mais nada manualmente.</p>
+</div>
+
+<div class="warn-box">
+  <strong>Importante:</strong> para conseguir enviar alterações (<code>git push</code>) para o
+  repositório, o computador precisa estar autenticado com uma conta que tenha permissão de
+  escrita no repositório GitHub <code>happySiteCerqueira/happysite</code>. Se for outro
+  computador/pessoa, pode ser necessário fazer login no Git com a conta correta ou receber
+  um convite de colaborador no GitHub.
+</div>
+
+<h2>6. Estrutura de pastas do projeto (referência rápida)</h2>
+<table>
+  <tr><th>Pasta/Arquivo</th><th>O que é</th></tr>
+  <tr><td><code>client/</code></td><td>Frontend (telas, componentes React) que o usuário vê no navegador</td></tr>
+  <tr><td><code>server/</code></td><td>Backend (rotas da API, regras de negócio, conexão com o banco)</td></tr>
+  <tr><td><code>server/db/database.js</code></td><td>Configuração de conexão com o PostgreSQL (Neon)</td></tr>
+  <tr><td><code>server/routes/</code></td><td>Cada arquivo é um grupo de funcionalidades (obras, usuários, medições, etc.)</td></tr>
+  <tr><td><code>render.yaml</code></td><td>Configuração de como o Render deve construir e rodar o projeto</td></tr>
+  <tr><td><code>iniciar.bat</code> / <code>iniciar-dev.bat</code></td><td>Atalhos para rodar o sistema localmente no Windows</td></tr>
+</table>
+
+<h2>7. Contato de suporte</h2>
+<p>Para dúvidas técnicas futuras, este mesmo fluxo (abrir a pasta do projeto no VS Code + Cline)
+permite continuar o desenvolvimento com qualquer assistente de IA compatível, já que todo o
+histórico e contexto do projeto está documentado no próprio código e neste arquivo.</p>
+
+</body>
+</html>
