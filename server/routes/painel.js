@@ -22,7 +22,17 @@ router.get('/', async (req, res) => {
       ORDER BY c.mes_ciclo
     `, o.id);
 
-    return { ...o, servicos, producao_mensal: producaoMensal };
+    return {
+      ...o,
+      tem_transicao: !!o.tem_transicao,
+      tem_atico: !!o.tem_atico,
+      tem_caixa_dagua: !!o.tem_caixa_dagua,
+      itens_terreo: JSON.parse(o.itens_terreo || '[]'),
+      itens_cobertura: JSON.parse(o.itens_cobertura || '[]'),
+      blocos_pavimentos: JSON.parse(o.blocos_pavimentos || '[]'),
+      servicos,
+      producao_mensal: producaoMensal
+    };
   }));
 
   res.json(resultado);
