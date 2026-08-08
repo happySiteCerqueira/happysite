@@ -18,8 +18,8 @@ export default function Layout() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <aside style={{ width: 220, background: '#0f172a', padding: 16, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ color: '#fff', fontWeight: 800, fontSize: 20, marginBottom: 24, textAlign: 'center' }}>
-          🏗️ HappySite
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+          <img src="/logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: 70, objectFit: 'contain' }} />
         </div>
         <nav style={{ flex: 1 }}>
           <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>

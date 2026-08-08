@@ -28,9 +28,11 @@ export default function Login() {
   return (
     <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#0f172a' }}>
       <form onSubmit={handleSubmit} className="card" style={{ width: 340 }}>
-        <div style={{ textAlign: 'center', fontSize: 26, fontWeight: 800, marginBottom: 4 }}>🏗️ HappySite</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+          <img src="/logo.png" alt="Logo" style={{ maxWidth: 220, maxHeight: 100, objectFit: 'contain' }} />
+        </div>
         <div style={{ textAlign: 'center', color: '#6b7280', marginBottom: 20, fontSize: 13 }}>
-          Administração de Obras
+          HappySite - Administração de Obras
         </div>
         {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 8, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{erro}</div>}
         <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
