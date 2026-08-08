@@ -91,7 +91,7 @@ export default function PagamentosAntecipados() {
           <thead>
             <tr>
               <th>Nome</th>
-              <th>Função/Cargo</th>
+              <th>Função</th>
               <th>CPF/CNPJ</th>
               {colunas.map(c => <th key={c}>{ROTULOS[c]}</th>)}
               <th>Total</th>
