@@ -9,13 +9,19 @@ if (fs.existsSync(envPath)) {
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
-// Diagnóstico seguro: mostra só o início da connection string (sem senha) para conferir
+// Remove espaços/quebras de linha acidentais no início/fim (comum ao colar em painéis de hospedagem)
+const databaseUrl = (process.env.DATABASE_URL || '').trim();
+
+// Diagnóstico seguro: mostra só o início/fim da connection string (sem senha) para conferir
 // se a variável de ambiente está chegando corretamente no processo.
-const urlDiag = process.env.DATABASE_URL || '(vazio)';
-console.log('[DIAG] DATABASE_URL length:', urlDiag.length, '| início:', urlDiag.slice(0, 15));
+console.log(
+  '[DIAG] DATABASE_URL length:', databaseUrl.length,
+  '| início:', JSON.stringify(databaseUrl.slice(0, 15)),
+  '| fim:', JSON.stringify(databaseUrl.slice(-15))
+);
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
   ssl: { rejectUnauthorized: false }
 });
 
