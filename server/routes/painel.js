@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
       ORDER BY c.mes_ciclo
     `, o.id);
 
-    return { ...o, servicos, producaoMensal };
+    return { ...o, servicos, producao_mensal: producaoMensal };
   }));
 
   res.json(resultado);
