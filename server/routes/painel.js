@@ -31,7 +31,7 @@ router.get('/', async (req, res) => {
       itens_cobertura: JSON.parse(o.itens_cobertura || '[]'),
       blocos_pavimentos: JSON.parse(o.blocos_pavimentos || '[]'),
       servicos,
-      producao_mensal: producaoMensal
+      producao_mensal: producaoMensal.map(m => ({ ...m, total: Number(m.total) || 0 }))
     };
   }));
 
