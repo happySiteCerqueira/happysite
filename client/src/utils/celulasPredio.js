@@ -86,6 +86,8 @@ export function gerarListaCelulas(obra, modoMedicao, rotulosAptos) {
     }
   }
 
+  lista.push({ key: 'laje-piso-terreo', label: 'Laje Piso Térreo' });
+
   const etapas = obra.fundacao_etapas || 1;
   for (let e = 0; e < etapas; e++) {
     lista.push({ key: `fundacao-${etapas - e}`, label: `Fundação - Etapa ${etapas - e}` });

@@ -72,6 +72,10 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
 
   linhas.push({ tipo: 'terreo' });
 
+  // Laje do piso térreo: sempre existe, imediatamente acima da fundação.
+  // Sem transição, fica direto abaixo do Térreo; com transição, fica abaixo da Transição.
+  linhas.push({ tipo: 'laje_piso_terreo' });
+
   const etapas = obra.fundacao_etapas || 1;
   for (let e = 0; e < etapas; e++) {
     linhas.push({ tipo: 'fundacao', etapa: etapas - e });
@@ -278,6 +282,15 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
           );
         }
 
+
+        if (linha.tipo === 'laje_piso_terreo') {
+          return (
+            <div key={idx} style={{ display: 'flex', gap: GAP, alignItems: 'center' }}>
+              {refAndar(null)}
+              {renderCelula('laje-piso-terreo', LARGURA_CEL * 3, { fontSize: 9 }, 'Laje Piso Térreo')}
+            </div>
+          );
+        }
 
         if (linha.tipo === 'fundacao') {
           return (

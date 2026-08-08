@@ -107,6 +107,9 @@ function rotuloCelula(obra, celulaKey, rotulosAptos) {
   if (celulaKey === 'elevador-terreo') return 'Térreo - Elevador';
   if (celulaKey === 'escada-terreo') return 'Térreo - Escada';
 
+  // Laje do piso térreo
+  if (celulaKey === 'laje-piso-terreo') return 'Laje Piso Térreo';
+
   // Fundação: fundacao-N
   m = /^fundacao-(\d+)$/.exec(celulaKey);
   if (m) return `Fundação - Etapa ${m[1]}`;
