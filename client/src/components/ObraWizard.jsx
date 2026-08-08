@@ -10,9 +10,27 @@ const ITENS_COBERTURA_PADRAO = [
   'Banheiros', 'Cozinha Gourmet', 'Salão de Festa', 'Cobertura Descoberta'
 ];
 
-export default function ObraWizard({ onClose, onCriada }) {
+// obraExistente: quando informada, o wizard entra em modo "revisão/edição" de uma obra já
+// cadastrada (usado pelo botão "Revisar cadastro", restrito ao ADM): pré-preenche todos os
+// passos com os dados atuais e salva com PUT em vez de POST ao finalizar.
+export default function ObraWizard({ onClose, onCriada, obraExistente }) {
+  const modoEdicao = !!obraExistente;
   const [passo, setPasso] = useState(1);
-  const [dados, setDados] = useState({
+  const [dados, setDados] = useState(() => obraExistente ? {
+    nome: obraExistente.nome || '',
+    endereco: obraExistente.endereco || '',
+    tem_transicao: !!obraExistente.tem_transicao,
+    terreo_tipo: obraExistente.terreo_tipo || 'estacionamento',
+    terreo_qtd_apto: obraExistente.terreo_qtd_apto || 0,
+    fundacao_etapas: obraExistente.fundacao_etapas || 1,
+    tem_atico: !!obraExistente.tem_atico,
+    tem_caixa_dagua: !!obraExistente.tem_caixa_dagua,
+    blocos_pavimentos: (obraExistente.blocos_pavimentos && obraExistente.blocos_pavimentos.length > 0)
+      ? obraExistente.blocos_pavimentos.map(b => ({ ...b }))
+      : [{ qtd_andares: 1, apto_por_andar: 4 }],
+    itens_terreo: [...(obraExistente.itens_terreo || [])],
+    itens_cobertura: [...(obraExistente.itens_cobertura || [])]
+  } : {
     nome: '', endereco: '',
     tem_transicao: false,
     terreo_tipo: 'estacionamento',
@@ -80,10 +98,14 @@ export default function ObraWizard({ onClose, onCriada }) {
     if (!dados.nome.trim()) { setErro('Informe o nome da obra'); setPasso(1); return; }
     setSalvando(true);
     try {
-      await api.post('/obras', dados);
+      if (modoEdicao) {
+        await api.put(`/obras/${obraExistente.id}`, dados);
+      } else {
+        await api.post('/obras', dados);
+      }
       onCriada();
     } catch (err) {
-      setErro(err.response?.data?.erro || 'Erro ao criar obra');
+      setErro(err.response?.data?.erro || (modoEdicao ? 'Erro ao salvar alterações da obra' : 'Erro ao criar obra'));
     } finally {
       setSalvando(false);
     }
@@ -95,9 +117,16 @@ export default function ObraWizard({ onClose, onCriada }) {
     <div className="modal-overlay">
       <div className="modal-content" style={{ width: 640 }}>
         <div className="flex" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>Nova Obra — Passo {passo} de {totalPassos}</h3>
+          <h3 style={{ margin: 0 }}>{modoEdicao ? `Revisar cadastro — Passo ${passo} de ${totalPassos}` : `Nova Obra — Passo ${passo} de ${totalPassos}`}</h3>
           <button className="btn-secondary btn-sm" onClick={onClose}>Fechar</button>
         </div>
+
+        {modoEdicao && (
+          <div style={{ background: '#fef3c7', color: '#92400e', padding: 8, borderRadius: 6, marginBottom: 10, fontSize: 12 }}>
+            ⚠️ Atenção: alterar blocos de pavimentos ou itens do térreo/cobertura de uma obra que já possui
+            marcações/medições lançadas pode desalinhar dados já registrados no desenho do prédio. Revise com cuidado antes de salvar.
+          </div>
+        )}
 
         {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 8, borderRadius: 6, marginBottom: 10 }}>{erro}</div>}
 
@@ -214,7 +243,9 @@ export default function ObraWizard({ onClose, onCriada }) {
           {passo < totalPassos ? (
             <button className="btn-primary" onClick={() => setPasso(p => p + 1)}>Avançar</button>
           ) : (
-            <button className="btn-success" disabled={salvando} onClick={finalizar}>{salvando ? 'Salvando...' : 'Criar obra'}</button>
+            <button className="btn-success" disabled={salvando} onClick={finalizar}>
+              {salvando ? 'Salvando...' : (modoEdicao ? 'Salvar alterações' : 'Criar obra')}
+            </button>
           )}
         </div>
       </div>

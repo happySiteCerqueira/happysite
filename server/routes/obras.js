@@ -104,7 +104,7 @@ router.post('/', permitir('RH'), async (req, res) => {
   res.json({ id: obraId });
 });
 
-router.put('/:id', permitir('RH'), async (req, res) => {
+router.put('/:id', permitir('ADM'), async (req, res) => {
   const id = req.params.id;
   const atual = await db.get('SELECT * FROM obras WHERE id = ?', id);
   if (!atual) return res.status(404).json({ erro: 'Obra não encontrada' });

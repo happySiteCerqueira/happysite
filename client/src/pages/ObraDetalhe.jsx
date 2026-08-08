@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import PredioDesenho from '../components/PredioDesenho';
+import ObraWizard from '../components/ObraWizard';
 import { gerarListaCelulas } from '../utils/celulasPredio';
 
 function mesAtual() {
@@ -33,6 +34,7 @@ export default function ObraDetalhe() {
   const [ordemAbas, setOrdemAbas] = useState([]); // lista de ids na ordem exibida (para drag-and-drop)
   const [arrastandoId, setArrastandoId] = useState(null);
   const [sobreId, setSobreId] = useState(null);
+  const [mostrarRevisaoObra, setMostrarRevisaoObra] = useState(false);
 
   // ---- Tela de Quantidades (quantidade cadastrada por célula, base do cálculo de valor) ----
   const [mostrarQuantidades, setMostrarQuantidades] = useState(false);
@@ -517,8 +519,16 @@ export default function ObraDetalhe() {
   return (
     <div>
       <Link to="/obras" style={{ color: '#2563eb', fontSize: 13 }}>← Voltar para Obras</Link>
-      <h2 style={{ marginTop: 6 }}>{obra.nome}</h2>
+      <div className="flex gap-2" style={{ alignItems: 'center', marginTop: 6 }}>
+        <h2 style={{ margin: 0 }}>{obra.nome}</h2>
+        {temPermissao('ADM') && (
+          <button className="btn-secondary btn-sm" onClick={() => setMostrarRevisaoObra(true)} title="Revisar todas as etapas do cadastro desta obra para corrigir algum erro de preenchimento">
+            🔄 Revisar cadastro
+          </button>
+        )}
+      </div>
       <div style={{ color: '#6b7280', marginBottom: 16 }}>{obra.endereco}</div>
+
 
       {temPermissao('RH', 'ADM', 'FINANCEIRO') && (
         <div className="flex gap-2" style={{ marginBottom: 16 }}>
@@ -982,6 +992,14 @@ export default function ObraDetalhe() {
             </div>
           </div>
         </div>
+      )}
+
+      {mostrarRevisaoObra && (
+        <ObraWizard
+          obraExistente={obra}
+          onClose={() => setMostrarRevisaoObra(false)}
+          onCriada={() => { setMostrarRevisaoObra(false); carregarObra(); }}
+        />
       )}
     </div>
   );
