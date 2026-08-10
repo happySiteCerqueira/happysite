@@ -520,18 +520,41 @@ router.put('/servicos/:servicoId/quantidades-em-lote', permitir('RH', 'ADM', 'EN
   res.json({ ok: true, atualizados: celulas.length });
 });
 
-// Replica a quantidade de UM apartamento (mesma posição/terminação) para os andares
+// ---- Reconhecimento genérico de células "replicáveis" entre andares do mesmo bloco ----
+// Suporta os 3 formatos possíveis de célula de pavimento, dependendo do modo de medição do serviço:
+//  - apartamento:   apto-b{bloco}-a{andar}-{posApto}
+//  - pavimento:      pav-b{bloco}-a{andar}
+//  - frente_fundo:    pav-b{bloco}-a{andar}-frente  |  pav-b{bloco}-a{andar}-fundo
+// Retorna { blocoIdx, andar, sufixo, montarKey(andar) } ou null se não for um formato replicável.
+function parseCelulaReplicavel(key) {
+  let m = /^apto-b(\d+)-a(\d+)-(\d+)$/.exec(key);
+  if (m) {
+    const blocoIdx = Number(m[1]), andar = Number(m[2]), aptoIdx = Number(m[3]);
+    return { blocoIdx, andar, montarKey: (a) => `apto-b${blocoIdx}-a${a}-${aptoIdx}` };
+  }
+  m = /^pav-b(\d+)-a(\d+)-(frente|fundo)$/.exec(key);
+  if (m) {
+    const blocoIdx = Number(m[1]), andar = Number(m[2]), lado = m[3];
+    return { blocoIdx, andar, montarKey: (a) => `pav-b${blocoIdx}-a${a}-${lado}` };
+  }
+  m = /^pav-b(\d+)-a(\d+)$/.exec(key);
+  if (m) {
+    const blocoIdx = Number(m[1]), andar = Number(m[2]);
+    return { blocoIdx, andar, montarKey: (a) => `pav-b${blocoIdx}-a${a}` };
+  }
+  return null;
+}
+
+// Replica a quantidade de UMA célula (apartamento, pavimento ou frente/fundo) para os andares
 // entre a origem e um andar-destino, dentro do MESMO bloco de pavimentos.
 // Ex: apto-b0-a0-0 (1º andar, apto 1) replicado até a5 -> aplica em a1,a2,a3,a4,a5 (mesmo apto 1).
 router.put('/servicos/:servicoId/quantidades/replicar', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'), async (req, res) => {
   const { celula_key_origem, andar_destino } = req.body;
   if (!celula_key_origem) return res.status(400).json({ erro: 'celula_key_origem é obrigatório' });
 
-  const m = /^apto-b(\d+)-a(\d+)-(\d+)$/.exec(celula_key_origem);
-  if (!m) return res.status(400).json({ erro: 'Só é possível replicar células de apartamento (formato apto-bX-aY-Z)' });
-  const blocoIdx = Number(m[1]);
-  const andarOrigem = Number(m[2]);
-  const aptoIdx = Number(m[3]);
+  const info = parseCelulaReplicavel(celula_key_origem);
+  if (!info) return res.status(400).json({ erro: 'Só é possível replicar células de apartamento, pavimento ou frente/fundo' });
+  const { blocoIdx, andar: andarOrigem, montarKey } = info;
   const andarDestino = Number(andar_destino);
   if (isNaN(andarDestino)) return res.status(400).json({ erro: 'andar_destino é obrigatório' });
 
@@ -541,9 +564,6 @@ router.put('/servicos/:servicoId/quantidades/replicar', permitir('RH', 'ADM', 'E
   const blocos = obra.blocos_pavimentos ? JSON.parse(obra.blocos_pavimentos) : [];
   const bloco = blocos[blocoIdx];
   if (!bloco) return res.status(400).json({ erro: 'Bloco de pavimentos não encontrado' });
-  if (aptoIdx < 0 || aptoIdx >= bloco.apto_por_andar) {
-    return res.status(400).json({ erro: 'Apartamento de origem fora do range do bloco' });
-  }
   if (andarDestino < 0 || andarDestino >= bloco.qtd_andares) {
     return res.status(400).json({ erro: `andar_destino deve estar entre 0 e ${bloco.qtd_andares - 1} (dentro do mesmo bloco)` });
   }
@@ -557,7 +577,7 @@ router.put('/servicos/:servicoId/quantidades/replicar', permitir('RH', 'ADM', 'E
 
   const celulasAtualizadas = [];
   for (let andar = inicio; andar <= fim; andar++) {
-    const key = `apto-b${blocoIdx}-a${andar}-${aptoIdx}`;
+    const key = montarKey(andar);
     await db.run(`INSERT INTO obra_servico_quantidades (obra_servico_id, celula_key, quantidade, atualizado_em)
       VALUES (?,?,?, NOW())
       ON CONFLICT(obra_servico_id, celula_key) DO UPDATE SET quantidade = EXCLUDED.quantidade, atualizado_em = EXCLUDED.atualizado_em`,
@@ -569,6 +589,7 @@ router.put('/servicos/:servicoId/quantidades/replicar', permitir('RH', 'ADM', 'E
     { celula_key_origem, andar_destino: andarDestino, quantidade, celulas: celulasAtualizadas });
   res.json({ ok: true, quantidade, atualizados: celulasAtualizadas.length, celulas: celulasAtualizadas });
 });
+
 
 // Exporta planilha com a lista de células (recebida do front, já calculada com base na obra) e a quantidade atual.
 router.post('/servicos/:servicoId/quantidades/exportar', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'), async (req, res) => {
@@ -836,10 +857,9 @@ router.put('/servicos/:servicoId/quantidades/aplicar-varios-andares', permitir('
     return res.status(400).json({ erro: 'andares_destino (lista) é obrigatório' });
   }
 
-  const m = /^apto-b(\d+)-a(\d+)-(\d+)$/.exec(celula_key_origem);
-  if (!m) return res.status(400).json({ erro: 'Só é possível aplicar em células de apartamento (formato apto-bX-aY-Z)' });
-  const blocoIdx = Number(m[1]);
-  const aptoIdx = Number(m[3]);
+  const info = parseCelulaReplicavel(celula_key_origem);
+  if (!info) return res.status(400).json({ erro: 'Só é possível aplicar em células de apartamento, pavimento ou frente/fundo' });
+  const { blocoIdx, montarKey } = info;
 
   const servico = await db.get('SELECT * FROM obra_servicos WHERE id = ?', req.params.servicoId);
   if (!servico) return res.status(404).json({ erro: 'Serviço não encontrado' });
@@ -847,9 +867,6 @@ router.put('/servicos/:servicoId/quantidades/aplicar-varios-andares', permitir('
   const blocos = obra.blocos_pavimentos ? JSON.parse(obra.blocos_pavimentos) : [];
   const bloco = blocos[blocoIdx];
   if (!bloco) return res.status(400).json({ erro: 'Bloco de pavimentos não encontrado' });
-  if (aptoIdx < 0 || aptoIdx >= bloco.apto_por_andar) {
-    return res.status(400).json({ erro: 'Apartamento de origem fora do range do bloco' });
-  }
 
   let qtd = quantidade;
   if (qtd === undefined || qtd === null) {
@@ -863,7 +880,7 @@ router.put('/servicos/:servicoId/quantidades/aplicar-varios-andares', permitir('
   for (const andarRaw of andares_destino) {
     const andar = Number(andarRaw);
     if (isNaN(andar) || andar < 0 || andar >= bloco.qtd_andares) continue;
-    const key = `apto-b${blocoIdx}-a${andar}-${aptoIdx}`;
+    const key = montarKey(andar);
     await db.run(`INSERT INTO obra_servico_quantidades (obra_servico_id, celula_key, quantidade, atualizado_em)
       VALUES (?,?,?, NOW())
       ON CONFLICT(obra_servico_id, celula_key) DO UPDATE SET quantidade = EXCLUDED.quantidade, atualizado_em = EXCLUDED.atualizado_em`,
@@ -875,5 +892,6 @@ router.put('/servicos/:servicoId/quantidades/aplicar-varios-andares', permitir('
     { celula_key_origem, andares_destino, quantidade: qtd, celulas: celulasAtualizadas });
   res.json({ ok: true, quantidade: qtd, atualizados: celulasAtualizadas.length, celulas: celulasAtualizadas });
 });
+
 
 module.exports = router;

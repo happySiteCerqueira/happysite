@@ -22,6 +22,8 @@ export default function ObraDetalhe() {
   const [marcacoes, setMarcacoes] = useState({});
   const [mes, setMes] = useState(mesAtual());
   const [celulaSelecionada, setCelulaSelecionada] = useState(null);
+  const [quantidadeModalCelula, setQuantidadeModalCelula] = useState('');
+
   const [mostrarConfigServico, setMostrarConfigServico] = useState(false);
   const [importandoPrecos, setImportandoPrecos] = useState(false);
   const [novoGrupoNome, setNovoGrupoNome] = useState('');
@@ -140,13 +142,29 @@ export default function ObraDetalhe() {
   function abrirSelecaoPessoa(celulaKey) {
     if (!temPermissao('ENGENHEIRO', 'MESTRE', 'RH')) return;
     setCelulaSelecionada(celulaKey);
+    const qtdAtual = quantidadesMapa[celulaKey];
+    setQuantidadeModalCelula(qtdAtual != null ? String(qtdAtual) : '');
+  }
+
+
+  // Se o usuário alterou o campo de quantidade dentro do modal "Quem executou", envia esse valor
+  // junto na marcação e também persiste na tabela de quantidades (mantém quantidadesMapa em dia).
+  async function salvarQuantidadeModalSeAlterada() {
+    if (quantidadeModalCelula === '' || quantidadeModalCelula == null) return undefined;
+    const valor = Number(quantidadeModalCelula);
+    if (isNaN(valor)) return undefined;
+    await api.put(`/obras/servicos/${servicoAtivoId}/quantidades`, { celula_key: celulaSelecionada, quantidade: valor });
+    setQuantidadesMapa(prev => ({ ...prev, [celulaSelecionada]: valor }));
+    return valor;
   }
 
   async function marcarPessoa(colaboradorId) {
+    const quantidade = await salvarQuantidadeModalSeAlterada();
     await api.post(`/obras/servicos/${servicoAtivoId}/celulas`, {
       celula_key: celulaSelecionada,
       colaborador_id: colaboradorId,
-      mes_ciclo: mes
+      mes_ciclo: mes,
+      ...(quantidade !== undefined ? { quantidade } : {})
       // sem "quantidade": o backend usa a quantidade cadastrada nessa célula (tela Quantidades),
       // ou 1 se nenhuma tiver sido definida ainda.
     });
@@ -155,14 +173,17 @@ export default function ObraDetalhe() {
   }
 
   async function marcarGrupo(grupoId) {
+    const quantidade = await salvarQuantidadeModalSeAlterada();
     await api.post(`/obras/servicos/${servicoAtivoId}/celulas`, {
       celula_key: celulaSelecionada,
       grupo_id: grupoId,
-      mes_ciclo: mes
+      mes_ciclo: mes,
+      ...(quantidade !== undefined ? { quantidade } : {})
     });
     setCelulaSelecionada(null);
     carregarCelulas();
   }
+
 
   async function desmarcar() {
     await api.post(`/obras/servicos/${servicoAtivoId}/celulas`, {
@@ -331,18 +352,47 @@ export default function ObraDetalhe() {
     await api.put(`/obras/servicos/${servicoAtivoId}/quantidades`, { celula_key: key, quantidade: valor });
   }
 
-  // ---- Replicar quantidade de um apartamento para outros andares (mesma posição/terminação) ----
+  // ---- Replicar quantidade de uma célula (apartamento, pavimento ou frente/fundo) para outros
+  // andares do mesmo bloco. Reconhece os 3 formatos possíveis, dependendo do modo de medição do serviço. ----
   const REGEX_APTO = /^apto-b(\d+)-a(\d+)-(\d+)$/;
+  const REGEX_PAV_FRENTE_FUNDO = /^pav-b(\d+)-a(\d+)-(frente|fundo)$/;
+  const REGEX_PAVIMENTO = /^pav-b(\d+)-a(\d+)$/;
 
   function infoReplicacao(key) {
-    const m = REGEX_APTO.exec(key);
-    if (!m || !obra) return null;
-    const blocoIdx = Number(m[1]);
-    const andarAtual = Number(m[2]);
-    const bloco = (obra.blocos_pavimentos || [])[blocoIdx];
-    if (!bloco) return null;
-    return { blocoIdx, andarAtual, qtdAndares: bloco.qtd_andares };
+    if (!obra) return null;
+    let m = REGEX_APTO.exec(key);
+    if (m) {
+      const blocoIdx = Number(m[1]);
+      const andarAtual = Number(m[2]);
+      const bloco = (obra.blocos_pavimentos || [])[blocoIdx];
+      if (!bloco) return null;
+      return { blocoIdx, andarAtual, qtdAndares: bloco.qtd_andares, tipo: 'apartamento' };
+    }
+    m = REGEX_PAV_FRENTE_FUNDO.exec(key);
+    if (m) {
+      const blocoIdx = Number(m[1]);
+      const andarAtual = Number(m[2]);
+      const bloco = (obra.blocos_pavimentos || [])[blocoIdx];
+      if (!bloco) return null;
+      return { blocoIdx, andarAtual, qtdAndares: bloco.qtd_andares, tipo: 'frente_fundo' };
+    }
+    m = REGEX_PAVIMENTO.exec(key);
+    if (m) {
+      const blocoIdx = Number(m[1]);
+      const andarAtual = Number(m[2]);
+      const bloco = (obra.blocos_pavimentos || [])[blocoIdx];
+      if (!bloco) return null;
+      return { blocoIdx, andarAtual, qtdAndares: bloco.qtd_andares, tipo: 'pavimento' };
+    }
+    return null;
   }
+
+  function descricaoTipoReplicacao(tipo) {
+    if (tipo === 'pavimento') return 'este pavimento';
+    if (tipo === 'frente_fundo') return 'este lado (frente/fundo)';
+    return 'este apartamento (mesma posição/terminação)';
+  }
+
 
   // ---- Alterar nome (rótulo customizado) do apartamento clicado no desenho ----
   function abrirAlterarNome() {
@@ -622,6 +672,20 @@ export default function ObraDetalhe() {
         <div className="modal-overlay" onClick={() => setCelulaSelecionada(null)}>
           <div className="modal-content" style={{ width: 320 }} onClick={e => e.stopPropagation()}>
             <h4>Quem executou: {rotulosAptos[celulaSelecionada] || celulaSelecionada}</h4>
+
+            {temPermissao('RH', 'ADM', 'ENGENHEIRO', 'MESTRE') && (
+              <div className="flex-col gap-2" style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 11, color: '#6b7280' }}>Quantidade ({servicoAtivo?.unidade || 'un'})</label>
+                <input
+                  type="number" step="0.01"
+                  value={quantidadeModalCelula}
+                  onChange={e => setQuantidadeModalCelula(e.target.value)}
+                  placeholder="Usar quantidade já cadastrada"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            )}
+
             <div className="flex-col gap-2">
               {servicoAtivo?.modo_execucao === 'grupo' ? (
                 <>
@@ -645,11 +709,13 @@ export default function ObraDetalhe() {
             </div>
             <button className="btn-danger" style={{ marginTop: 12, width: '100%' }} onClick={desmarcar}>Remover marcação</button>
 
-            {REGEX_APTO.test(celulaSelecionada) && temPermissao('RH', 'ADM', 'ENGENHEIRO', 'MESTRE') && (
+            {infoReplicacao(celulaSelecionada) && temPermissao('RH', 'ADM', 'ENGENHEIRO', 'MESTRE') && (
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                <button className="btn-secondary btn-sm" style={{ flex: 1 }} onClick={abrirAlterarNome}>
-                  ✏️ Alterar nome
-                </button>
+                {REGEX_APTO.test(celulaSelecionada) && (
+                  <button className="btn-secondary btn-sm" style={{ flex: 1 }} onClick={abrirAlterarNome}>
+                    ✏️ Alterar nome
+                  </button>
+                )}
                 <button className="btn-secondary btn-sm" style={{ flex: 1 }} onClick={abrirQtdVariosAndares}>
                   🔢 Definir quantidade
                 </button>
@@ -658,6 +724,7 @@ export default function ObraDetalhe() {
           </div>
         </div>
       )}
+
 
       {mostrarAlterarNome && celulaSelecionada && (
         <div className="modal-overlay" onClick={() => setMostrarAlterarNome(false)}>
@@ -693,9 +760,10 @@ export default function ObraDetalhe() {
             <div className="modal-content" style={{ width: 380, maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
               <h4>Definir quantidade em vários andares</h4>
               <p style={{ fontSize: 12, color: '#6b7280' }}>
-                Aplica a mesma quantidade a este apartamento (mesma posição/terminação) em todos os andares
+                Aplica a mesma quantidade a {descricaoTipoReplicacao(info.tipo)} em todos os andares
                 marcados abaixo, dentro deste mesmo bloco.
               </p>
+
               <label>Quantidade ({servicoAtivo?.unidade || 'un'})</label>
               <input
                 type="number" step="0.01"
@@ -876,8 +944,9 @@ export default function ObraDetalhe() {
                                   width: 220, padding: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                                 }}>
                                   <div style={{ fontSize: 12, marginBottom: 6 }}>
-                                    Replicar quantidade ({quantidadesMapa[item.key] ?? 0}) para o mesmo apartamento até:
+                                    Replicar quantidade ({quantidadesMapa[item.key] ?? 0}) para {descricaoTipoReplicacao(info.tipo)} até:
                                   </div>
+
                                   <select
                                     value={andarDestinoReplicar}
                                     onChange={e => setAndarDestinoReplicar(e.target.value)}

@@ -181,7 +181,17 @@ function AbaRetirada() {
 }
 
 // ---- ABA CADASTRAR / ENTRADA ----
+// Por padrão, exige selecionar um item já existente no estoque (autocomplete/boxpoint),
+// evitando duplicidade por erro de digitação. Criar um item novo é uma ação deliberada,
+// feita através do botão "➕ Criar novo item".
 function AbaCadastrar() {
+  const [itensEstoque, setItensEstoque] = useState([]);
+  const [criandoNovo, setCriandoNovo] = useState(false);
+
+  const [itemSelecionadoId, setItemSelecionadoId] = useState(null);
+  const [buscaTexto, setBuscaTexto] = useState('');
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+
   const [descricao, setDescricao] = useState('');
   const [ca, setCa] = useState('');
   const [quantidade, setQuantidade] = useState('');
@@ -190,14 +200,58 @@ function AbaCadastrar() {
   const [msg, setMsg] = useState('');
   const [salvando, setSalvando] = useState(false);
 
+  function carregarItens() {
+    api.get('/epi/itens').then(res => setItensEstoque(res.data));
+  }
+  useEffect(carregarItens, []);
+
+  const sugestoes = buscaTexto.trim()
+    ? itensEstoque.filter(i => i.descricao.toLowerCase().includes(buscaTexto.trim().toLowerCase()))
+    : itensEstoque;
+
+  function selecionarItemExistente(item) {
+    setItemSelecionadoId(item.id);
+    setBuscaTexto(item.descricao);
+    setCa(item.ca || '');
+    setMostrarSugestoes(false);
+  }
+
+  function limparSelecao() {
+    setItemSelecionadoId(null);
+    setBuscaTexto('');
+    setCa('');
+  }
+
+  function abrirCriarNovo() {
+    setCriandoNovo(true);
+    setItemSelecionadoId(null);
+    setBuscaTexto('');
+    setDescricao('');
+    setCa('');
+  }
+
+  function cancelarCriarNovo() {
+    setCriandoNovo(false);
+    setDescricao('');
+    setCa('');
+  }
+
   async function salvar(e) {
     e.preventDefault();
     setErro(''); setMsg('');
+
+    const descricaoFinal = criandoNovo ? descricao.trim() : buscaTexto.trim();
+    if (!descricaoFinal) { setErro(criandoNovo ? 'Informe a descrição do novo item.' : 'Selecione um item da lista ou clique em "➕ Criar novo item".'); return; }
+    if (!criandoNovo && !itemSelecionadoId) { setErro('Selecione um item da lista de sugestões, ou clique em "➕ Criar novo item".'); return; }
+
     setSalvando(true);
     try {
-      await api.post('/epi/itens', { descricao, ca, quantidade, estoque_minimo: estoqueMinimo });
+      await api.post('/epi/itens', { descricao: descricaoFinal, ca, quantidade, estoque_minimo: estoqueMinimo });
       setMsg('Item cadastrado / estoque atualizado com sucesso!');
-      setDescricao(''); setCa(''); setQuantidade(''); setEstoqueMinimo('');
+      setQuantidade(''); setEstoqueMinimo('');
+      if (criandoNovo) { setCriandoNovo(false); setDescricao(''); setCa(''); }
+      else { limparSelecao(); }
+      carregarItens();
     } catch (err) {
       setErro(err.response?.data?.erro || 'Erro ao cadastrar item');
     }
@@ -208,13 +262,61 @@ function AbaCadastrar() {
     <div className="card" style={{ maxWidth: 500 }}>
       <h3>Cadastrar item / dar entrada em estoque</h3>
       <p style={{ color: '#6b7280', fontSize: 13 }}>
-        Se já existir um item com a mesma descrição, a quantidade informada será somada ao estoque existente.
+        Selecione um item já existente para somar quantidade ao estoque, ou crie um item novo deliberadamente.
       </p>
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
       {msg && <div style={{ background: '#dcfce7', color: '#166534', padding: 10, borderRadius: 6, marginBottom: 12 }}>{msg}</div>}
+
       <form onSubmit={salvar} className="flex-col gap-2">
-        <label style={{ fontSize: 12 }}>Descrição do EPI</label>
-        <input value={descricao} onChange={e => setDescricao(e.target.value)} required placeholder="Ex: Luva de raspa" />
+        {!criandoNovo ? (
+          <>
+            <label style={{ fontSize: 12 }}>Item do estoque</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                value={buscaTexto}
+                onChange={e => { setBuscaTexto(e.target.value); setItemSelecionadoId(null); setMostrarSugestoes(true); }}
+                onFocus={() => setMostrarSugestoes(true)}
+                onBlur={() => setTimeout(() => setMostrarSugestoes(false), 150)}
+                placeholder="Digite para buscar um item já cadastrado..."
+                autoComplete="off"
+              />
+              {mostrarSugestoes && sugestoes.length > 0 && (
+                <div className="card" style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                  maxHeight: 200, overflow: 'auto', padding: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }}>
+                  {sugestoes.map(item => (
+                    <div
+                      key={item.id}
+                      onMouseDown={() => selecionarItemExistente(item)}
+                      style={{ padding: '6px 8px', cursor: 'pointer', borderRadius: 4, fontSize: 13, display: 'flex', justifyContent: 'space-between' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span>{item.descricao} {item.ca ? `(C.A. ${item.ca})` : ''}</span>
+                      <span style={{ color: '#9ca3af' }}>estoque: {item.quantidade}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {itemSelecionadoId && (
+              <div style={{ fontSize: 12, color: '#166534' }}>✔ Item selecionado — a quantidade informada será somada ao estoque atual.</div>
+            )}
+
+            <button type="button" className="btn-secondary btn-sm" onClick={abrirCriarNovo} style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+              ➕ Criar novo item
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex gap-2" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ fontSize: 12 }}>Descrição do novo EPI</label>
+              <button type="button" className="btn-secondary btn-sm" onClick={cancelarCriarNovo}>← Selecionar item existente</button>
+            </div>
+            <input value={descricao} onChange={e => setDescricao(e.target.value)} required placeholder="Ex: Luva de raspa" />
+          </>
+        )}
 
         <label style={{ fontSize: 12 }}>C.A. (Certificado de Aprovação)</label>
         <input value={ca} onChange={e => setCa(e.target.value)} placeholder="Ex: 12345" />
@@ -232,6 +334,7 @@ function AbaCadastrar() {
     </div>
   );
 }
+
 
 // ---- ABA ESTOQUE ----
 function AbaEstoque() {
