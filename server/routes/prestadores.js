@@ -8,9 +8,11 @@ const router = express.Router();
 router.use(autenticar);
 
 router.get('/', async (req, res) => {
-  const { busca } = req.query;
-  let sql = 'SELECT * FROM colaboradores WHERE ativo = 1';
+  const { busca, status } = req.query; // status: 'ativos' (default) | 'arquivados' | 'todos'
+  let sql = 'SELECT * FROM colaboradores WHERE 1=1';
   const params = [];
+  if (status === 'arquivados') sql += ' AND ativo = 0';
+  else if (status !== 'todos') sql += ' AND ativo = 1';
   if (busca) {
     sql += ' AND (nome ILIKE ? OR documento ILIKE ?)';
     params.push(`%${busca}%`, `%${busca}%`);
@@ -18,6 +20,7 @@ router.get('/', async (req, res) => {
   sql += ' ORDER BY tipo, nome';
   res.json(await db.all(sql, ...params));
 });
+
 
 router.get('/:id/historico', async (req, res) => {
   const id = req.params.id;

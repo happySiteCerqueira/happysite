@@ -26,7 +26,7 @@ export default function Layout() {
           <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>
           {temPermissao('RH') && <NavLink to="/cadastro" style={linkStyle}>👥 Cadastro</NavLink>}
           {temPermissao('FINANCEIRO') && <NavLink to="/medicao" style={linkStyle}>💰 Medição</NavLink>}
-          {temPermissao('FINANCEIRO') && <NavLink to="/pagamentos-antecipados" style={linkStyle}>🧾 Pagtos. Antecipados</NavLink>}
+          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/pagamentos-antecipados" style={linkStyle}>🧾 Pagtos. Antecipados</NavLink>}
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/diarias" style={linkStyle}>📅 Diárias</NavLink>}
 
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}

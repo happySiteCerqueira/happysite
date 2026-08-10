@@ -7,22 +7,53 @@ function mesAtual() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+const CAMPO_VAZIO = {
+  tipo: 'CPF', nome: '', documento: '', telefone: '', email: '', endereco: '',
+  funcao: '', contato_responsavel: '', banco: '', agencia: '', conta: '', pix: '', valor_diaria: 0
+};
+
 export default function Prestadores() {
   const [busca, setBusca] = useState('');
   const [lista, setLista] = useState([]);
   const [aba, setAba] = useState('ativos'); // 'ativos' | 'arquivados'
-  const [selecionado, setSelecionado] = useState(null);
+  const [filtroTipo, setFiltroTipo] = useState(''); // '' | 'CPF' | 'PJ'
+  const [filtroFuncao, setFiltroFuncao] = useState('');
+
+  const [selecionado, setSelecionado] = useState(null); // histórico (visualização)
   const [mes, setMes] = useState(mesAtual());
   const [historico, setHistorico] = useState(null);
   const [carregandoHist, setCarregandoHist] = useState(false);
   const [processando, setProcessando] = useState(null);
   const [erroAcao, setErroAcao] = useState('');
+
+  const [editando, setEditando] = useState(null); // objeto do formulário em edição
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [erroEdicao, setErroEdicao] = useState('');
+
   const { temPermissao, usuario } = useAuth();
+  const podeEditar = temPermissao('RH');
 
   function carregarLista() {
     api.get('/prestadores', { params: { busca, status: aba } }).then(res => setLista(res.data));
   }
   useEffect(carregarLista, [busca, aba]);
+
+  // Lista de funções distintas já cadastradas (para o dropdown de filtro), calculada a partir
+  // do que já está na tela (independe de status ativo/arquivado consultado no momento).
+  const funcoesDisponiveis = [...new Set(
+    lista
+      .map(p => (p.tipo === 'PJ' ? p.contato_responsavel : p.funcao))
+      .filter(f => f && f.trim())
+  )].sort();
+
+  const listaFiltrada = lista.filter(p => {
+    if (filtroTipo && p.tipo !== filtroTipo) return false;
+    if (filtroFuncao) {
+      const f = p.tipo === 'PJ' ? p.contato_responsavel : p.funcao;
+      if (f !== filtroFuncao) return false;
+    }
+    return true;
+  });
 
   async function desligar(id, e) {
     e.stopPropagation();
@@ -62,11 +93,9 @@ export default function Prestadores() {
     setProcessando(null);
   }
 
-
   function abrirHistorico(pessoa) {
     setSelecionado(pessoa);
   }
-
   function fecharHistorico() {
     setSelecionado(null);
     setHistorico(null);
@@ -80,6 +109,56 @@ export default function Prestadores() {
       .finally(() => setCarregandoHist(false));
   }, [selecionado, mes]);
 
+  function abrirEdicao(p, e) {
+    e.stopPropagation();
+    setErroEdicao('');
+    setEditando({
+      id: p.id,
+      tipo: p.tipo || 'CPF',
+      nome: p.nome || '',
+      documento: p.documento || '',
+      telefone: p.telefone || '',
+      email: p.email || '',
+      endereco: p.endereco || '',
+      funcao: p.funcao || '',
+      contato_responsavel: p.contato_responsavel || '',
+      banco: p.banco || '',
+      agencia: p.agencia || '',
+      conta: p.conta || '',
+      pix: p.pix || '',
+      valor_diaria: p.valor_diaria ?? 0
+    });
+  }
+
+  function fecharEdicao() {
+    setEditando(null);
+    setErroEdicao('');
+  }
+
+  async function salvarEdicao() {
+    if (!editando.nome.trim()) { setErroEdicao('Informe o nome.'); return; }
+    setSalvandoEdicao(true);
+    setErroEdicao('');
+    try {
+      await api.put(`/colaboradores/${editando.id}`, {
+        ...editando,
+        valor_diaria: Number(editando.valor_diaria) || 0
+      });
+      fecharEdicao();
+      carregarLista();
+    } catch (err) {
+      setErroEdicao(err.response?.data?.erro || 'Erro ao salvar alterações');
+    }
+    setSalvandoEdicao(false);
+  }
+
+  const linhaCampo = (label, valor, onChange, tipo = 'text') => (
+    <div className="flex-col gap-2">
+      <label style={{ fontSize: 12 }}>{label}</label>
+      <input type={tipo} value={valor} onChange={onChange} />
+    </div>
+  );
+
   return (
     <div>
       <h2>📇 Lista de Prestadores</h2>
@@ -92,56 +171,136 @@ export default function Prestadores() {
         />
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <button className={aba === 'ativos' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('ativos')}>
           Ativos
         </button>
         <button className={aba === 'arquivados' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('arquivados')}>
           Desligados / Arquivados
         </button>
+
+        <span style={{ width: 1, height: 24, background: '#e5e7eb', margin: '0 4px' }}></span>
+
+        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ fontSize: 13 }}>
+          <option value="">Todos os tipos</option>
+          <option value="CPF">Colaborador (PF)</option>
+          <option value="PJ">Empreiteiro (PJ)</option>
+        </select>
+
+        <select value={filtroFuncao} onChange={e => setFiltroFuncao(e.target.value)} style={{ fontSize: 13 }}>
+          <option value="">Todas as funções</option>
+          {funcoesDisponiveis.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
+
+        {(filtroTipo || filtroFuncao) && (
+          <button className="btn-secondary btn-sm" onClick={() => { setFiltroTipo(''); setFiltroFuncao(''); }}>
+            ✖ Limpar filtros
+          </button>
+        )}
       </div>
 
       {erroAcao && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erroAcao}</div>}
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-        {lista.map(p => (
-          <div key={p.id} className="card" style={{ cursor: 'pointer' }} onClick={() => abrirHistorico(p)}>
-            <div className="flex gap-2" style={{ alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ width: 12, height: 12, background: p.cor, borderRadius: 3, display: 'inline-block' }}></span>
-              <strong>{p.nome}</strong>
-            </div>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>{p.tipo === 'PJ' ? 'Empreiteiro (PJ)' : 'Colaborador (PF)'}</div>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>{p.documento || 'Sem documento'}</div>
-
-            {temPermissao('RH') && (
-              <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {aba === 'ativos' ? (
-                  <button className="btn-secondary btn-sm" disabled={processando === p.id} onClick={e => desligar(p.id, e)}>
-                    🚫 Desligar
-                  </button>
-                ) : (
-                  <button className="btn-secondary btn-sm" disabled={processando === p.id} onClick={e => reativar(p.id, e)}>
-                    ↩️ Reativar
-                  </button>
-                )}
-                {usuario?.perfil === 'ADM' && (
-                  <button className="btn-secondary btn-sm" style={{ color: '#991b1b' }} disabled={processando === p.id}
-                    onClick={e => excluirDefinitivo(p.id, p.nome, e)}>
-                    🗑️ Excluir definitivo
-                  </button>
-                )}
-              </div>
+      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: 24 }}></th>
+              <th>Nome</th>
+              <th>Tipo</th>
+              <th>Documento</th>
+              <th>Telefone</th>
+              <th>Função / Contato</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {listaFiltrada.map(p => (
+              <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => abrirHistorico(p)}>
+                <td><span style={{ width: 12, height: 12, background: p.cor, borderRadius: 3, display: 'inline-block' }}></span></td>
+                <td><strong>{p.nome}</strong></td>
+                <td>{p.tipo === 'PJ' ? 'Empreiteiro (PJ)' : 'Colaborador (PF)'}</td>
+                <td style={{ color: '#6b7280' }}>{p.documento || '-'}</td>
+                <td style={{ color: '#6b7280' }}>{p.telefone || '-'}</td>
+                <td style={{ color: '#6b7280' }}>{p.tipo === 'PJ' ? (p.contato_responsavel || '-') : (p.funcao || '-')}</td>
+                <td>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {podeEditar && (
+                      <button className="btn-secondary btn-sm" onClick={e => abrirEdicao(p, e)}>✏️ Editar</button>
+                    )}
+                    {temPermissao('RH') && (
+                      aba === 'ativos' ? (
+                        <button className="btn-secondary btn-sm" disabled={processando === p.id} onClick={e => desligar(p.id, e)}>
+                          🚫 Desligar
+                        </button>
+                      ) : (
+                        <button className="btn-secondary btn-sm" disabled={processando === p.id} onClick={e => reativar(p.id, e)}>
+                          ↩️ Reativar
+                        </button>
+                      )
+                    )}
+                    {usuario?.perfil === 'ADM' && (
+                      <button className="btn-secondary btn-sm" style={{ color: '#991b1b' }} disabled={processando === p.id}
+                        onClick={e => excluirDefinitivo(p.id, p.nome, e)}>
+                        🗑️ Excluir
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {listaFiltrada.length === 0 && (
+              <tr><td colSpan={7} style={{ color: '#9ca3af', padding: 16 }}>
+                {lista.length > 0
+                  ? 'Nenhum prestador corresponde aos filtros selecionados.'
+                  : (aba === 'arquivados' ? 'Nenhum colaborador/empreiteiro arquivado.' : 'Nenhum prestador encontrado.')}
+              </td></tr>
             )}
-          </div>
-        ))}
-        {lista.length === 0 && (
-          <div style={{ color: '#6b7280' }}>
-            {aba === 'arquivados' ? 'Nenhum colaborador/empreiteiro arquivado.' : 'Nenhum prestador encontrado.'}
-          </div>
-        )}
+          </tbody>
+        </table>
       </div>
 
+      {/* Modal de edição de cadastro */}
+      {editando && (
+        <div className="modal-overlay" onClick={fecharEdicao}>
+          <div className="modal-content" style={{ width: 640 }} onClick={e => e.stopPropagation()}>
+            <h4 style={{ marginTop: 0 }}>Editar cadastro</h4>
+            {erroEdicao && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erroEdicao}</div>}
 
+            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div className="flex-col gap-2">
+                <label style={{ fontSize: 12 }}>Tipo</label>
+                <select value={editando.tipo} onChange={e => setEditando({ ...editando, tipo: e.target.value })}>
+                  <option value="CPF">Pessoa Física (CPF)</option>
+                  <option value="PJ">Pessoa Jurídica / Empreiteiro (PJ)</option>
+                </select>
+              </div>
+              {linhaCampo('Nome / Razão Social', editando.nome, e => setEditando({ ...editando, nome: e.target.value }))}
+              {linhaCampo('CPF/CNPJ', editando.documento, e => setEditando({ ...editando, documento: e.target.value }))}
+              {linhaCampo('Telefone', editando.telefone, e => setEditando({ ...editando, telefone: e.target.value }))}
+              {linhaCampo('E-mail', editando.email, e => setEditando({ ...editando, email: e.target.value }))}
+              {linhaCampo('Endereço', editando.endereco, e => setEditando({ ...editando, endereco: e.target.value }))}
+              {editando.tipo === 'CPF'
+                ? linhaCampo('Função', editando.funcao, e => setEditando({ ...editando, funcao: e.target.value }))
+                : linhaCampo('Contato Responsável', editando.contato_responsavel, e => setEditando({ ...editando, contato_responsavel: e.target.value }))}
+              {linhaCampo('Banco', editando.banco, e => setEditando({ ...editando, banco: e.target.value }))}
+              {linhaCampo('Agência', editando.agencia, e => setEditando({ ...editando, agencia: e.target.value }))}
+              {linhaCampo('Conta', editando.conta, e => setEditando({ ...editando, conta: e.target.value }))}
+              {linhaCampo('PIX', editando.pix, e => setEditando({ ...editando, pix: e.target.value }))}
+              {linhaCampo('Valor da Diária (R$)', editando.valor_diaria, e => setEditando({ ...editando, valor_diaria: e.target.value }), 'number')}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-primary" disabled={salvandoEdicao} onClick={salvarEdicao} style={{ flex: 1 }}>
+                {salvandoEdicao ? 'Salvando...' : '💾 Salvar alterações'}
+              </button>
+              <button className="btn-secondary" onClick={fecharEdicao} style={{ flex: 1 }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de histórico (visualização, ao clicar na linha) */}
       {selecionado && (
         <div className="modal-overlay" onClick={fecharHistorico}>
           <div className="modal-content" style={{ width: 640, maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>

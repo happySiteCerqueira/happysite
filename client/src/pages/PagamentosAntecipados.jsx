@@ -19,11 +19,24 @@ export default function PagamentosAntecipados() {
   const [mes, setMes] = useState(mesAtual());
   const [planilha, setPlanilha] = useState({ PJ: [], CPF: [], colunas: { PF: [], PJ: [] } });
   const [salvandoKey, setSalvandoKey] = useState(null);
+  const [filtroTipo, setFiltroTipo] = useState(''); // '' | 'CPF' | 'PJ'
+  const [filtroFuncao, setFiltroFuncao] = useState('');
 
   function carregar() {
     api.get('/pagamentos-antecipados/planilha', { params: { mes } }).then(res => setPlanilha(res.data));
   }
   useEffect(carregar, [mes]);
+
+  const funcoesDisponiveis = [...new Set(
+    [...planilha.PJ, ...planilha.CPF].map(i => i.funcao).filter(f => f && f.trim())
+  )].sort();
+
+  function filtrarItens(itens) {
+    return itens.filter(i => {
+      if (filtroFuncao && i.funcao !== filtroFuncao) return false;
+      return true;
+    });
+  }
 
   async function salvarCelula(item, coluna, valor) {
     const key = `${item.colaborador_id}-${coluna}`;
@@ -121,12 +134,38 @@ export default function PagamentosAntecipados() {
   return (
     <div>
       <h2>🧾 Pagamentos Antecipados</h2>
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ marginRight: 8 }}>Mês:</label>
-        <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
+      <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <label style={{ marginRight: 8 }}>Mês:</label>
+          <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
+        </div>
+
+        <span style={{ width: 1, height: 24, background: '#e5e7eb' }}></span>
+
+        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ fontSize: 13 }}>
+          <option value="">Todos os tipos</option>
+          <option value="CPF">Colaborador (PF)</option>
+          <option value="PJ">Empreiteiro (PJ)</option>
+        </select>
+
+        <select value={filtroFuncao} onChange={e => setFiltroFuncao(e.target.value)} style={{ fontSize: 13 }}>
+          <option value="">Todas as funções</option>
+          {funcoesDisponiveis.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
+
+        {(filtroTipo || filtroFuncao) && (
+          <button className="btn-secondary btn-sm" onClick={() => { setFiltroTipo(''); setFiltroFuncao(''); }}>
+            ✖ Limpar filtros
+          </button>
+        )}
       </div>
-      <Tabela titulo="Pessoa Jurídica (Empreiteiros)" itens={planilha.PJ} colunas={planilha.colunas?.PJ || ['adiantamento']} />
-      <Tabela titulo="Pessoa Física (Colaboradores)" itens={planilha.CPF} colunas={planilha.colunas?.PF || ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra']} />
+
+      {filtroTipo !== 'CPF' && (
+        <Tabela titulo="Pessoa Jurídica (Empreiteiros)" itens={filtrarItens(planilha.PJ)} colunas={planilha.colunas?.PJ || ['adiantamento']} />
+      )}
+      {filtroTipo !== 'PJ' && (
+        <Tabela titulo="Pessoa Física (Colaboradores)" itens={filtrarItens(planilha.CPF)} colunas={planilha.colunas?.PF || ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra']} />
+      )}
       <p style={{ color: '#6b7280', fontSize: 12 }}>
         Edite os valores diretamente na tabela (clique, digite e saia do campo para salvar). O <strong>Total</strong> é calculado
         automaticamente e não pode ser editado. Valores de pessoas cuja medição do mês já foi paga ficam bloqueados (🔒).

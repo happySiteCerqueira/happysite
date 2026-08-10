@@ -1,0 +1,73 @@
+====================================================
+ AjustarCorNotebook.exe - LEIA-ME
+====================================================
+
+O QUE ESTE PROGRAMA FAZ
+------------------------
+Este programa foi criado para ajudar a corrigir problemas de cor e
+HDR no Windows depois de mexer nessas configurações.
+
+Ele NÃO possui um banco de dados mágico com "o perfil de cor ideal"
+para cada modelo de notebook - isso não existe publicamente para
+nenhum fabricante. O que ele faz é:
+
+  1. Detecta automaticamente o fabricante e modelo do seu notebook.
+  2. Verifica se há algum perfil de cor (ICC) customizado associado
+     ao seu monitor no Windows.
+  3. Permite resetar rapidamente para o perfil sRGB padrão do
+     Windows (a opção mais segura e neutra para a maioria dos usos).
+  4. Abre as telas corretas do Windows para você ajustar/conferir:
+     - Configurações de Vídeo
+     - Configurações de HDR
+     - Assistente de Calibração de Cores do Windows (dccw)
+     - Gerenciamento de Cores do Windows (colorcpl)
+  5. Tenta localizar e abrir o software de gerenciamento de tela do
+     fabricante do seu notebook (Dell Display Manager, Lenovo
+     Vantage, HP Display Center, MyASUS/ASUS Splendid, Acer Care
+     Center), caso esteja instalado. É nesses softwares que
+     costuma existir a opção "Perfil de cor padrão de fábrica".
+
+COMO USAR
+---------
+1. Dê dois cliques em "AjustarCorNotebook.exe".
+   - O Windows pode exibir um aviso do SmartScreen (porque o
+     programa não possui assinatura digital paga). Clique em
+     "Mais informações" > "Executar assim mesmo".
+2. Quando perguntado, digite "s" e ENTER para reabrir como
+   Administrador (recomendado, já que altera configurações do
+   sistema).
+3. O programa mostrará o fabricante e modelo detectados do seu
+   notebook.
+4. Use o menu numérico para escolher a ação desejada. Recomendação
+   de uso caso as cores estejam "estranhas":
+     a) Opção 3 -> Desligue o HDR nas Configurações do Windows.
+     b) Opção 1 -> Resete o perfil de cor para sRGB.
+     c) Opção 6 -> Abra o software do fabricante (se instalado) e
+        procure por algo como "Perfil de Cor" ou "Color Profile" e
+        selecione a opção "Padrão"/"Normal"/"sRGB"/"Native".
+
+RECOMENDAÇÃO IMPORTANTE PARA O SEU MODELO (ASUS ROG Zephyrus G16)
+------------------------------------------------------------------
+Notebooks ASUS ROG normalmente usam o aplicativo "MyASUS" ou
+"ASUS Splendid" para gerenciar os perfis de tela (Normal, Vivid,
+Eye Care, Manual, etc.) e o HDR do painel OLED/miniLED. Se o
+MyASUS estiver instalado, use a opção 6 do programa para abri-lo
+e procure a seção de tela/display, restaurando o perfil "Normal"
+ou "Padrão de fábrica".
+
+LIMITAÇÕES CONHECIDAS
+----------------------
+- O programa não substitui um colorímetro físico para calibração
+  precisa de cores profissionais.
+- Não é possível ler/alternar o estado do HDR via linha de comando
+  em todas as versões do Windows de forma 100% confiável; por isso
+  o programa abre a tela de configuração para você alternar
+  manualmente com um clique.
+- Detecção de monitor via WMI pode falhar em alguns notebooks; isso
+  não impede o uso das demais funções.
+
+SUPORTE
+-------
+Este é um utilitário simples, feito sob medida. Qualquer ajuste
+adicional que precisar (por exemplo, suporte a outro fabricante),
+é só pedir.

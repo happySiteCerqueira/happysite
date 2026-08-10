@@ -179,7 +179,7 @@ router.post('/', permitir('RH', 'ADM'), async (req, res) => {
   res.json({ id: info.lastInsertRowid, cor });
 });
 
-router.put('/:id', permitir('RH'), async (req, res) => {
+router.put('/:id', permitir('RH', 'ADM'), async (req, res) => {
   const id = req.params.id;
   const atual = await db.get('SELECT * FROM colaboradores WHERE id = ?', id);
   if (!atual) return res.status(404).json({ erro: 'Não encontrado' });

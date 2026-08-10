@@ -5,7 +5,7 @@ const { registrar } = require('../utils/auditoria');
 
 const router = express.Router();
 
-router.use(autenticar, permitir('FINANCEIRO', 'ADM'));
+router.use(autenticar, permitir('FINANCEIRO', 'RH', 'ADM'));
 
 // Colunas de valores por tipo de pessoa
 const COLUNAS_PF = ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra'];
