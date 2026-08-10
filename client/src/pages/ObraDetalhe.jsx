@@ -108,6 +108,10 @@ export default function ObraDetalhe() {
     api.get(`/obras/servicos/${servicoAtivoId}/pessoas`).then(res => setPessoasLiberadas(res.data));
     carregarGrupos();
     carregarCelulas();
+    // Carrega as quantidades já cadastradas para este serviço, mesmo sem abrir o modal de
+    // Quantidades, pois o desenho usa esse mapa para pintar em cinza-pendência as células
+    // ainda sem quantidade definida.
+    api.get(`/obras/servicos/${servicoAtivoId}/quantidades`).then(res => setQuantidadesMapa(res.data || {}));
   }, [servicoAtivoId, mes]);
 
   function carregarGrupos() {
@@ -608,6 +612,7 @@ export default function ObraDetalhe() {
               pessoasPorId={pessoasPorId}
               onClickCelula={abrirSelecaoPessoa}
               rotulosAptos={rotulosAptos}
+              quantidadesMapa={quantidadesMapa}
             />
           </div>
         </div>

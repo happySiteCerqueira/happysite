@@ -10,6 +10,11 @@
 // Quando modoMedicao === 'pavimento' ou 'frente_fundo', os quadrados de referência C/L/E (corredor/elevador/escada)
 // NÃO são exibidos nos andares de apartamento, pois nesse modo tudo do pavimento é agrupado em bloco(s) clicável(is).
 // No modo 'frente_fundo', cada andar de apartamento é dividido em 2 blocos: "Frente" e "Fundo".
+//
+// quantidadesMapa (opcional): mapa { chaveCelula: quantidade } cadastrado na tela de "Quantidades"
+// do serviço ativo. Quando informado, qualquer célula (ou bloco agrupado, nos modos pavimento/frente_fundo)
+// cuja quantidade seja indefinida ou <= 0 é pintada em cinza-pendência (mais escuro que o cinza "disponível"),
+// indicando visualmente que falta cadastrar a quantidade daquele item antes de poder medir.
 
 import { numeroApto } from '../utils/celulasPredio';
 
@@ -22,7 +27,7 @@ function nomePavimento(numAndar) {
   return `${numAndar}º Andar`;
 }
 
-export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCelula, pessoasPorId, escala, rotulosAptos }) {
+export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCelula, pessoasPorId, escala, rotulosAptos, quantidadesMapa }) {
 
   if (!obra) return null;
   const blocos = obra.blocos_pavimentos || [];
@@ -84,8 +89,17 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
   // Itens do térreo (embaixo de tudo, abaixo da fundação, um quadrado clicável para cada item marcado)
   if (itensTerreo.length > 0) linhas.push({ tipo: 'itens_terreo', itens: itensTerreo });
 
+  // Enquanto não houver uma quantidade > 0 cadastrada para esta célula (na tela de Quantidades
+  // daquele serviço), ela fica em cinza-pendência (mais escuro). A quantidade é individual por
+  // serviço, então quantidadesMapa vem sempre referente ao serviço ativo.
+  function semQuantidade(key) {
+    if (!quantidadesMapa) return false;
+    const qtd = Number(quantidadesMapa[key]);
+    return !(qtd > 0);
+  }
 
   function corCelula(key) {
+    if (semQuantidade(key)) return '#9ca3af';
     const marc = marcacoes?.[key];
     if (!marc) return '#e5e7eb';
     const pessoa = pessoasPorId?.[marc.colaborador_id];
