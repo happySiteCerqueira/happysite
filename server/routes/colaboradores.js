@@ -113,10 +113,9 @@ router.post('/importar', permitir('RH', 'ADM'), async (req, res) => {
     const conta = l[COLUNAS_COLAB[9]] ? String(l[COLUNAS_COLAB[9]]) : null;
     const pix = l[COLUNAS_COLAB[10]] ? String(l[COLUNAS_COLAB[10]]) : null;
 
-    const existente = await db.get(
-      'SELECT * FROM colaboradores WHERE nome = ? AND (documento = ? OR (documento IS NULL AND ? IS NULL))',
-      nome, documento, documento
-    );
+    const existente = documento
+      ? await db.get('SELECT * FROM colaboradores WHERE nome = ? AND documento = ?', nome, documento)
+      : await db.get('SELECT * FROM colaboradores WHERE nome = ? AND documento IS NULL', nome);
     if (existente) {
       await db.run(
         'UPDATE colaboradores SET tipo=?, telefone=?, email=?, endereco=?, funcao=?, contato_responsavel=?, banco=?, agencia=?, conta=?, pix=? WHERE id=?',
