@@ -2,12 +2,12 @@
   "name": "happysite",
   "private": true,
   "version": "1.0.0",
-  "description": "HappySite - Sistema de administração de obras",
+  "description": "HappySite - Sistema de administracao de obras",
   "scripts": {
-    "install:all": "npm install --prefix server && npm install --prefix client",
-    "dev:server": "npm run dev --prefix server",
-    "dev:client": "npm run dev --prefix client",
-    "build:client": "npm run build --prefix client",
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
     "start": "node server/server.js",
     "seed": "node server/db/seed.js"
   }
