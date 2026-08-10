@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
 
-const PERFIS = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE'];
+const PERFIS = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
 
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);

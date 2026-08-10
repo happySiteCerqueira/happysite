@@ -31,6 +31,7 @@ export default function Layout() {
 
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/relatorios" style={linkStyle}>📈 Relatórios</NavLink>}
+          {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
 
           <NavLink to="/configuracoes" style={linkStyle}>⚙️ Configurações</NavLink>
           {usuario?.perfil === 'ADM' && <NavLink to="/usuarios" style={linkStyle}>🔐 Usuários</NavLink>}

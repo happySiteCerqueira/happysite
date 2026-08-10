@@ -115,7 +115,7 @@ async function migrate() {
       nome TEXT NOT NULL,
       login TEXT NOT NULL UNIQUE,
       senha_hash TEXT NOT NULL,
-      perfil TEXT NOT NULL CHECK(perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE')),
+      perfil TEXT NOT NULL CHECK(perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE','SUPERVISOR','APONTADOR')),
       precisa_trocar_senha INTEGER NOT NULL DEFAULT 1,
       ativo INTEGER NOT NULL DEFAULT 1,
       criado_em TIMESTAMP DEFAULT NOW()
@@ -293,6 +293,44 @@ async function migrate() {
       detalhes TEXT,
       criado_em TIMESTAMP DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS epi_itens (
+      id SERIAL PRIMARY KEY,
+      descricao TEXT NOT NULL,
+      ca TEXT,
+      quantidade DOUBLE PRECISION NOT NULL DEFAULT 0,
+      estoque_minimo DOUBLE PRECISION NOT NULL DEFAULT 0,
+      ativo INTEGER NOT NULL DEFAULT 1,
+      criado_em TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS epi_retiradas (
+      id SERIAL PRIMARY KEY,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      data_retirada DATE NOT NULL,
+      assinatura TEXT,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS epi_retirada_itens (
+      id SERIAL PRIMARY KEY,
+      retirada_id INTEGER NOT NULL REFERENCES epi_retiradas(id) ON DELETE CASCADE,
+      epi_item_id INTEGER NOT NULL REFERENCES epi_itens(id),
+      descricao TEXT NOT NULL,
+      ca TEXT,
+      quantidade DOUBLE PRECISION NOT NULL DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS epi_movimentos (
+      id SERIAL PRIMARY KEY,
+      epi_item_id INTEGER NOT NULL REFERENCES epi_itens(id) ON DELETE CASCADE,
+      tipo TEXT NOT NULL CHECK(tipo IN ('ENTRADA','SAIDA')),
+      quantidade DOUBLE PRECISION NOT NULL DEFAULT 0,
+      retirada_id INTEGER REFERENCES epi_retiradas(id) ON DELETE SET NULL,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW()
+    );
   `);
 
   // Seed: serviços padrão
@@ -360,6 +398,24 @@ async function migrate() {
   // Migração idempotente: coluna "valor_diaria" em colaboradores
   if (!(await colunaExiste('colaboradores', 'valor_diaria'))) {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN valor_diaria DOUBLE PRECISION NOT NULL DEFAULT 0');
+  }
+
+  // Migração idempotente: perfis novos (SUPERVISOR, APONTADOR) no CHECK de usuarios.perfil
+  const temSupervisor = await constraintContem('usuarios', 'perfil', 'SUPERVISOR');
+  if (!temSupervisor) {
+    const constraints = await pool.query(
+      `SELECT conname FROM pg_constraint WHERE conrelid = 'usuarios'::regclass AND contype = 'c'`
+    );
+    for (const row of constraints.rows) {
+      const def = await pool.query('SELECT pg_get_constraintdef(oid) as def FROM pg_constraint WHERE conname = $1', [row.conname]);
+      if (def.rows[0] && def.rows[0].def.includes('perfil')) {
+        await pool.query(`ALTER TABLE usuarios DROP CONSTRAINT ${row.conname}`);
+      }
+    }
+    await pool.query(
+      `ALTER TABLE usuarios ADD CONSTRAINT usuarios_perfil_check
+       CHECK (perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE','SUPERVISOR','APONTADOR'))`
+    );
   }
 }
 
