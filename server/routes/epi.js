@@ -14,15 +14,18 @@ const PERFIS_EPI = ['ADM', 'RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADO
 
 router.get('/itens', permitir(...PERFIS_EPI), async (req, res) => {
   const itens = await db.all('SELECT * FROM epi_itens WHERE ativo = 1 ORDER BY descricao');
+  itens.sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR', { sensitivity: 'base' }));
   res.json(itens);
 });
 
-// Cadastrar/entrada: soma quantidade se já existir item com a mesma descrição (case-insensitive), senão cria
+// Cadastrar/entrada: soma quantidade se já existir item com a mesma descrição (case-insensitive), senão cria.
+// A quantidade é opcional: pode-se cadastrar/atualizar um item (descrição, C.A., estoque mínimo) sem
+// necessariamente dar entrada em estoque agora. Se quantidade vier vazia/zero, nenhum movimento é gerado.
 router.post('/itens', permitir(...PERFIS_EPI), async (req, res) => {
   const { descricao, quantidade, ca, estoque_minimo } = req.body;
   if (!descricao || !descricao.trim()) return res.status(400).json({ erro: 'Descrição é obrigatória' });
-  const qtd = Number(quantidade);
-  if (!qtd || qtd <= 0) return res.status(400).json({ erro: 'Quantidade deve ser maior que zero' });
+  const qtd = Number(quantidade) || 0;
+  if (qtd < 0) return res.status(400).json({ erro: 'Quantidade não pode ser negativa' });
 
   const existente = await db.get('SELECT * FROM epi_itens WHERE LOWER(descricao) = LOWER(?) AND ativo = 1', descricao.trim());
 
@@ -39,8 +42,10 @@ router.post('/itens', permitir(...PERFIS_EPI), async (req, res) => {
     itemId = info.lastInsertRowid;
   }
 
-  await db.run('INSERT INTO epi_movimentos (epi_item_id, tipo, quantidade, criado_por) VALUES (?,?,?,?)',
-    itemId, 'ENTRADA', qtd, req.usuario.id);
+  if (qtd > 0) {
+    await db.run('INSERT INTO epi_movimentos (epi_item_id, tipo, quantidade, criado_por) VALUES (?,?,?,?)',
+      itemId, 'ENTRADA', qtd, req.usuario.id);
+  }
 
   await registrar(req.usuario.id, 'ENTRADA_EPI', 'epi_itens', itemId, { descricao, quantidade: qtd, ca });
   res.json({ ok: true, id: itemId });

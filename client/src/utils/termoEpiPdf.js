@@ -14,10 +14,27 @@ f) devolver o EPI ao término do contrato, quando de sua substituição por novo
 
 O uso incorreto ou a não utilização do EPI, bem como o descumprimento das obrigações acima, poderá acarretar em advertência, suspensão ou demissão por justa causa, conforme legislação vigente.`;
 
+// Extrai apenas a parte "AAAA-MM-DD" de uma data, aceitando tanto uma string pura de data
+// (ex: "2026-08-11") quanto um timestamp ISO completo vindo do Postgres (ex: "2026-08-11T00:00:00.000Z"),
+// evitando problemas de fuso horário ao usar new Date(...) e removendo qualquer resquício de hora.
+function apenasDataISO(valor) {
+  if (!valor) return '';
+  return String(valor).split('T')[0];
+}
+
 function formatarData(dataStr) {
-  if (!dataStr) return '';
-  const [ano, mes, dia] = dataStr.split('-');
+  const iso = apenasDataISO(dataStr);
+  if (!iso) return '';
+  const [ano, mes, dia] = iso.split('-');
   return `${dia}/${mes}/${ano}`;
+}
+
+// Formato usado no nome do arquivo: DD-MM-AAAA (sem hora, sem barras que quebrariam o nome do arquivo)
+function formatarDataParaArquivo(dataStr) {
+  const iso = apenasDataISO(dataStr);
+  if (!iso) return '';
+  const [ano, mes, dia] = iso.split('-');
+  return `${dia}-${mes}-${ano}`;
 }
 
 export function gerarTermoEpiPdf(retirada) {
@@ -92,5 +109,6 @@ export function gerarTermoEpiPdf(retirada) {
   doc.setFontSize(9);
   doc.text('Assinatura do recebedor', margem, y);
 
-  doc.save(`termo-epi-${(retirada.colaborador?.nome || 'colaborador').replace(/\s+/g, '_')}-${retirada.data_retirada}.pdf`);
+  const nomeArquivo = (retirada.colaborador?.nome || 'colaborador').replace(/\s+/g, '_');
+  doc.save(`termo-epi-${nomeArquivo}-${formatarDataParaArquivo(retirada.data_retirada)}.pdf`);
 }

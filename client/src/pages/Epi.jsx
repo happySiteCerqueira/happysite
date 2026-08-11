@@ -8,6 +8,10 @@ function hoje() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function ordenarAlfabetico(lista) {
+  return [...lista].sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR', { sensitivity: 'base' }));
+}
+
 export default function Epi() {
   const [aba, setAba] = useState('retirada'); // retirada | cadastrar | estoque | historico
 
@@ -111,8 +115,10 @@ function AbaRetirada() {
     );
   }
 
+  const itensOrdenados = ordenarAlfabetico(itensEstoque);
+
   return (
-    <div className="card" style={{ maxWidth: 700 }}>
+    <div className="card" style={{ maxWidth: 700, width: '100%' }}>
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -131,8 +137,8 @@ function AbaRetirada() {
 
       <div style={{ marginBottom: 16 }}>
         <label style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>Adicionar item do estoque</label>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {itensEstoque.map(item => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6 }}>
+          {itensOrdenados.map(item => (
             <button
               key={item.id}
               type="button"
@@ -140,6 +146,7 @@ function AbaRetirada() {
               disabled={itensSelecionados.some(i => i.epi_item_id === item.id) || item.quantidade <= 0}
               onClick={() => adicionarItem(item)}
               title={item.quantidade <= 0 ? 'Sem estoque' : `Disponível: ${item.quantidade}`}
+              style={{ width: '100%', textAlign: 'left' }}
             >
               {item.descricao} ({item.quantidade})
             </button>
@@ -184,6 +191,7 @@ function AbaRetirada() {
 // Por padrão, exige selecionar um item já existente no estoque (autocomplete/boxpoint),
 // evitando duplicidade por erro de digitação. Criar um item novo é uma ação deliberada,
 // feita através do botão "➕ Criar novo item".
+// A quantidade é opcional: pode-se cadastrar/atualizar um item sem dar entrada em estoque agora.
 function AbaCadastrar() {
   const [itensEstoque, setItensEstoque] = useState([]);
   const [criandoNovo, setCriandoNovo] = useState(false);
@@ -205,9 +213,11 @@ function AbaCadastrar() {
   }
   useEffect(carregarItens, []);
 
-  const sugestoes = buscaTexto.trim()
-    ? itensEstoque.filter(i => i.descricao.toLowerCase().includes(buscaTexto.trim().toLowerCase()))
-    : itensEstoque;
+  const sugestoes = ordenarAlfabetico(
+    buscaTexto.trim()
+      ? itensEstoque.filter(i => i.descricao.toLowerCase().includes(buscaTexto.trim().toLowerCase()))
+      : itensEstoque
+  );
 
   function selecionarItemExistente(item) {
     setItemSelecionadoId(item.id);
@@ -247,7 +257,7 @@ function AbaCadastrar() {
     setSalvando(true);
     try {
       await api.post('/epi/itens', { descricao: descricaoFinal, ca, quantidade, estoque_minimo: estoqueMinimo });
-      setMsg('Item cadastrado / estoque atualizado com sucesso!');
+      setMsg(quantidade ? 'Item cadastrado / estoque atualizado com sucesso!' : 'Item cadastrado com sucesso! (sem entrada em estoque)');
       setQuantidade(''); setEstoqueMinimo('');
       if (criandoNovo) { setCriandoNovo(false); setDescricao(''); setCa(''); }
       else { limparSelecao(); }
@@ -263,6 +273,7 @@ function AbaCadastrar() {
       <h3>Cadastrar item / dar entrada em estoque</h3>
       <p style={{ color: '#6b7280', fontSize: 13 }}>
         Selecione um item já existente para somar quantidade ao estoque, ou crie um item novo deliberadamente.
+        A quantidade é opcional — deixe em branco se quiser apenas cadastrar o item sem dar entrada agora.
       </p>
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
       {msg && <div style={{ background: '#dcfce7', color: '#166534', padding: 10, borderRadius: 6, marginBottom: 12 }}>{msg}</div>}
@@ -321,8 +332,8 @@ function AbaCadastrar() {
         <label style={{ fontSize: 12 }}>C.A. (Certificado de Aprovação)</label>
         <input value={ca} onChange={e => setCa(e.target.value)} placeholder="Ex: 12345" />
 
-        <label style={{ fontSize: 12 }}>Quantidade a adicionar</label>
-        <input type="number" min="1" value={quantidade} onChange={e => setQuantidade(e.target.value)} required />
+        <label style={{ fontSize: 12 }}>Quantidade a adicionar (opcional)</label>
+        <input type="number" min="0" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="Deixe vazio para não dar entrada agora" />
 
         <label style={{ fontSize: 12 }}>Estoque mínimo (opcional, alerta)</label>
         <input type="number" min="0" value={estoqueMinimo} onChange={e => setEstoqueMinimo(e.target.value)} />
@@ -342,7 +353,7 @@ function AbaEstoque() {
   const [editando, setEditando] = useState(null);
 
   function carregar() {
-    api.get('/epi/itens').then(res => setItens(res.data));
+    api.get('/epi/itens').then(res => setItens(ordenarAlfabetico(res.data)));
   }
   useEffect(carregar, []);
 
