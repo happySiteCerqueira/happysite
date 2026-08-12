@@ -1,8 +1,36 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+
+// Mapa usado só para exibir um título amigável na barra superior mobile
+const TITULOS_ROTA = [
+  { prefixo: '/obras', titulo: '🏢 Obras' },
+  { prefixo: '/cadastro', titulo: '👥 Cadastro' },
+  { prefixo: '/medicao', titulo: '💰 Medição' },
+  { prefixo: '/pagamentos-antecipados', titulo: '🧾 Pagtos. Antecipados' },
+  { prefixo: '/diarias', titulo: '📅 Diárias' },
+  { prefixo: '/prestadores', titulo: '📇 Prestadores' },
+  { prefixo: '/relatorios', titulo: '📈 Relatórios' },
+  { prefixo: '/epi', titulo: '🦺 EPI' },
+  { prefixo: '/configuracoes', titulo: '⚙️ Configurações' },
+  { prefixo: '/usuarios', titulo: '🔐 Usuários' },
+  { prefixo: '/backup', titulo: '💾 Backup' }
+];
+
+function tituloDaRota(pathname) {
+  const encontrada = TITULOS_ROTA.find(r => pathname.startsWith(r.prefixo));
+  return encontrada ? encontrada.titulo : '📊 Painel';
+}
 
 export default function Layout() {
   const { usuario, logout, temPermissao } = useAuth();
+  const location = useLocation();
+  const [menuAberto, setMenuAberto] = useState(false);
+
+  // Fecha o menu automaticamente ao navegar para outra tela (clique num link do menu mobile)
+  useEffect(() => {
+    setMenuAberto(false);
+  }, [location.pathname]);
 
   const linkStyle = ({ isActive }) => ({
     display: 'block',
@@ -16,12 +44,29 @@ export default function Layout() {
   });
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside style={{ width: 220, background: '#0f172a', padding: 16, display: 'flex', flexDirection: 'column' }}>
+    <div className="layout-root">
+      {/* Barra superior visível apenas em telas pequenas (mobile), controlada via CSS */}
+      <header className="layout-topbar-mobile">
+        <button
+          type="button"
+          className="btn-secondary btn-sm"
+          onClick={() => setMenuAberto(true)}
+          aria-label="Abrir menu"
+          style={{ fontSize: 18, padding: '6px 10px' }}
+        >
+          ☰
+        </button>
+        <span className="layout-topbar-titulo">{tituloDaRota(location.pathname)}</span>
+      </header>
+
+      {/* Fundo escurecido ao abrir o menu no mobile, clicar nele fecha o menu */}
+      {menuAberto && <div className="layout-overlay-mobile" onClick={() => setMenuAberto(false)} />}
+
+      <aside className={`layout-sidebar${menuAberto ? ' layout-sidebar-aberta' : ''}`}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
           <img src="/logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: 70, objectFit: 'contain' }} />
         </div>
-        <nav style={{ flex: 1 }}>
+        <nav style={{ flex: 1, overflowY: 'auto' }}>
           <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>
           <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>
           {temPermissao('RH') && <NavLink to="/cadastro" style={linkStyle}>👥 Cadastro</NavLink>}
@@ -43,7 +88,7 @@ export default function Layout() {
           <button onClick={logout} className="btn-secondary btn-sm" style={{ marginTop: 8, width: '100%' }}>Sair</button>
         </div>
       </aside>
-      <main style={{ flex: 1, padding: 24, overflow: 'auto' }}>
+      <main className="layout-conteudo">
         <Outlet />
       </main>
     </div>

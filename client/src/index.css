@@ -74,3 +74,63 @@ table th { background: #f9fafb; font-weight: 600; }
   background: #fff; border-radius: 10px; padding: 20px;
   max-width: 90vw; max-height: 90vh; overflow: auto; min-width: 320px;
 }
+
+/* ---- Layout responsivo (mobile) ---- */
+.layout-root { display: flex; min-height: 100vh; }
+
+.layout-topbar-mobile { display: none; }
+
+.layout-sidebar {
+  width: 220px;
+  background: #0f172a;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.layout-overlay-mobile { display: none; }
+
+.layout-conteudo { flex: 1; padding: 24px; overflow: auto; min-width: 0; }
+
+@media (max-width: 768px) {
+  .layout-root { flex-direction: column; }
+
+  /* Barra superior fixa substitui a lateral fixa, deixando mais espaço para o conteúdo */
+  .layout-topbar-mobile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #0f172a;
+    padding: 10px 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .layout-topbar-titulo { color: #fff; font-weight: 700; font-size: 15px; }
+
+  /* Sidebar passa a ser um menu deslizante (drawer), oculto por padrão */
+  .layout-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 260px;
+    max-width: 82vw;
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.3);
+  }
+  .layout-sidebar-aberta { transform: translateX(0); }
+
+  .layout-overlay-mobile {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 150;
+  }
+
+  .layout-conteudo { padding: 14px; }
+}
