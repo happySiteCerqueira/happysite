@@ -167,14 +167,17 @@ router.post('/', permitir('RH', 'ADM'), async (req, res) => {
   const b = req.body;
   if (!b.nome) return res.status(400).json({ erro: 'Nome é obrigatório' });
   const cor = b.cor || await proximaCor();
-  const info = await db.run(
-    `INSERT INTO colaboradores
-    (tipo, nome, documento, telefone, email, endereco, funcao, contato_responsavel, banco, agencia, conta, pix, cor, valor_diaria, data_nascimento, data_admissao)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const colunas = ['tipo', 'nome', 'documento', 'telefone', 'email', 'endereco', 'funcao', 'contato_responsavel', 'banco', 'agencia', 'conta', 'pix', 'cor', 'valor_diaria', 'data_nascimento', 'data_admissao'];
+  const valores = [
     b.tipo || 'CPF', b.nome, b.documento || null, b.telefone || null, b.email || null,
     b.endereco || null, b.funcao || null, b.contato_responsavel || null,
     b.banco || null, b.agencia || null, b.conta || null, b.pix || null, cor, Number(b.valor_diaria) || 0,
     b.data_nascimento || null, b.data_admissao || null
+  ];
+  const placeholders = colunas.map(() => '?').join(',');
+  const info = await db.run(
+    `INSERT INTO colaboradores (${colunas.join(', ')}) VALUES (${placeholders})`,
+    ...valores
   );
   await registrar(req.usuario.id, 'CRIAR', 'colaboradores', info.lastInsertRowid, b);
   res.json({ id: info.lastInsertRowid, cor });
