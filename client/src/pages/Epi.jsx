@@ -138,19 +138,23 @@ function AbaRetirada() {
       <div style={{ marginBottom: 16 }}>
         <label style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>Adicionar item do estoque</label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6 }}>
-          {itensOrdenados.map(item => (
-            <button
-              key={item.id}
-              type="button"
-              className="btn-secondary btn-sm"
-              disabled={itensSelecionados.some(i => i.epi_item_id === item.id) || item.quantidade <= 0}
-              onClick={() => adicionarItem(item)}
-              title={item.quantidade <= 0 ? 'Sem estoque' : `Disponível: ${item.quantidade}`}
-              style={{ width: '100%', textAlign: 'left' }}
-            >
-              {item.descricao} ({item.quantidade})
-            </button>
-          ))}
+          {itensOrdenados.map(item => {
+            const jaSelecionado = itensSelecionados.some(i => i.epi_item_id === item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={jaSelecionado ? 'btn-success btn-sm' : 'btn-secondary btn-sm'}
+                disabled={jaSelecionado || item.quantidade <= 0}
+                onClick={() => adicionarItem(item)}
+                title={item.quantidade <= 0 ? 'Sem estoque' : `Disponível: ${item.quantidade}`}
+                style={{ width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span>{item.descricao} ({item.quantidade})</span>
+                {jaSelecionado && <span>✔ Selecionado</span>}
+              </button>
+            );
+          })}
           {itensEstoque.length === 0 && <span style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum item cadastrado no estoque ainda.</span>}
         </div>
       </div>
