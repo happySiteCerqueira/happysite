@@ -14,7 +14,8 @@ function baixarBlob(blob, nomeArquivo) {
 
 const COLABORADOR_VAZIO = {
   tipo: 'CPF', nome: '', documento: '', telefone: '', email: '', endereco: '',
-  funcao: '', contato_responsavel: '', banco: '', agencia: '', conta: '', pix: '', valor_diaria: ''
+  funcao: '', contato_responsavel: '', banco: '', agencia: '', conta: '', pix: '', valor_diaria: '',
+  data_nascimento: '', data_admissao: ''
 };
 
 
@@ -271,6 +272,9 @@ export default function Cadastro() {
                 {campo('Agência', novoColab.agencia, e => setNovoColab({ ...novoColab, agencia: e.target.value }))}
                 {campo('Conta', novoColab.conta, e => setNovoColab({ ...novoColab, conta: e.target.value }))}
                 {campo('PIX', novoColab.pix, e => setNovoColab({ ...novoColab, pix: e.target.value }))}
+                {campo(novoColab.tipo === 'PJ' ? 'Data de Fundação/Aniversário (opcional)' : 'Data de Nascimento (opcional)',
+                  novoColab.data_nascimento, e => setNovoColab({ ...novoColab, data_nascimento: e.target.value }), 'date')}
+                {campo('Data de Admissão (opcional)', novoColab.data_admissao, e => setNovoColab({ ...novoColab, data_admissao: e.target.value }), 'date')}
                 <div className="flex-col gap-2">
                   <label style={{ fontSize: 12 }}>Valor da Diária (R$) — opcional</label>
                   <input type="number" step="0.01" value={novoColab.valor_diaria}

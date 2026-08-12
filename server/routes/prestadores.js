@@ -70,7 +70,7 @@ router.get('/:id/historico', async (req, res) => {
     return {
       ...r,
       obra_nome: obra ? obra.nome : '',
-      rotulo: rotulos[r.celula_key] || rotuloCelula(r.celula_key, obra)
+      rotulo: rotulos[r.celula_key] || rotuloCelula(obra, r.celula_key, rotulos)
     };
   });
 

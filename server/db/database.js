@@ -400,6 +400,14 @@ async function migrate() {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN valor_diaria DOUBLE PRECISION NOT NULL DEFAULT 0');
   }
 
+  // Migração idempotente: datas de nascimento e admissão em colaboradores (usado no Painel: aniversariantes)
+  if (!(await colunaExiste('colaboradores', 'data_nascimento'))) {
+    await pool.query('ALTER TABLE colaboradores ADD COLUMN data_nascimento DATE');
+  }
+  if (!(await colunaExiste('colaboradores', 'data_admissao'))) {
+    await pool.query('ALTER TABLE colaboradores ADD COLUMN data_admissao DATE');
+  }
+
   // Migração idempotente: perfis novos (SUPERVISOR, APONTADOR) no CHECK de usuarios.perfil
   const temSupervisor = await constraintContem('usuarios', 'perfil', 'SUPERVISOR');
   if (!temSupervisor) {

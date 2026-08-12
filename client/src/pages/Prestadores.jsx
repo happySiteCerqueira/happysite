@@ -7,9 +7,33 @@ function mesAtual() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// Formata uma data (Date, string ISO ou 'YYYY-MM-DD') como dd/mm/aaaa, ignorando timezone
+// (usa os componentes UTC para evitar que colunas DATE do Postgres "voltem" um dia por fuso).
+function formatarData(data) {
+  if (!data) return '-';
+  const d = new Date(data);
+  if (isNaN(d.getTime())) return '-';
+  const dia = String(d.getUTCDate()).padStart(2, '0');
+  const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const ano = d.getUTCFullYear();
+  return `${dia}/${mes}/${ano}`;
+}
+
+// Converte uma data para o formato aceito pelo <input type="date"> (YYYY-MM-DD)
+function paraInputDate(data) {
+  if (!data) return '';
+  const d = new Date(data);
+  if (isNaN(d.getTime())) return '';
+  const ano = d.getUTCFullYear();
+  const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(d.getUTCDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
 const CAMPO_VAZIO = {
   tipo: 'CPF', nome: '', documento: '', telefone: '', email: '', endereco: '',
-  funcao: '', contato_responsavel: '', banco: '', agencia: '', conta: '', pix: '', valor_diaria: 0
+  funcao: '', contato_responsavel: '', banco: '', agencia: '', conta: '', pix: '', valor_diaria: 0,
+  data_nascimento: '', data_admissao: ''
 };
 
 export default function Prestadores() {
@@ -126,7 +150,9 @@ export default function Prestadores() {
       agencia: p.agencia || '',
       conta: p.conta || '',
       pix: p.pix || '',
-      valor_diaria: p.valor_diaria ?? 0
+      valor_diaria: p.valor_diaria ?? 0,
+      data_nascimento: paraInputDate(p.data_nascimento),
+      data_admissao: paraInputDate(p.data_admissao)
     });
   }
 
@@ -211,6 +237,8 @@ export default function Prestadores() {
               <th>Documento</th>
               <th>Telefone</th>
               <th>Função / Contato</th>
+              <th>Nascimento</th>
+              <th>Admissão</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -223,6 +251,8 @@ export default function Prestadores() {
                 <td style={{ color: '#6b7280' }}>{p.documento || '-'}</td>
                 <td style={{ color: '#6b7280' }}>{p.telefone || '-'}</td>
                 <td style={{ color: '#6b7280' }}>{p.tipo === 'PJ' ? (p.contato_responsavel || '-') : (p.funcao || '-')}</td>
+                <td style={{ color: '#6b7280' }}>{formatarData(p.data_nascimento)}</td>
+                <td style={{ color: '#6b7280' }}>{formatarData(p.data_admissao)}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {podeEditar && (
@@ -250,7 +280,7 @@ export default function Prestadores() {
               </tr>
             ))}
             {listaFiltrada.length === 0 && (
-              <tr><td colSpan={7} style={{ color: '#9ca3af', padding: 16 }}>
+              <tr><td colSpan={9} style={{ color: '#9ca3af', padding: 16 }}>
                 {lista.length > 0
                   ? 'Nenhum prestador corresponde aos filtros selecionados.'
                   : (aba === 'arquivados' ? 'Nenhum colaborador/empreiteiro arquivado.' : 'Nenhum prestador encontrado.')}
@@ -287,6 +317,9 @@ export default function Prestadores() {
               {linhaCampo('Agência', editando.agencia, e => setEditando({ ...editando, agencia: e.target.value }))}
               {linhaCampo('Conta', editando.conta, e => setEditando({ ...editando, conta: e.target.value }))}
               {linhaCampo('PIX', editando.pix, e => setEditando({ ...editando, pix: e.target.value }))}
+              {linhaCampo(editando.tipo === 'PJ' ? 'Data de Fundação/Aniversário' : 'Data de Nascimento',
+                editando.data_nascimento, e => setEditando({ ...editando, data_nascimento: e.target.value }), 'date')}
+              {linhaCampo('Data de Admissão', editando.data_admissao, e => setEditando({ ...editando, data_admissao: e.target.value }), 'date')}
               {linhaCampo('Valor da Diária (R$)', editando.valor_diaria, e => setEditando({ ...editando, valor_diaria: e.target.value }), 'number')}
             </div>
 

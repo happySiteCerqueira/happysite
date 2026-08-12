@@ -46,49 +46,180 @@ function calcularEscala(obra, alturaDisponivel, larguraDisponivel) {
   return escala;
 }
 
+function mesAtual() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function nomeMesExtenso(mesStr) {
+  if (!mesStr) return '';
+  const [ano, mes] = mesStr.split('-').map(Number);
+  const nomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  return `${nomes[mes - 1]} de ${ano}`;
+}
 
 export default function Painel() {
-  const [obras, setObras] = useState([]);
+  const [aba, setAba] = useState('geral'); // 'geral' (padrão) | 'indicadores'
+  const [mes, setMes] = useState(mesAtual());
+  const [dados, setDados] = useState(null);
+  const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    api.get('/painel').then(res => setObras(res.data));
-  }, []);
+    setCarregando(true);
+    api.get('/painel', { params: { mes } }).then(res => setDados(res.data)).finally(() => setCarregando(false));
+  }, [mes]);
+
+  const obras = dados?.obras || [];
 
   return (
     <div>
-      <h2>📊 Painel Geral de Obras</h2>
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-        {obras.map(o => {
-          const totalProducao = o.producao_mensal.reduce((s, m) => s + m.total, 0);
-          const maxProd = Math.max(...o.producao_mensal.map(m => m.total), 1);
-          const ALTURA_DISPONIVEL = 320;
-          const LARGURA_DISPONIVEL = 260;
-          const escala = calcularEscala(o, ALTURA_DISPONIVEL, LARGURA_DISPONIVEL);
-          return (
-            <Link key={o.id} to={`/obras/${o.id}`} className="card" style={{ display: 'block' }}>
-              <div style={{ fontWeight: 700, marginBottom: 10 }}>{o.nome}</div>
-              <div style={{ height: ALTURA_DISPONIVEL, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                <PredioDesenho obra={o} modoMedicao="apartamento" marcacoes={{}} pessoasPorId={{}} escala={escala} />
-              </div>
+      <h2>📊 Painel</h2>
 
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button className={aba === 'geral' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('geral')}>
+          🏗️ Visão Geral
+        </button>
+        <button className={aba === 'indicadores' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('indicadores')}>
+          📈 Indicadores do Mês
+        </button>
+      </div>
 
-                Produção acumulada: R$ {totalProducao.toFixed(2)}
-              </div>
-              <div style={{ display: 'flex', gap: 3, alignItems: 'end', height: 40 }}>
-                {o.producao_mensal.map(m => (
-                  <div key={m.mes_ciclo} title={`${m.mes_ciclo}: R$ ${m.total.toFixed(2)}`}
-                    style={{
-                      width: 10, background: '#2563eb', borderRadius: 2,
-                      height: `${Math.max(4, (m.total / maxProd) * 40)}px`
-                    }} />
-                ))}
-                {o.producao_mensal.length === 0 && <span style={{ fontSize: 11, color: '#9ca3af' }}>Sem produção lançada ainda</span>}
-              </div>
-            </Link>
-          );
-        })}
-        {obras.length === 0 && <div style={{ color: '#6b7280' }}>Nenhuma obra ativa.</div>}
+      {carregando && <div style={{ color: '#6b7280' }}>Carregando...</div>}
+
+      {!carregando && aba === 'geral' && <AbaVisaoGeral obras={obras} />}
+      {!carregando && aba === 'indicadores' && (
+        <AbaIndicadores mes={mes} setMes={setMes} dados={dados} obras={obras} />
+      )}
+    </div>
+  );
+}
+
+function AbaVisaoGeral({ obras }) {
+  return (
+    <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+      {obras.map(o => {
+        const producaoMensal = o.producao_mensal || [];
+        const totalProducao = producaoMensal.reduce((s, m) => s + m.total, 0);
+        const maxProd = Math.max(...producaoMensal.map(m => m.total), 1);
+        const ALTURA_DISPONIVEL = 320;
+        const LARGURA_DISPONIVEL = 260;
+        const escala = calcularEscala(o, ALTURA_DISPONIVEL, LARGURA_DISPONIVEL);
+        return (
+          <Link key={o.id} to={`/obras/${o.id}`} className="card" style={{ display: 'block' }}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>{o.nome}</div>
+            <div style={{ height: ALTURA_DISPONIVEL, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <PredioDesenho obra={o} modoMedicao="apartamento" marcacoes={{}} pessoasPorId={{}} escala={escala} />
+            </div>
+
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
+              Produção acumulada: R$ {totalProducao.toFixed(2)}
+            </div>
+            <div style={{ display: 'flex', gap: 3, alignItems: 'end', height: 40 }}>
+              {producaoMensal.map(m => (
+                <div key={m.mes_ciclo} title={`${m.mes_ciclo}: R$ ${m.total.toFixed(2)}`}
+                  style={{
+                    width: 10, background: '#2563eb', borderRadius: 2,
+                    height: `${Math.max(4, (m.total / maxProd) * 40)}px`
+                  }} />
+              ))}
+              {producaoMensal.length === 0 && <span style={{ fontSize: 11, color: '#9ca3af' }}>Sem produção lançada ainda</span>}
+            </div>
+          </Link>
+        );
+      })}
+      {obras.length === 0 && <div style={{ color: '#6b7280' }}>Nenhuma obra ativa.</div>}
+    </div>
+  );
+}
+
+function AbaIndicadores({ mes, setMes, dados, obras }) {
+  const aniversariantesNascimento = dados?.aniversariantes_nascimento || [];
+  const aniversariantesEmpresa = dados?.aniversariantes_empresa || [];
+  const estoqueBaixo = dados?.estoque_baixo || [];
+  const funcionariosDoMes = dados?.funcionarios_do_mes || [];
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <label style={{ fontSize: 13, fontWeight: 600 }}>Mês de referência:</label>
+        <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
+        <span style={{ color: '#6b7280', fontSize: 13 }}>{nomeMesExtenso(mes)}</span>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="card">
+          <h4 style={{ marginTop: 0 }}>🎂 Aniversariantes do mês</h4>
+          {aniversariantesNascimento.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum aniversariante este mês.</p>}
+          {aniversariantesNascimento.map(p => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: p.cor, display: 'inline-block' }}></span>
+              <span>{p.nome}</span>
+              <span style={{ color: '#9ca3af', fontSize: 12, marginLeft: 'auto' }}>dia {p.dia}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <h4 style={{ marginTop: 0 }}>🏢 Aniversário de empresa (admissão)</h4>
+          {aniversariantesEmpresa.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum aniversário de empresa este mês.</p>}
+          {aniversariantesEmpresa.map(p => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: p.cor, display: 'inline-block' }}></span>
+              <span>{p.nome}</span>
+              <span style={{ color: '#9ca3af', fontSize: 12, marginLeft: 'auto' }}>{p.anos} ano(s) — dia {p.dia}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <h4 style={{ marginTop: 0 }}>⚠️ Estoque de EPI baixo</h4>
+          {estoqueBaixo.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum item com estoque baixo.</p>}
+          {estoqueBaixo.map(item => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+              <span>{item.descricao} {item.ca ? `(C.A. ${item.ca})` : ''}</span>
+              <span style={{ color: '#dc2626', fontSize: 12, marginLeft: 'auto', fontWeight: 600 }}>
+                {item.quantidade} / mín. {item.estoque_minimo}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <h4 style={{ marginTop: 0 }}>🏆 Funcionário do mês (por serviço)</h4>
+          {funcionariosDoMes.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhuma produção lançada neste mês.</p>}
+          {funcionariosDoMes.map((f, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: f.cor, display: 'inline-block' }}></span>
+              <span>{f.servico_nome}: <strong>{f.colaborador_nome}</strong></span>
+              <span style={{ color: '#9ca3af', fontSize: 12, marginLeft: 'auto' }}>R$ {f.total.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <h4 style={{ marginTop: 0 }}>🏗️ Obras — serviços medidos no mês</h4>
+        <table>
+          <thead>
+            <tr><th>Obra</th><th>Serviço</th><th>Quantidade</th><th>Valor</th></tr>
+          </thead>
+          <tbody>
+            {obras.flatMap(o => (o.servicos || [])
+              .filter(s => s.valor_total > 0)
+              .map(s => (
+                <tr key={`${o.id}-${s.obra_servico_id}`}>
+                  <td><Link to={`/obras/${o.id}`}>{o.nome}</Link></td>
+                  <td>{s.servico_nome}</td>
+                  <td>{s.quantidade_total}</td>
+                  <td>R$ {s.valor_total.toFixed(2)}</td>
+                </tr>
+              ))
+            )}
+            {obras.every(o => (o.servicos || []).every(s => s.valor_total <= 0)) && (
+              <tr><td colSpan={4} style={{ color: '#9ca3af' }}>Nenhum serviço medido neste mês.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
