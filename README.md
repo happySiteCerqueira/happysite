@@ -30,7 +30,24 @@ conexão fica em `server/.env` (local) ou na variável de ambiente `DATABASE_URL
 Como o banco é o mesmo para todo mundo, qualquer computador que rodar o backend do HappySite
 (local ou na nuvem) enxerga os mesmos dados em tempo real.
 
+## Continuar o desenvolvimento em outro computador
+
+Para preparar um computador novo (instalar Git, Node.js, VS Code, a extensão Cline e as
+dependências do projeto de uma vez só), copie a pasta inteira do projeto (pendrive, OneDrive,
+etc. — **incluindo o arquivo `server/.env`**, que não vai pelo Git por segurança) para o
+computador novo e dê duplo-clique em **`preparar-ambiente.bat`**.
+
+O script verifica o que já está instalado e instala automaticamente (via `winget`) o que estiver
+faltando, além de rodar `npm install` no backend e no frontend. Ao final, é só abrir a pasta no
+VS Code (`code .`) e usar o `iniciar-dev.bat` normalmente.
+
+> Alternativa (recomendada se possível): ao invés de copiar a pasta manualmente, clone o
+> repositório com `git clone https://github.com/happySiteCerqueira/happysite.git` e copie
+> apenas o arquivo `server/.env` por fora (ele fica de fora do Git de propósito, pois contém a
+> senha do banco de dados).
+
 ## Como testar localmente (modo desenvolvimento)
+
 
 1. Configure `server/.env` com sua `DATABASE_URL` do Neon (veja `server/.env.example`)
 2. Dê duplo-clique em **`iniciar-dev.bat`**
