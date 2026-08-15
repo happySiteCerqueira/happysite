@@ -1,0 +1,15 @@
+Criei o script __`preparar-ambiente.bat`__ na raiz do projeto (já commitado e enviado ao GitHub). Para continuar o desenvolvimento em outro computador:
+
+1. __Copie a pasta inteira do projeto__ para o computador novo (pendrive, OneDrive, etc.) — incluindo o arquivo `server/.env`, que fica de fora do Git de propósito (contém a senha do banco Neon) mas precisa ir junto na cópia manual.
+
+2. Dê __duplo-clique em `preparar-ambiente.bat`__. Ele automaticamente:
+
+   - Verifica/instala __Git__ e __Node.js (LTS)__ via `winget` (se não estiverem instalados)
+   - Verifica/instala o __VS Code__ via `winget` (se não estiver instalado)
+   - Instala a extensão __Cline__ (`saoudrizwan.claude-dev`) no VS Code
+   - Roda `npm install` no backend (`server/`) e no frontend (`client/`)
+   - Confere se o `server/.env` está presente e avisa caso falte
+
+3. Ao final, é só abrir a pasta no VS Code (`code .`) e usar o `iniciar-dev.bat` normalmente para rodar o projeto.
+
+Também atualizei o `README.md` com uma seção "Continuar o desenvolvimento em outro computador" explicando esse fluxo, incluindo a alternativa (recomendada) de usar `git clone` do repositório em vez de copiar a pasta manualmente. Se o computador novo não tiver `winget` (raro em Windows 10/11 atualizados), o script avisa e fornece os links de download manual do Git e Node.js.

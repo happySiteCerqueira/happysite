@@ -17,6 +17,8 @@ import Prestadores from './pages/Prestadores';
 import Relatorios from './pages/Relatorios';
 import Backup from './pages/Backup';
 import Epi from './pages/Epi';
+import Financeiro from './pages/Financeiro';
+
 
 
 function Privado({ children }) {
@@ -46,6 +48,8 @@ export default function App() {
         <Route path="prestadores" element={<Prestadores />} />
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="epi" element={<Epi />} />
+        <Route path="financeiro" element={<Financeiro />} />
+
 
         <Route path="backup" element={<Backup />} />
       </Route>
