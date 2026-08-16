@@ -10,6 +10,8 @@ export default function Diarias() {
   const [mes, setMes] = useState(mesAtual());
   const [itens, setItens] = useState([]);
   const [salvandoId, setSalvandoId] = useState(null);
+  const [busca, setBusca] = useState('');
+
 
   function carregar() {
     api.get('/diarias/planilha', { params: { mes } }).then(res => setItens(res.data));
@@ -121,16 +123,31 @@ export default function Diarias() {
     );
   }
 
-  const totalGeral = itens.reduce((s, i) => s + (i.total || 0), 0);
+  const itensFiltrados = itens.filter(item => {
+    if (!busca.trim()) return true;
+    const termo = busca.trim().toLowerCase();
+    return (item.nome || '').toLowerCase().includes(termo) || (item.funcao || '').toLowerCase().includes(termo);
+  });
+
+  const totalGeral = itensFiltrados.reduce((s, i) => s + (i.total || 0), 0);
 
 
   return (
     <div>
       <h2>📅 Diárias</h2>
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ marginRight: 8 }}>Mês:</label>
-        <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
+      <div style={{ marginBottom: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <label style={{ marginRight: 8 }}>Mês:</label>
+          <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
+        </div>
+        <input
+          placeholder="🔎 Buscar por nome ou função..."
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          style={{ minWidth: 260 }}
+        />
       </div>
+
 
       <div className="card" style={{ overflowX: 'auto' }}>
         <table>
@@ -146,7 +163,7 @@ export default function Diarias() {
             </tr>
           </thead>
           <tbody>
-            {itens.map(item => (
+            {itensFiltrados.map(item => (
               <tr key={item.colaborador_id} style={item.bloqueado ? { background: '#fef2f2' } : undefined}>
                 <td>{item.nome}</td>
                 <td>{item.tipo}</td>
@@ -161,8 +178,13 @@ export default function Diarias() {
                 </td>
               </tr>
             ))}
-            {itens.length === 0 && <tr><td colSpan={7} style={{ color: '#9ca3af' }}>Nenhum colaborador/empreiteiro ativo cadastrado.</td></tr>}
+            {itensFiltrados.length === 0 && (
+              <tr><td colSpan={7} style={{ color: '#9ca3af' }}>
+                {itens.length > 0 ? 'Nenhum resultado para a busca.' : 'Nenhum colaborador/empreiteiro ativo cadastrado.'}
+              </td></tr>
+            )}
           </tbody>
+
           {itens.length > 0 && (
             <tfoot>
               <tr>
