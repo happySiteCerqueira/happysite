@@ -32,6 +32,14 @@ export default function Usuarios() {
     carregar();
   }
 
+  async function alterarPerfil(u, novoPerfil) {
+    if (novoPerfil === u.perfil) return;
+    if (!window.confirm(`Alterar o perfil de "${u.nome}" de ${u.perfil} para ${novoPerfil}?`)) return;
+    await api.put(`/usuarios/${u.id}`, { perfil: novoPerfil });
+    carregar();
+  }
+
+
   async function resetarSenha(u) {
     const res = await api.post(`/usuarios/${u.id}/resetar-senha`, {});
     alert(`Senha provisória de ${u.nome}: ${res.data.senha_provisoria}\nO usuário deverá trocá-la no próximo login.`);
@@ -81,7 +89,12 @@ export default function Usuarios() {
               <tr key={u.id}>
                 <td>{u.nome}</td>
                 <td>{u.login}</td>
-                <td>{u.perfil}</td>
+                <td>
+                  <select value={u.perfil} onChange={e => alterarPerfil(u, e.target.value)} style={{ fontSize: 13 }}>
+                    {PERFIS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </td>
+
                 <td>{u.ativo ? 'Ativo' : 'Inativo'}</td>
                 <td>{u.precisa_trocar_senha ? 'Sim' : 'Não'}</td>
                 <td style={{ display: 'flex', gap: 6 }}>
