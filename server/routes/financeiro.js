@@ -52,6 +52,13 @@ router.get('/obras-sugestoes', async (req, res) => {
   res.json(obras.map(o => o.nome));
 });
 
+// ---- Nomes de obras distintos já usados em receitas (usado no filtro do dashboard Resumo) ----
+router.get('/receitas/obras-distintas', permitir('ADM'), async (req, res) => {
+  const linhas = await db.all('SELECT DISTINCT obra_nome FROM financeiro_receitas ORDER BY obra_nome');
+  res.json(linhas.map(l => l.obra_nome));
+});
+
+
 // ---- Listagem ----
 router.get('/receitas', async (req, res) => {
   const { obra, status } = req.query;
@@ -260,4 +267,49 @@ router.delete('/receitas/:id', permitir('ADM'), async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Resumo: totais por ano/mês (gráfico principal, todo o histórico) - só ADM ----
+router.get('/resumo/por-mes-ano', permitir('ADM'), async (req, res) => {
+  const linhas = await db.all(`
+    SELECT to_char(data_medicao, 'YYYY') as ano, to_char(data_medicao, 'MM') as mes,
+           SUM(valor_liquido) as valor_liquido, SUM(valor_bruto) as valor_bruto, COUNT(*)::int as qtd
+    FROM financeiro_receitas
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+  `);
+  res.json(linhas.map(l => ({
+    ano: l.ano,
+    mes: l.mes,
+    valor_liquido: Number(l.valor_liquido) || 0,
+    valor_bruto: Number(l.valor_bruto) || 0,
+    qtd: l.qtd
+  })));
+});
+
+// ---- Resumo: gráfico configurável (filtros de período, serviço e obra) - só ADM ----
+router.get('/resumo/configuravel', permitir('ADM'), async (req, res) => {
+  const { data_inicio, data_fim, servico, obra } = req.query;
+
+  let sql = `
+    SELECT to_char(data_medicao, 'YYYY-MM') as mes_ano,
+           SUM(valor_liquido) as valor_liquido, SUM(valor_bruto) as valor_bruto, COUNT(*)::int as qtd
+    FROM financeiro_receitas WHERE 1=1
+  `;
+  const params = [];
+  if (data_inicio) { sql += ' AND data_medicao >= ?'; params.push(data_inicio); }
+  if (data_fim) { sql += ' AND data_medicao <= ?'; params.push(data_fim); }
+  if (servico) { sql += ' AND servico = ?'; params.push(servico); }
+  if (obra) { sql += ' AND obra_nome = ?'; params.push(obra); }
+  sql += ' GROUP BY 1 ORDER BY 1';
+
+  const linhas = await db.all(sql, ...params);
+  res.json(linhas.map(l => ({
+    mes_ano: l.mes_ano,
+    valor_liquido: Number(l.valor_liquido) || 0,
+    valor_bruto: Number(l.valor_bruto) || 0,
+    qtd: l.qtd
+  })));
+});
+
 module.exports = router;
+
+

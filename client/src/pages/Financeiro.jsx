@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
+} from 'recharts';
+
 
 const SERVICOS = ['Pintura', 'Produção', 'Diárias', 'Reforma N', 'Reforma S'];
 
@@ -57,6 +61,8 @@ const RECEITA_VAZIA = {
 };
 
 export default function Financeiro() {
+  const { usuario } = useAuth();
+  const ehAdm = usuario?.perfil === 'ADM';
   const [subAba, setSubAba] = useState('receita'); // preparado para futuras sub-abas dentro de Financeiro
 
   return (
@@ -67,12 +73,19 @@ export default function Financeiro() {
         <button className={subAba === 'receita' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('receita')}>
           📥 Receita
         </button>
+        {ehAdm && (
+          <button className={subAba === 'resumo' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('resumo')}>
+            📊 Resumo
+          </button>
+        )}
       </div>
 
       {subAba === 'receita' && <Receita />}
+      {subAba === 'resumo' && ehAdm && <Resumo />}
     </div>
   );
 }
+
 
 function Receita() {
   const [subSubAba, setSubSubAba] = useState('entrada'); // preparado para futuras sub-abas dentro de Receita
@@ -514,3 +527,224 @@ function Entrada() {
     </div>
   );
 }
+
+// ---- Cores usadas nos gráficos ----
+const CORES_MESES = [
+  '#2563eb', '#0891b2', '#16a34a', '#65a30d', '#ca8a04', '#ea580c',
+  '#dc2626', '#db2777', '#9333ea', '#7c3aed', '#4f46e5', '#0284c7'
+];
+const NOMES_MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+function formatarMoeda(valor) {
+  return `R$ ${Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function TooltipPersonalizado({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: p.color, fontSize: 13 }}>
+          {p.name}: <strong>{formatarMoeda(p.value)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Resumo() {
+  // ---- Gráfico principal: valor líquido por ano/mês (todo o histórico) ----
+
+  const [dadosPorMesAno, setDadosPorMesAno] = useState([]);
+  const [anoSelecionado, setAnoSelecionado] = useState('TODOS');
+  const [carregandoPrincipal, setCarregandoPrincipal] = useState(true);
+
+  useEffect(() => {
+    setCarregandoPrincipal(true);
+    api.get('/financeiro/resumo/por-mes-ano')
+      .then(res => setDadosPorMesAno(res.data))
+      .finally(() => setCarregandoPrincipal(false));
+  }, []);
+
+  const anosDisponiveis = [...new Set(dadosPorMesAno.map(d => d.ano))].sort();
+
+  const dadosGraficoPrincipal = (anoSelecionado === 'TODOS' ? dadosPorMesAno : dadosPorMesAno.filter(d => d.ano === anoSelecionado))
+    .map(d => ({
+      label: anoSelecionado === 'TODOS' ? `${NOMES_MESES_CURTOS[Number(d.mes) - 1]}/${d.ano.slice(2)}` : NOMES_MESES_CURTOS[Number(d.mes) - 1],
+      valor_liquido: d.valor_liquido,
+      valor_bruto: d.valor_bruto,
+      mes: d.mes
+    }));
+
+  const totalGeralLiquido = dadosPorMesAno.reduce((s, d) => s + d.valor_liquido, 0);
+  const totalGeralBruto = dadosPorMesAno.reduce((s, d) => s + d.valor_bruto, 0);
+  const totalGeralQtd = dadosPorMesAno.reduce((s, d) => s + d.qtd, 0);
+
+  // ---- Gráfico configurável ----
+  const [obras, setObras] = useState([]);
+
+  const [filtros, setFiltros] = useState({ data_inicio: '', data_fim: '', servico: '', obra: '' });
+  const [dadosConfiguravel, setDadosConfiguravel] = useState([]);
+  const [carregandoConfiguravel, setCarregandoConfiguravel] = useState(false);
+
+  useEffect(() => {
+    api.get('/financeiro/receitas/obras-distintas').then(res => setObras(res.data));
+  }, []);
+
+  function carregarConfiguravel() {
+    setCarregandoConfiguravel(true);
+    api.get('/financeiro/resumo/configuravel', {
+      params: {
+        data_inicio: filtros.data_inicio || undefined,
+        data_fim: filtros.data_fim || undefined,
+        servico: filtros.servico || undefined,
+        obra: filtros.obra || undefined
+      }
+    })
+      .then(res => setDadosConfiguravel(res.data))
+      .finally(() => setCarregandoConfiguravel(false));
+  }
+  useEffect(carregarConfiguravel, [filtros]);
+
+  const dadosGraficoConfiguravel = dadosConfiguravel.map(d => {
+    const [ano, mes] = d.mes_ano.split('-');
+    return {
+      label: `${NOMES_MESES_CURTOS[Number(mes) - 1]}/${ano.slice(2)}`,
+      valor_liquido: d.valor_liquido,
+      valor_bruto: d.valor_bruto
+    };
+  });
+
+  const totalConfLiquido = dadosConfiguravel.reduce((s, d) => s + d.valor_liquido, 0);
+  const totalConfBruto = dadosConfiguravel.reduce((s, d) => s + d.valor_bruto, 0);
+  const totalConfQtd = dadosConfiguravel.reduce((s, d) => s + d.qtd, 0);
+
+  function limparFiltros() {
+    setFiltros({ data_inicio: '', data_fim: '', servico: '', obra: '' });
+  }
+
+  return (
+    <div>
+      {/* Cards de totais gerais */}
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 20 }}>
+        <div className="card" style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}>
+          <div style={{ fontSize: 12, opacity: 0.85 }}>Total Líquido (geral)</div>
+          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>{formatarMoeda(totalGeralLiquido)}</div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 12, color: '#6b7280' }}>Total Bruto (geral)</div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{formatarMoeda(totalGeralBruto)}</div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 12, color: '#6b7280' }}>Qtd. de Entradas</div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{totalGeralQtd}</div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 12, color: '#6b7280' }}>Desconto médio estimado</div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: '#dc2626' }}>
+            {totalGeralBruto > 0 ? `${(100 - (totalGeralLiquido / totalGeralBruto) * 100).toFixed(1)}%` : '-'}
+          </div>
+        </div>
+      </div>
+
+      {/* Gráfico principal: valor líquido por ano/mês */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          <h3 style={{ margin: 0 }}>📊 Entradas por Ano/Mês (Valor Líquido)</h3>
+          <select value={anoSelecionado} onChange={e => setAnoSelecionado(e.target.value)}>
+            <option value="TODOS">Todos os anos</option>
+            {anosDisponiveis.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+
+        {carregandoPrincipal ? (
+          <p style={{ color: '#9ca3af' }}>Carregando...</p>
+        ) : dadosGraficoPrincipal.length === 0 ? (
+          <p style={{ color: '#9ca3af' }}>Nenhum dado encontrado.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={340}>
+            <BarChart data={dadosGraficoPrincipal} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip content={<TooltipPersonalizado />} />
+              <Legend />
+              <Bar name="Valor Líquido" dataKey="valor_liquido" radius={[6, 6, 0, 0]}>
+                {dadosGraficoPrincipal.map((_, i) => (
+                  <Cell key={i} fill={CORES_MESES[i % CORES_MESES.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Gráfico configurável */}
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>⚙️ Gráfico Configurável</h3>
+
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+          <div className="flex-col gap-2">
+            <label style={{ fontSize: 12, color: '#6b7280' }}>Data Início</label>
+            <input type="date" value={filtros.data_inicio} onChange={e => setFiltros({ ...filtros, data_inicio: e.target.value })} />
+          </div>
+          <div className="flex-col gap-2">
+            <label style={{ fontSize: 12, color: '#6b7280' }}>Data Fim</label>
+            <input type="date" value={filtros.data_fim} onChange={e => setFiltros({ ...filtros, data_fim: e.target.value })} />
+          </div>
+          <div className="flex-col gap-2">
+            <label style={{ fontSize: 12, color: '#6b7280' }}>Serviço</label>
+            <select value={filtros.servico} onChange={e => setFiltros({ ...filtros, servico: e.target.value })}>
+              <option value="">Todos os serviços</option>
+              {SERVICOS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="flex-col gap-2">
+            <label style={{ fontSize: 12, color: '#6b7280' }}>Obra</label>
+            <select value={filtros.obra} onChange={e => setFiltros({ ...filtros, obra: e.target.value })}>
+              <option value="">Todas as obras</option>
+              {obras.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <button className="btn-secondary btn-sm" onClick={limparFiltros}>Limpar filtros</button>
+        </div>
+
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
+          <div className="card" style={{ background: '#f0fdf4' }}>
+            <div style={{ fontSize: 12, color: '#15803d' }}>Total Líquido (filtro)</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#15803d' }}>{formatarMoeda(totalConfLiquido)}</div>
+          </div>
+          <div className="card" style={{ background: '#eff6ff' }}>
+            <div style={{ fontSize: 12, color: '#1d4ed8' }}>Total Bruto (filtro)</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1d4ed8' }}>{formatarMoeda(totalConfBruto)}</div>
+          </div>
+          <div className="card">
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Qtd. de Entradas (filtro)</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{totalConfQtd}</div>
+          </div>
+        </div>
+
+        {carregandoConfiguravel ? (
+          <p style={{ color: '#9ca3af' }}>Carregando...</p>
+        ) : dadosGraficoConfiguravel.length === 0 ? (
+          <p style={{ color: '#9ca3af' }}>Nenhum dado encontrado para os filtros selecionados.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={dadosGraficoConfiguravel} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip content={<TooltipPersonalizado />} />
+              <Legend />
+              <Bar name="Valor Líquido" dataKey="valor_liquido" fill="#16a34a" radius={[6, 6, 0, 0]} />
+              <Bar name="Valor Bruto" dataKey="valor_bruto" fill="#93c5fd" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
