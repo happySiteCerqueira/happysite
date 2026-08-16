@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import Cadastro from './Cadastro';
+
 
 function mesAtual() {
   const d = new Date();
@@ -37,6 +39,29 @@ const CAMPO_VAZIO = {
 };
 
 export default function Prestadores() {
+  const { temPermissao } = useAuth();
+  const [subAba, setSubAba] = useState('lista'); // 'lista' | 'cadastro'
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button className={subAba === 'lista' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('lista')}>
+          📇 Lista
+        </button>
+        {temPermissao('RH') && (
+          <button className={subAba === 'cadastro' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('cadastro')}>
+            📋 Cadastro
+          </button>
+        )}
+      </div>
+
+      {subAba === 'lista' && <ListaPrestadores />}
+      {subAba === 'cadastro' && temPermissao('RH') && <Cadastro />}
+    </div>
+  );
+}
+
+function ListaPrestadores() {
   const [busca, setBusca] = useState('');
   const [lista, setLista] = useState([]);
   const [aba, setAba] = useState('ativos'); // 'ativos' | 'arquivados'
@@ -56,6 +81,7 @@ export default function Prestadores() {
 
   const { temPermissao, usuario } = useAuth();
   const podeEditar = temPermissao('RH');
+
 
   function carregarLista() {
     api.get('/prestadores', { params: { busca, status: aba } }).then(res => setLista(res.data));

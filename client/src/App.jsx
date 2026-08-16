@@ -6,8 +6,8 @@ import TrocarSenha from './pages/TrocarSenha';
 import Painel from './pages/Painel';
 import Obras from './pages/Obras';
 import ObraDetalhe from './pages/ObraDetalhe';
-import Cadastro from './pages/Cadastro';
 import Configuracoes from './pages/Configuracoes';
+
 import Usuarios from './pages/Usuarios';
 import Medicao from './pages/Medicao';
 import Diarias from './pages/Diarias';
@@ -36,8 +36,8 @@ export default function App() {
         <Route index element={<Painel />} />
         <Route path="obras" element={<Obras />} />
         <Route path="obras/:id" element={<ObraDetalhe />} />
-        <Route path="cadastro" element={<Cadastro />} />
         <Route path="configuracoes" element={<Configuracoes />} />
+
         <Route path="usuarios" element={<Usuarios />} />
         <Route path="medicao" element={<Medicao />} />
         <Route path="diarias" element={<Diarias />} />

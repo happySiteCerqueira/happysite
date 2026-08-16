@@ -5,12 +5,12 @@ import { useAuth } from '../context/AuthContext';
 // Mapa usado só para exibir um título amigável na barra superior mobile
 const TITULOS_ROTA = [
   { prefixo: '/obras', titulo: '🏢 Obras' },
-  { prefixo: '/cadastro', titulo: '👥 Cadastro' },
   { prefixo: '/medicao', titulo: '💰 Medição' },
   { prefixo: '/diarias', titulo: '📅 Diárias' },
   { prefixo: '/prestadores', titulo: '📇 Prestadores' },
   { prefixo: '/epi', titulo: '🦺 EPI' },
   { prefixo: '/financeiro', titulo: '💵 Financeiro' },
+
 
   { prefixo: '/configuracoes', titulo: '⚙️ Configurações' },
   { prefixo: '/usuarios', titulo: '🔐 Usuários' },
@@ -70,8 +70,8 @@ export default function Layout() {
         <nav style={{ flex: 1, overflowY: 'auto' }}>
           <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>
           <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>
-          {temPermissao('RH') && <NavLink to="/cadastro" style={linkStyle}>👥 Cadastro</NavLink>}
           {temPermissao('FINANCEIRO') && <NavLink to="/medicao" style={linkStyle}>💰 Medição</NavLink>}
+
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/diarias" style={linkStyle}>📅 Diárias</NavLink>}
 
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}
