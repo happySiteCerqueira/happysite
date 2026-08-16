@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/api';
 import PredioDesenho from '../components/PredioDesenho';
+import { useAuth } from '../context/AuthContext';
+
 
 // Dimensões reais usadas pelo PredioDesenho (mantidas em sincronia com o componente)
 const LARGURA_CEL_REAL = 34;
@@ -59,7 +61,10 @@ function nomeMesExtenso(mesStr) {
 }
 
 export default function Painel() {
-  const [aba, setAba] = useState('geral'); // 'geral' (padrão) | 'indicadores'
+  const { usuario } = useAuth();
+  const ehAdm = usuario?.perfil === 'ADM';
+
+  const [aba, setAba] = useState(ehAdm ? 'geral' : 'indicadores'); // ADM: 'geral' (padrão) | 'indicadores'. Demais perfis: só 'indicadores'.
   const [mes, setMes] = useState(mesAtual());
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -75,24 +80,27 @@ export default function Painel() {
     <div>
       <h2>📊 Painel</h2>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button className={aba === 'geral' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('geral')}>
-          🏗️ Visão Geral
-        </button>
-        <button className={aba === 'indicadores' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('indicadores')}>
-          📈 Indicadores do Mês
-        </button>
-      </div>
+      {ehAdm && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button className={aba === 'geral' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('geral')}>
+            🏗️ Visão Geral
+          </button>
+          <button className={aba === 'indicadores' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('indicadores')}>
+            📈 Indicadores do Mês
+          </button>
+        </div>
+      )}
 
       {carregando && <div style={{ color: '#6b7280' }}>Carregando...</div>}
 
-      {!carregando && aba === 'geral' && <AbaVisaoGeral obras={obras} />}
-      {!carregando && aba === 'indicadores' && (
+      {!carregando && ehAdm && aba === 'geral' && <AbaVisaoGeral obras={obras} />}
+      {!carregando && (aba === 'indicadores' || !ehAdm) && (
         <AbaIndicadores mes={mes} setMes={setMes} dados={dados} obras={obras} />
       )}
     </div>
   );
 }
+
 
 function AbaVisaoGeral({ obras }) {
   return (
