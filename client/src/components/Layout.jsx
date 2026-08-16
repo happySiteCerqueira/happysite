@@ -7,10 +7,8 @@ const TITULOS_ROTA = [
   { prefixo: '/obras', titulo: '🏢 Obras' },
   { prefixo: '/cadastro', titulo: '👥 Cadastro' },
   { prefixo: '/medicao', titulo: '💰 Medição' },
-  { prefixo: '/pagamentos-antecipados', titulo: '🧾 Pagtos. Antecipados' },
   { prefixo: '/diarias', titulo: '📅 Diárias' },
   { prefixo: '/prestadores', titulo: '📇 Prestadores' },
-  { prefixo: '/relatorios', titulo: '📈 Relatórios' },
   { prefixo: '/epi', titulo: '🦺 EPI' },
   { prefixo: '/financeiro', titulo: '💵 Financeiro' },
 
@@ -18,6 +16,7 @@ const TITULOS_ROTA = [
   { prefixo: '/usuarios', titulo: '🔐 Usuários' },
   { prefixo: '/backup', titulo: '💾 Backup' }
 ];
+
 
 function tituloDaRota(pathname) {
   const encontrada = TITULOS_ROTA.find(r => pathname.startsWith(r.prefixo));
@@ -73,13 +72,12 @@ export default function Layout() {
           <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>
           {temPermissao('RH') && <NavLink to="/cadastro" style={linkStyle}>👥 Cadastro</NavLink>}
           {temPermissao('FINANCEIRO') && <NavLink to="/medicao" style={linkStyle}>💰 Medição</NavLink>}
-          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/pagamentos-antecipados" style={linkStyle}>🧾 Pagtos. Antecipados</NavLink>}
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/diarias" style={linkStyle}>📅 Diárias</NavLink>}
 
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}
-          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/relatorios" style={linkStyle}>📈 Relatórios</NavLink>}
           {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
-          {temPermissao('FINANCEIRO') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
+          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
+
 
 
           <NavLink to="/configuracoes" style={linkStyle}>⚙️ Configurações</NavLink>

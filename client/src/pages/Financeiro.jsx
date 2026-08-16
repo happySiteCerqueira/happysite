@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
+import PagamentosAntecipados from './PagamentosAntecipados';
+import Relatorios from './Relatorios';
+
 
 
 const SERVICOS = ['Pintura', 'Produção', 'Diárias', 'Reforma N', 'Reforma S'];
@@ -63,28 +66,52 @@ const RECEITA_VAZIA = {
 export default function Financeiro() {
   const { usuario } = useAuth();
   const ehAdm = usuario?.perfil === 'ADM';
-  const [subAba, setSubAba] = useState('receita'); // preparado para futuras sub-abas dentro de Financeiro
+  const ehRh = usuario?.perfil === 'RH';
+  const ehFinanceiro = usuario?.perfil === 'FINANCEIRO';
+
+  // RH só enxerga a sub-aba de Pagtos. Antecipados dentro de Financeiro.
+  const [subAba, setSubAba] = useState(ehRh ? 'pagamentos' : 'receita');
+
+  const mostrarReceita = ehAdm || ehFinanceiro;
+  const mostrarPagamentos = ehAdm || ehFinanceiro || ehRh;
+  const mostrarRelatorios = ehAdm || ehFinanceiro;
+  const mostrarResumo = ehAdm;
 
   return (
     <div>
       <h2>💵 Financeiro</h2>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button className={subAba === 'receita' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('receita')}>
-          📥 Receita
-        </button>
-        {ehAdm && (
+        {mostrarReceita && (
+          <button className={subAba === 'receita' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('receita')}>
+            📥 Receita
+          </button>
+        )}
+        {mostrarPagamentos && (
+          <button className={subAba === 'pagamentos' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('pagamentos')}>
+            🧾 Pagtos. Antecipados
+          </button>
+        )}
+        {mostrarRelatorios && (
+          <button className={subAba === 'relatorios' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('relatorios')}>
+            📈 Relatórios
+          </button>
+        )}
+        {mostrarResumo && (
           <button className={subAba === 'resumo' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('resumo')}>
             📊 Resumo
           </button>
         )}
       </div>
 
-      {subAba === 'receita' && <Receita />}
-      {subAba === 'resumo' && ehAdm && <Resumo />}
+      {subAba === 'receita' && mostrarReceita && <Receita />}
+      {subAba === 'pagamentos' && mostrarPagamentos && <PagamentosAntecipados />}
+      {subAba === 'relatorios' && mostrarRelatorios && <Relatorios />}
+      {subAba === 'resumo' && mostrarResumo && <Resumo />}
     </div>
   );
 }
+
 
 
 function Receita() {

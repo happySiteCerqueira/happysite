@@ -10,11 +10,9 @@ import Cadastro from './pages/Cadastro';
 import Configuracoes from './pages/Configuracoes';
 import Usuarios from './pages/Usuarios';
 import Medicao from './pages/Medicao';
-import PagamentosAntecipados from './pages/PagamentosAntecipados';
 import Diarias from './pages/Diarias';
 
 import Prestadores from './pages/Prestadores';
-import Relatorios from './pages/Relatorios';
 import Backup from './pages/Backup';
 import Epi from './pages/Epi';
 import Financeiro from './pages/Financeiro';
@@ -42,11 +40,9 @@ export default function App() {
         <Route path="configuracoes" element={<Configuracoes />} />
         <Route path="usuarios" element={<Usuarios />} />
         <Route path="medicao" element={<Medicao />} />
-        <Route path="pagamentos-antecipados" element={<PagamentosAntecipados />} />
         <Route path="diarias" element={<Diarias />} />
 
         <Route path="prestadores" element={<Prestadores />} />
-        <Route path="relatorios" element={<Relatorios />} />
         <Route path="epi" element={<Epi />} />
         <Route path="financeiro" element={<Financeiro />} />
 
