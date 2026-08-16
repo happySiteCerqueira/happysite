@@ -8,8 +8,8 @@ import Obras from './pages/Obras';
 import ObraDetalhe from './pages/ObraDetalhe';
 import Configuracoes from './pages/Configuracoes';
 
-import Usuarios from './pages/Usuarios';
 import Medicao from './pages/Medicao';
+
 import Diarias from './pages/Diarias';
 
 import Prestadores from './pages/Prestadores';
@@ -38,7 +38,6 @@ export default function App() {
         <Route path="obras/:id" element={<ObraDetalhe />} />
         <Route path="configuracoes" element={<Configuracoes />} />
 
-        <Route path="usuarios" element={<Usuarios />} />
         <Route path="medicao" element={<Medicao />} />
         <Route path="diarias" element={<Diarias />} />
 
@@ -47,7 +46,6 @@ export default function App() {
         <Route path="financeiro" element={<Financeiro />} />
 
 
-        <Route path="backup" element={<Backup />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />
 

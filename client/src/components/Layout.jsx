@@ -12,9 +12,8 @@ const TITULOS_ROTA = [
   { prefixo: '/financeiro', titulo: '💵 Financeiro' },
 
 
-  { prefixo: '/configuracoes', titulo: '⚙️ Configurações' },
-  { prefixo: '/usuarios', titulo: '🔐 Usuários' },
-  { prefixo: '/backup', titulo: '💾 Backup' }
+  { prefixo: '/configuracoes', titulo: '⚙️ Configurações' }
+
 ];
 
 
@@ -82,8 +81,6 @@ export default function Layout() {
 
           <NavLink to="/configuracoes" style={linkStyle}>⚙️ Configurações</NavLink>
 
-          {usuario?.perfil === 'ADM' && <NavLink to="/usuarios" style={linkStyle}>🔐 Usuários</NavLink>}
-          {usuario?.perfil === 'ADM' && <NavLink to="/backup" style={linkStyle}>💾 Backup</NavLink>}
         </nav>
         <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 16, borderTop: '1px solid #1e293b', paddingTop: 12 }}>
           <div style={{ color: '#fff', fontWeight: 600 }}>{usuario?.nome}</div>
