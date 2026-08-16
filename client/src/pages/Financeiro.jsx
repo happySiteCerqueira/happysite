@@ -377,16 +377,55 @@ function Entrada() {
                         disabled={processandoStatusId === item.id}
                         onClick={() => mudarStatus(item, PROXIMO_STATUS[item.status])}
                         title={`Marcar como ${STATUS_ROTULO[PROXIMO_STATUS[item.status]]}`}
+                        style={{ fontWeight: 700, fontSize: 13, padding: '6px 12px', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}
                       >
                         ✔ {STATUS_ROTULO[PROXIMO_STATUS[item.status]]}
                       </button>
                     )}
                     {ehAdm && (
                       <>
-                        <button className="btn-secondary btn-sm" onClick={() => abrirEdicao(item)}>✏️</button>
-                        <button className="btn-danger btn-sm" onClick={() => excluir(item.id)}>🗑️</button>
+                        <button
+                          onClick={() => abrirEdicao(item)}
+                          title="Editar"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#d1d5db',
+                            padding: '2px 4px',
+                            fontSize: 11,
+                            lineHeight: 1,
+                            opacity: 0.55,
+                            transition: 'opacity 0.15s, color 0.15s'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#6b7280'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = 0.55; e.currentTarget.style.color = '#d1d5db'; }}
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => excluir(item.id)}
+                          title="Excluir"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#d1d5db',
+                            padding: '2px 4px',
+                            fontSize: 11,
+                            lineHeight: 1,
+                            opacity: 0.55,
+                            transition: 'opacity 0.15s, color 0.15s'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#dc2626'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = 0.55; e.currentTarget.style.color = '#d1d5db'; }}
+                        >
+                          🗑️
+                        </button>
                       </>
                     )}
+
+
                   </div>
                 </td>
               </tr>
