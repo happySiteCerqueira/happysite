@@ -42,6 +42,11 @@ function hoje() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function formatarValorBR(valor) {
+  return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+
 function baixarBlob(blob, nomeArquivo) {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -393,8 +398,9 @@ function Entrada() {
                 <td>{item.data_medicao ? item.data_medicao.slice(0, 10).split('-').reverse().join('/') : '-'}</td>
                 <td>{item.obra_nome}</td>
                 <td>{item.servico}</td>
-                <td>R$ {Number(item.valor_bruto).toFixed(2)}</td>
-                <td>R$ {Number(item.valor_liquido).toFixed(2)}</td>
+                <td>R$ {formatarValorBR(item.valor_bruto)}</td>
+                <td>R$ {formatarValorBR(item.valor_liquido)}</td>
+
                 <td style={{ color: '#6b7280' }}>{item.fonte_pagador || '-'}</td>
                 <td>{item.data_pagamento ? item.data_pagamento.slice(0, 10).split('-').reverse().join('/') : '-'}</td>
                 <td style={{ color: '#6b7280' }}>{item.conta || '-'}</td>
@@ -478,8 +484,9 @@ function Entrada() {
               <tr>
                 <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Totais:</td>
 
-                <td><strong>R$ {totalBruto.toFixed(2)}</strong></td>
-                <td><strong>R$ {totalLiquido.toFixed(2)}</strong></td>
+                <td><strong>R$ {formatarValorBR(totalBruto)}</strong></td>
+                <td><strong>R$ {formatarValorBR(totalLiquido)}</strong></td>
+
                 <td colSpan={5}></td>
               </tr>
             </tfoot>
@@ -528,9 +535,10 @@ function Entrada() {
                 onChange={e => setForm({ ...form, valor_bruto: e.target.value })}
               />
               <div style={{ fontSize: 12, color: '#6b7280' }}>
-                Valor líquido estimado: <strong>R$ {calcularValorLiquidoLocal(form.servico, form.valor_bruto).toFixed(2)}</strong>
+                Valor líquido estimado: <strong>R$ {formatarValorBR(calcularValorLiquidoLocal(form.servico, form.valor_bruto))}</strong>
                 {['Diárias', 'Reforma S'].includes(form.servico) ? ' (sem desconto)' : ' (11% de desconto)'}
               </div>
+
 
               <label>Fonte Pag.</label>
               <input value={form.fonte_pagador} onChange={e => setForm({ ...form, fonte_pagador: e.target.value })} />
