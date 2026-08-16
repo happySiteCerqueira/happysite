@@ -5,7 +5,8 @@ const { registrar } = require('../utils/auditoria');
 
 const router = express.Router();
 
-router.use(autenticar, permitir('FINANCEIRO', 'ADM'));
+router.use(autenticar, permitir('FINANCEIRO', 'ADM', 'RH'));
+
 
 // Planilha do mês: apenas colaboradores CPF ativos com valor_diaria configurado (ou não),
 // mostrando quantidade lançada e total calculado (quantidade x valor_diaria da pessoa).
