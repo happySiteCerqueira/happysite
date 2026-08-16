@@ -79,8 +79,10 @@ export default function Financeiro() {
 
   const mostrarReceita = ehAdm || ehFinanceiro;
   const mostrarPagamentos = ehAdm || ehFinanceiro || ehRh;
+  const mostrarGastos = ehAdm || ehFinanceiro;
   const mostrarRelatorios = ehAdm || ehFinanceiro;
   const mostrarResumo = ehAdm;
+
 
   return (
     <div>
@@ -97,6 +99,11 @@ export default function Financeiro() {
             🧾 Pagtos. Antecipados
           </button>
         )}
+        {mostrarGastos && (
+          <button className={subAba === 'gastos' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('gastos')}>
+            💸 Gastos
+          </button>
+        )}
         {mostrarRelatorios && (
           <button className={subAba === 'relatorios' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('relatorios')}>
             📈 Relatórios
@@ -111,11 +118,24 @@ export default function Financeiro() {
 
       {subAba === 'receita' && mostrarReceita && <Receita />}
       {subAba === 'pagamentos' && mostrarPagamentos && <PagamentosAntecipados />}
+      {subAba === 'gastos' && mostrarGastos && <Gastos />}
       {subAba === 'relatorios' && mostrarRelatorios && <Relatorios />}
       {subAba === 'resumo' && mostrarResumo && <Resumo />}
     </div>
   );
 }
+
+// Aba "Gastos" — ainda não implementada, reservado o espaço para uso futuro.
+function Gastos() {
+  return (
+    <div className="card" style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>💸</div>
+      <h3 style={{ margin: 0, color: '#6b7280' }}>Gastos</h3>
+      <p style={{ marginTop: 8 }}>Esta aba ainda será implementada.</p>
+    </div>
+  );
+}
+
 
 
 
