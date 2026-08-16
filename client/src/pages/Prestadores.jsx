@@ -32,14 +32,29 @@ function paraInputDate(data) {
   return `${ano}-${mes}-${dia}`;
 }
 
+// Estilo compartilhado dos botões de ação discretos (ícone apenas, opacidade baixa até o hover)
+const BOTAO_ICONE_DISCRETO = {
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  color: '#d1d5db',
+  padding: '2px 4px',
+  fontSize: 14,
+  lineHeight: 1,
+  opacity: 0.55,
+  transition: 'opacity 0.15s, color 0.15s'
+};
+
 const CAMPO_VAZIO = {
+
   tipo: 'CPF', nome: '', documento: '', telefone: '', email: '', endereco: '',
   funcao: '', contato_responsavel: '', banco: '', agencia: '', conta: '', pix: '', valor_diaria: 0,
   data_nascimento: '', data_admissao: ''
 };
 
 export default function Prestadores() {
-  const { temPermissao } = useAuth();
+  const { temAcessoSubaba } = useAuth();
+  const mostrarCadastro = temAcessoSubaba('prestadores.cadastro');
   const [subAba, setSubAba] = useState('lista'); // 'lista' | 'cadastro'
 
   return (
@@ -48,7 +63,7 @@ export default function Prestadores() {
         <button className={subAba === 'lista' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('lista')}>
           📇 Lista
         </button>
-        {temPermissao('RH') && (
+        {mostrarCadastro && (
           <button className={subAba === 'cadastro' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('cadastro')}>
             📋 Cadastro
           </button>
@@ -56,9 +71,10 @@ export default function Prestadores() {
       </div>
 
       {subAba === 'lista' && <ListaPrestadores />}
-      {subAba === 'cadastro' && temPermissao('RH') && <Cadastro />}
+      {subAba === 'cadastro' && mostrarCadastro && <Cadastro />}
     </div>
   );
+
 }
 
 function ListaPrestadores() {
@@ -280,29 +296,58 @@ function ListaPrestadores() {
                 <td style={{ color: '#6b7280' }}>{formatarData(p.data_nascimento)}</td>
                 <td style={{ color: '#6b7280' }}>{formatarData(p.data_admissao)}</td>
                 <td>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {podeEditar && (
-                      <button className="btn-secondary btn-sm" onClick={e => abrirEdicao(p, e)}>✏️ Editar</button>
+                      <button
+                        onClick={e => abrirEdicao(p, e)}
+                        title="Editar"
+                        style={BOTAO_ICONE_DISCRETO}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#6b7280'; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = 0.55; e.currentTarget.style.color = '#d1d5db'; }}
+                      >
+                        ✏️
+                      </button>
                     )}
                     {temPermissao('RH') && (
                       aba === 'ativos' ? (
-                        <button className="btn-secondary btn-sm" disabled={processando === p.id} onClick={e => desligar(p.id, e)}>
-                          🚫 Desligar
+                        <button
+                          disabled={processando === p.id}
+                          onClick={e => desligar(p.id, e)}
+                          title="Desligar"
+                          style={BOTAO_ICONE_DISCRETO}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#6b7280'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = 0.55; e.currentTarget.style.color = '#d1d5db'; }}
+                        >
+                          🚫
                         </button>
                       ) : (
-                        <button className="btn-secondary btn-sm" disabled={processando === p.id} onClick={e => reativar(p.id, e)}>
-                          ↩️ Reativar
+                        <button
+                          disabled={processando === p.id}
+                          onClick={e => reativar(p.id, e)}
+                          title="Reativar"
+                          style={BOTAO_ICONE_DISCRETO}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#6b7280'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = 0.55; e.currentTarget.style.color = '#d1d5db'; }}
+                        >
+                          ↩️
                         </button>
                       )
                     )}
                     {usuario?.perfil === 'ADM' && (
-                      <button className="btn-secondary btn-sm" style={{ color: '#991b1b' }} disabled={processando === p.id}
-                        onClick={e => excluirDefinitivo(p.id, p.nome, e)}>
-                        🗑️ Excluir
+                      <button
+                        disabled={processando === p.id}
+                        onClick={e => excluirDefinitivo(p.id, p.nome, e)}
+                        title="Excluir definitivamente"
+                        style={BOTAO_ICONE_DISCRETO}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = 1; e.currentTarget.style.color = '#dc2626'; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = 0.55; e.currentTarget.style.color = '#d1d5db'; }}
+                      >
+                        🗑️
                       </button>
                     )}
                   </div>
                 </td>
+
               </tr>
             ))}
             {listaFiltrada.length === 0 && (
@@ -350,9 +395,15 @@ function ListaPrestadores() {
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-primary" disabled={salvandoEdicao} onClick={salvarEdicao} style={{ flex: 1 }}>
-                {salvandoEdicao ? 'Salvando...' : '💾 Salvar alterações'}
+              <button
+                className="btn-success"
+                disabled={salvandoEdicao}
+                onClick={salvarEdicao}
+                style={{ flex: 1, fontWeight: 700, fontSize: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}
+              >
+                {salvandoEdicao ? 'Salvando...' : '✔ Salvar alterações'}
               </button>
+
               <button className="btn-secondary" onClick={fecharEdicao} style={{ flex: 1 }}>Cancelar</button>
             </div>
           </div>

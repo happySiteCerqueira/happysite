@@ -1,11 +1,13 @@
 const express = require('express');
 const db = require('../db/database');
-const { autenticar, permitir } = require('../utils/auth');
+const { autenticar } = require('../utils/auth');
+const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar } = require('../utils/auditoria');
 
 const router = express.Router();
 
-router.use(autenticar, permitir('FINANCEIRO', 'ADM', 'RH'));
+router.use(autenticar, permissaoModulo('diarias'));
+
 
 
 // Planilha do mês: apenas colaboradores CPF ativos com valor_diaria configurado (ou não),

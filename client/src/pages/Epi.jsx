@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
+import { useAuth } from '../context/AuthContext';
 import AssinaturaCanvas from '../components/AssinaturaCanvas';
 import { gerarTermoEpiPdf } from '../utils/termoEpiPdf';
+
 
 function hoje() {
   const d = new Date();
@@ -13,6 +15,8 @@ function ordenarAlfabetico(lista) {
 }
 
 export default function Epi() {
+  const { temAcessoSubaba } = useAuth();
+  const mostrarCadastrar = temAcessoSubaba('epi.cadastrar');
   const [aba, setAba] = useState('retirada'); // retirada | cadastrar | estoque | historico
 
   return (
@@ -21,18 +25,21 @@ export default function Epi() {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className={aba === 'retirada' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('retirada')}>📤 Retirada</button>
-        <button className={aba === 'cadastrar' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('cadastrar')}>➕ Cadastrar / Entrada</button>
+        {mostrarCadastrar && (
+          <button className={aba === 'cadastrar' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('cadastrar')}>➕ Cadastrar / Entrada</button>
+        )}
         <button className={aba === 'estoque' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('estoque')}>📦 Estoque</button>
         <button className={aba === 'historico' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('historico')}>📜 Histórico</button>
       </div>
 
       {aba === 'retirada' && <AbaRetirada />}
-      {aba === 'cadastrar' && <AbaCadastrar />}
+      {aba === 'cadastrar' && mostrarCadastrar && <AbaCadastrar />}
       {aba === 'estoque' && <AbaEstoque />}
       {aba === 'historico' && <AbaHistorico />}
     </div>
   );
 }
+
 
 // ---- ABA RETIRADA ----
 function AbaRetirada() {

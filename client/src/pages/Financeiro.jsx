@@ -69,19 +69,23 @@ const RECEITA_VAZIA = {
 };
 
 export default function Financeiro() {
-  const { usuario } = useAuth();
+  const { usuario, temAcessoSubaba } = useAuth();
   const ehAdm = usuario?.perfil === 'ADM';
-  const ehRh = usuario?.perfil === 'RH';
-  const ehFinanceiro = usuario?.perfil === 'FINANCEIRO';
 
-  // RH só enxerga a sub-aba de Pagtos. Antecipados dentro de Financeiro.
-  const [subAba, setSubAba] = useState(ehRh ? 'pagamentos' : 'receita');
+  const mostrarReceita = temAcessoSubaba('financeiro.receita');
+  const mostrarPagamentos = temAcessoSubaba('financeiro.pagamentos');
+  const mostrarGastos = temAcessoSubaba('financeiro.gastos');
+  const mostrarRelatorios = temAcessoSubaba('financeiro.relatorios');
+  const mostrarResumo = temAcessoSubaba('financeiro.resumo');
 
-  const mostrarReceita = ehAdm || ehFinanceiro;
-  const mostrarPagamentos = ehAdm || ehFinanceiro || ehRh;
-  const mostrarGastos = ehAdm || ehFinanceiro;
-  const mostrarRelatorios = ehAdm || ehFinanceiro;
-  const mostrarResumo = ehAdm;
+  // Abre na primeira sub-aba à qual o usuário tem acesso.
+  const primeiraDisponivel = mostrarReceita ? 'receita'
+    : mostrarPagamentos ? 'pagamentos'
+    : mostrarGastos ? 'gastos'
+    : mostrarRelatorios ? 'relatorios'
+    : mostrarResumo ? 'resumo' : null;
+  const [subAba, setSubAba] = useState(primeiraDisponivel);
+
 
 
   return (

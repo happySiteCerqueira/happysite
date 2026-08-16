@@ -332,7 +332,16 @@ async function migrate() {
       criado_em TIMESTAMP DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS perfil_permissoes (
+      id SERIAL PRIMARY KEY,
+      perfil TEXT NOT NULL,
+      modulo TEXT NOT NULL,
+      permitido INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(perfil, modulo)
+    );
+
     CREATE TABLE IF NOT EXISTS financeiro_receitas (
+
       id SERIAL PRIMARY KEY,
       data_medicao DATE NOT NULL,
       obra_nome TEXT NOT NULL,
@@ -443,7 +452,70 @@ async function migrate() {
        CHECK (perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE','SUPERVISOR','APONTADOR'))`
     );
   }
+
+  // Seed: permissões padrão por perfil x módulo (equivalente ao que hoje está fixo no código via temPermissao)
+  const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
+  if (permCountRes.rows[0].c === 0) {
+    const MODULOS = [
+      'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro',
+      // Sub-abas granulares (dentro de módulos que já foram liberados para o perfil)
+      'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
+      'prestadores.cadastro',
+      'epi.cadastrar'
+    ];
+    const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
+    // Espelha as regras atuais do Layout.jsx/telas (temPermissao(...)):
+    const PADRAO = {
+      obras: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'],
+      medicao: ['FINANCEIRO'],
+      diarias: ['FINANCEIRO', 'RH'],
+      prestadores: ['FINANCEIRO', 'RH'],
+      epi: ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR'],
+      financeiro: ['FINANCEIRO', 'RH'],
+      // Sub-abas: mesmo padrão que hoje está fixo em Financeiro.jsx/Prestadores.jsx/Epi.jsx
+      'financeiro.receita': ['FINANCEIRO'],
+      'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
+      'financeiro.gastos': ['FINANCEIRO'],
+      'financeiro.relatorios': ['FINANCEIRO'],
+      'financeiro.resumo': [],
+      'prestadores.cadastro': ['RH'],
+      'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR']
+    };
+    for (const perfil of PERFIS) {
+      for (const modulo of MODULOS) {
+        const permitido = (PADRAO[modulo] || []).includes(perfil) ? 1 : 0;
+        await pool.query(
+          'INSERT INTO perfil_permissoes (perfil, modulo, permitido) VALUES ($1,$2,$3) ON CONFLICT (perfil, modulo) DO NOTHING',
+          [perfil, modulo, permitido]
+        );
+      }
+    }
+  } else {
+    // Garante que sub-permissões novas existam mesmo em bancos já semeados anteriormente
+    // (não sobrescreve valores já definidos, apenas insere as chaves que ainda não existem).
+    const SUBMODULOS_PADRAO = {
+      'financeiro.receita': ['FINANCEIRO'],
+      'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
+      'financeiro.gastos': ['FINANCEIRO'],
+      'financeiro.relatorios': ['FINANCEIRO'],
+      'financeiro.resumo': [],
+      'prestadores.cadastro': ['RH'],
+      'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR']
+    };
+    const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
+    for (const perfil of PERFIS) {
+      for (const modulo of Object.keys(SUBMODULOS_PADRAO)) {
+        const permitido = SUBMODULOS_PADRAO[modulo].includes(perfil) ? 1 : 0;
+        await pool.query(
+          'INSERT INTO perfil_permissoes (perfil, modulo, permitido) VALUES ($1,$2,$3) ON CONFLICT (perfil, modulo) DO NOTHING',
+          [perfil, modulo, permitido]
+        );
+      }
+    }
+  }
 }
+
+
 
 const pronto = migrate().catch(e => {
   console.error('Erro ao migrar/preparar banco de dados Postgres:', e);

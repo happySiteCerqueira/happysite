@@ -9,6 +9,13 @@ export function AuthProvider({ children }) {
     return raw ? JSON.parse(raw) : null;
   });
   const [carregando, setCarregando] = useState(true);
+  // Lista de módulos/sub-abas liberados para o perfil do usuário logado (vem do backend).
+  // Para ADM, fica undefined/ignorado (sempre tem acesso a tudo).
+  const [permissoesModulo, setPermissoesModulo] = useState([]);
+
+  function carregarPermissoes() {
+    api.get('/permissoes/minhas').then(res => setPermissoesModulo(res.data || [])).catch(() => setPermissoesModulo([]));
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('hs_token');
@@ -16,6 +23,7 @@ export function AuthProvider({ children }) {
       api.get('/auth/me').then(res => {
         setUsuario(res.data);
         localStorage.setItem('hs_usuario', JSON.stringify(res.data));
+        carregarPermissoes();
       }).catch(() => {
         localStorage.removeItem('hs_token');
         localStorage.removeItem('hs_usuario');
@@ -31,6 +39,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('hs_token', res.data.token);
     localStorage.setItem('hs_usuario', JSON.stringify(res.data.usuario));
     setUsuario(res.data.usuario);
+    carregarPermissoes();
     return res.data.usuario;
   }
 
@@ -38,6 +47,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('hs_token');
     localStorage.removeItem('hs_usuario');
     setUsuario(null);
+    setPermissoesModulo([]);
   }
 
   function atualizarUsuario(dados) {
@@ -47,18 +57,30 @@ export function AuthProvider({ children }) {
   }
 
   const podeTudo = usuario?.perfil === 'ADM';
+
+  // Comportamento original, inalterado: checa se o PERFIL do usuário está entre os informados.
   function temPermissao(...perfis) {
     if (!usuario) return false;
     if (usuario.perfil === 'ADM') return true;
     return perfis.includes(usuario.perfil);
   }
 
+  // Nova checagem granular por sub-aba (ex: 'financeiro.receita', 'prestadores.cadastro').
+  // Consulta a lista de módulos/sub-abas liberados carregada do backend (GET /permissoes/minhas).
+  function temAcessoSubaba(chave) {
+    if (!usuario) return false;
+    if (usuario.perfil === 'ADM') return true;
+    return permissoesModulo.includes(chave);
+  }
+
   return (
-    <AuthContext.Provider value={{ usuario, login, logout, carregando, atualizarUsuario, temPermissao, podeTudo }}>
+    <AuthContext.Provider value={{ usuario, login, logout, carregando, atualizarUsuario, temPermissao, temAcessoSubaba, podeTudo }}>
       {children}
     </AuthContext.Provider>
   );
 }
+
+
 
 export function useAuth() {
   return useContext(AuthContext);

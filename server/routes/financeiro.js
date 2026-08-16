@@ -2,12 +2,15 @@ const express = require('express');
 const XLSX = require('xlsx');
 const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
+const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar } = require('../utils/auditoria');
 
 const router = express.Router();
 
+
 router.use(autenticar);
-router.use(permitir('FINANCEIRO'));
+router.use(permissaoModulo('financeiro'));
+
 
 const SERVICOS_VALIDOS = ['Pintura', 'Produção', 'Diárias', 'Reforma N', 'Reforma S'];
 // Serviços que NÃO sofrem o desconto de 11% no valor líquido
@@ -55,6 +58,7 @@ router.get('/obras-sugestoes', async (req, res) => {
 // ---- Nomes de obras distintos já usados em receitas (usado no filtro do dashboard Resumo) ----
 router.get('/receitas/obras-distintas', permitir('ADM'), async (req, res) => {
   const linhas = await db.all('SELECT DISTINCT obra_nome FROM financeiro_receitas ORDER BY obra_nome');
+
   res.json(linhas.map(l => l.obra_nome));
 });
 

@@ -3,11 +3,13 @@ import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import Usuarios from './Usuarios';
 import Backup from './Backup';
+import ControleAcesso from './ControleAcesso';
 
 export default function Configuracoes() {
   const { usuario, atualizarUsuario } = useAuth();
   const ehAdm = usuario?.perfil === 'ADM';
-  const [subAba, setSubAba] = useState('geral'); // 'geral' | 'usuarios' | 'backup'
+  const [subAba, setSubAba] = useState('geral'); // 'geral' | 'usuarios' | 'backup' | 'acessos'
+
 
   const [servicosPadrao, setServicosPadrao] = useState([]);
   const [novoServico, setNovoServico] = useState('');
@@ -58,7 +60,13 @@ export default function Configuracoes() {
             💾 Backup
           </button>
         )}
+        {ehAdm && (
+          <button className={subAba === 'acessos' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('acessos')}>
+            🔒 Controle de Acesso
+          </button>
+        )}
       </div>
+
 
       {subAba === 'geral' && (
         <div>
@@ -105,8 +113,10 @@ export default function Configuracoes() {
 
       {subAba === 'usuarios' && ehAdm && <Usuarios />}
       {subAba === 'backup' && ehAdm && <Backup />}
+      {subAba === 'acessos' && ehAdm && <ControleAcesso />}
     </div>
   );
 }
+
 
 

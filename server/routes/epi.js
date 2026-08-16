@@ -1,18 +1,17 @@
 const express = require('express');
 const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
+const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar } = require('../utils/auditoria');
 
 const router = express.Router();
 
-router.use(autenticar);
-
-// Perfis que podem gerenciar (cadastrar estoque, criar retiradas): todos os que têm acesso à aba
-const PERFIS_EPI = ['ADM', 'RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR'];
+router.use(autenticar, permissaoModulo('epi'));
 
 // ---- Estoque ----
 
-router.get('/itens', permitir(...PERFIS_EPI), async (req, res) => {
+router.get('/itens', async (req, res) => {
+
   const itens = await db.all('SELECT * FROM epi_itens WHERE ativo = 1 ORDER BY descricao');
   itens.sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR', { sensitivity: 'base' }));
   res.json(itens);
@@ -21,7 +20,8 @@ router.get('/itens', permitir(...PERFIS_EPI), async (req, res) => {
 // Cadastrar/entrada: soma quantidade se já existir item com a mesma descrição (case-insensitive), senão cria.
 // A quantidade é opcional: pode-se cadastrar/atualizar um item (descrição, C.A., estoque mínimo) sem
 // necessariamente dar entrada em estoque agora. Se quantidade vier vazia/zero, nenhum movimento é gerado.
-router.post('/itens', permitir(...PERFIS_EPI), async (req, res) => {
+router.post('/itens', async (req, res) => {
+
   const { descricao, quantidade, ca, estoque_minimo } = req.body;
   if (!descricao || !descricao.trim()) return res.status(400).json({ erro: 'Descrição é obrigatória' });
   const qtd = Number(quantidade) || 0;
@@ -51,7 +51,8 @@ router.post('/itens', permitir(...PERFIS_EPI), async (req, res) => {
   res.json({ ok: true, id: itemId });
 });
 
-router.put('/itens/:id', permitir(...PERFIS_EPI), async (req, res) => {
+router.put('/itens/:id', async (req, res) => {
+
   const { descricao, ca, estoque_minimo } = req.body;
   const item = await db.get('SELECT * FROM epi_itens WHERE id = ?', req.params.id);
   if (!item) return res.status(404).json({ erro: 'Item não encontrado' });
@@ -60,7 +61,8 @@ router.put('/itens/:id', permitir(...PERFIS_EPI), async (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/itens/:id', permitir('ADM', 'RH'), async (req, res) => {
+router.delete('/itens/:id', permitir('ADM'), async (req, res) => {
+
   await db.run('UPDATE epi_itens SET ativo = 0 WHERE id = ?', req.params.id);
   await registrar(req.usuario.id, 'DESATIVAR_ITEM_EPI', 'epi_itens', req.params.id, {});
   res.json({ ok: true });
@@ -69,7 +71,8 @@ router.delete('/itens/:id', permitir('ADM', 'RH'), async (req, res) => {
 // ---- Retirada ----
 
 // Cria uma retirada: valida estoque, debita quantidade de cada item, registra movimento de saída
-router.post('/retiradas', permitir(...PERFIS_EPI), async (req, res) => {
+router.post('/retiradas', async (req, res) => {
+
   const { colaborador_id, data_retirada, itens, assinatura } = req.body;
   if (!colaborador_id || !data_retirada || !Array.isArray(itens) || itens.length === 0) {
     return res.status(400).json({ erro: 'Colaborador, data e ao menos um item são obrigatórios' });
@@ -121,7 +124,8 @@ router.post('/retiradas', permitir(...PERFIS_EPI), async (req, res) => {
   }
 });
 
-router.get('/retiradas/:id', permitir(...PERFIS_EPI), async (req, res) => {
+router.get('/retiradas/:id', async (req, res) => {
+
   const retirada = await db.get('SELECT * FROM epi_retiradas WHERE id = ?', req.params.id);
   if (!retirada) return res.status(404).json({ erro: 'Retirada não encontrada' });
   const colaborador = await db.get('SELECT * FROM colaboradores WHERE id = ?', retirada.colaborador_id);
@@ -131,7 +135,8 @@ router.get('/retiradas/:id', permitir(...PERFIS_EPI), async (req, res) => {
 
 // ---- Histórico por colaborador ----
 
-router.get('/historico/:colaboradorId', permitir(...PERFIS_EPI), async (req, res) => {
+router.get('/historico/:colaboradorId', async (req, res) => {
+
   const colaborador = await db.get('SELECT * FROM colaboradores WHERE id = ?', req.params.colaboradorId);
   if (!colaborador) return res.status(404).json({ erro: 'Colaborador/empreiteiro não encontrado' });
 

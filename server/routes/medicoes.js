@@ -3,7 +3,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db/database');
-const { autenticar, permitir } = require('../utils/auth');
+const { autenticar } = require('../utils/auth');
+const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar } = require('../utils/auditoria');
 const { rotuloCelula } = require('../utils/celulasLabel');
 
@@ -19,7 +20,8 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-router.use(autenticar, permitir('FINANCEIRO', 'ADM'));
+router.use(autenticar, permissaoModulo('medicao'));
+
 
 // Gera/recalcula a planilha unificada de medição do mês, filtrando por obra(s) ou todas
 // obras: "" (todas) ou lista de ids separados por vírgula
@@ -219,7 +221,8 @@ router.post('/:id/comprovante', upload.single('comprovante'), async (req, res) =
 
 
 // Reabrir medição paga (somente ADM) - log de auditoria obrigatório
-router.post('/:id/reabrir', permitir('ADM'), async (req, res) => {
+router.post('/:id/reabrir', require('../utils/auth').permitir('ADM'), async (req, res) => {
+
   const id = req.params.id;
   const medicao = await db.get('SELECT * FROM medicoes WHERE id = ?', id);
   if (!medicao) return res.status(404).json({ erro: 'Medição não encontrada' });

@@ -30,6 +30,8 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/painel', require('./routes/painel'));
 app.use('/api/epi', require('./routes/epi'));
 app.use('/api/financeiro', require('./routes/financeiro'));
+app.use('/api/permissoes', require('./routes/permissoes'));
+
 
 
 

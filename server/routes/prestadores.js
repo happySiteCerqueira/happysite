@@ -1,11 +1,13 @@
 const express = require('express');
 const db = require('../db/database');
 const { autenticar } = require('../utils/auth');
+const { permissaoModulo } = require('../utils/permissaoModulo');
 const { rotuloCelula } = require('../utils/celulasLabel');
 
 const router = express.Router();
 
-router.use(autenticar);
+router.use(autenticar, permissaoModulo('prestadores'));
+
 
 router.get('/', async (req, res) => {
   const { busca, status } = req.query; // status: 'ativos' (default) | 'arquivados' | 'todos'
