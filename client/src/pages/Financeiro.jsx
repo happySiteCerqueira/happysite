@@ -208,8 +208,14 @@ function Entrada() {
       try {
         const res = await api.post('/financeiro/receitas/importar', { arquivo_base64: base64 });
         const d = res.data;
-        setMsg(`Importação concluída! Criados: ${d.criados ?? 0}${d.erros ? ` • Ignorados: ${d.erros}` : ''}`);
+        let texto = `Importação concluída! Criados: ${d.criados ?? 0}${d.erros ? ` • Ignorados: ${d.erros}` : ''}`;
+        if (d.detalhesErros?.length) {
+          const primeiros = d.detalhesErros.slice(0, 5).map(e => `Linha: ${JSON.stringify(e.linha)} → ${e.motivo}`);
+          texto += '\n\nMotivos (primeiros ' + primeiros.length + '):\n' + primeiros.join('\n');
+        }
+        setMsg(texto);
         carregar();
+
         api.get('/financeiro/obras-sugestoes').then(res2 => setObrasSugestoes(res2.data));
       } catch (err) {
         setErro(err.response?.data?.erro || 'Erro ao importar planilha');
@@ -266,7 +272,8 @@ function Entrada() {
       </div>
 
       {erro && <div className="card" style={{ background: '#fef2f2', color: '#dc2626', marginBottom: 12 }}>{erro}</div>}
-      {msg && <div className="card" style={{ background: '#f0fdf4', color: '#15803d', marginBottom: 12 }}>{msg}</div>}
+      {msg && <div className="card" style={{ background: '#f0fdf4', color: '#15803d', marginBottom: 12, whiteSpace: 'pre-wrap' }}>{msg}</div>}
+
 
       <div className="card" style={{ overflowX: 'auto' }}>
         <table>

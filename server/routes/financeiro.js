@@ -13,6 +13,24 @@ const SERVICOS_VALIDOS = ['Pintura', 'Produção', 'Diárias', 'Reforma N', 'Ref
 // Serviços que NÃO sofrem o desconto de 11% no valor líquido
 const SERVICOS_SEM_DESCONTO = ['Diárias', 'Reforma S'];
 
+// Normaliza texto para comparação tolerante: remove acentos, espaços extras e ignora maiúsc/minúsc.
+function normalizarTexto(texto) {
+  return (texto || '')
+    .toString()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+// Encontra o serviço válido correspondente ao texto informado (planilha ou formulário),
+// tolerando diferenças de maiúsculas/minúsculas, acentos e espaços.
+function encontrarServicoValido(textoDigitado) {
+  const alvo = normalizarTexto(textoDigitado);
+  return SERVICOS_VALIDOS.find(s => normalizarTexto(s) === alvo) || null;
+}
+
+
 function calcularValorLiquido(servico, valorBruto) {
   const bruto = Number(valorBruto) || 0;
   if (SERVICOS_SEM_DESCONTO.includes(servico)) return bruto;
@@ -117,7 +135,7 @@ router.post('/receitas/importar', permitir('ADM'), async (req, res) => {
   for (const l of linhas) {
     const dataMedicaoRaw = l[COLUNAS[0]];
     const obraNome = (l[COLUNAS[1]] || '').toString().trim();
-    const servico = (l[COLUNAS[2]] || '').toString().trim();
+    const servicoDigitado = (l[COLUNAS[2]] || '').toString().trim();
     const valorBruto = Number(l[COLUNAS[3]]) || 0;
     const fontePag = l[COLUNAS[4]] || null;
     const dataPagamentoRaw = l[COLUNAS[5]];
@@ -125,9 +143,13 @@ router.post('/receitas/importar', permitir('ADM'), async (req, res) => {
     const statusTexto = l[COLUNAS[7]];
 
     const dataMedicao = excelDataParaISO(dataMedicaoRaw);
-    if (!dataMedicao) { erros.push({ linha: l, motivo: 'Data de Medição inválida' }); continue; }
+    if (!dataMedicao) { erros.push({ linha: l, motivo: 'Data de Medição inválida ou vazia' }); continue; }
     if (!obraNome) { erros.push({ linha: l, motivo: 'Obra é obrigatória' }); continue; }
-    if (!SERVICOS_VALIDOS.includes(servico)) { erros.push({ linha: l, motivo: 'Serviço inválido' }); continue; }
+    const servico = encontrarServicoValido(servicoDigitado);
+    if (!servico) {
+      erros.push({ linha: l, motivo: `Serviço inválido: "${servicoDigitado}". Valores aceitos: ${SERVICOS_VALIDOS.join(', ')}` });
+      continue;
+    }
 
     const dataPagamento = excelDataParaISO(dataPagamentoRaw);
     const status = interpretarStatus(statusTexto);
@@ -142,16 +164,18 @@ router.post('/receitas/importar', permitir('ADM'), async (req, res) => {
     criados++;
   }
 
+
   await registrar(req.usuario.id, 'IMPORTAR_FINANCEIRO_RECEITAS', 'financeiro_receitas', null, { criados, erros: erros.length });
   res.json({ ok: true, criados, erros: erros.length, detalhesErros: erros });
 });
 
 // ---- Criar (só ADM) ----
 router.post('/receitas', permitir('ADM'), async (req, res) => {
-  const { data_medicao, obra_nome, servico, valor_bruto, fonte_pagador, data_pagamento, conta } = req.body;
+  const { data_medicao, obra_nome, servico: servicoDigitado, valor_bruto, fonte_pagador, data_pagamento, conta } = req.body;
   if (!data_medicao) return res.status(400).json({ erro: 'Data de medição é obrigatória' });
   if (!obra_nome || !obra_nome.trim()) return res.status(400).json({ erro: 'Obra é obrigatória' });
-  if (!SERVICOS_VALIDOS.includes(servico)) return res.status(400).json({ erro: 'Serviço inválido' });
+  const servico = encontrarServicoValido(servicoDigitado);
+  if (!servico) return res.status(400).json({ erro: 'Serviço inválido' });
 
   const valorLiquido = calcularValorLiquido(servico, valor_bruto);
 
@@ -163,6 +187,7 @@ router.post('/receitas', permitir('ADM'), async (req, res) => {
     fonte_pagador || null, data_pagamento || null, conta || null, req.usuario.id
   );
 
+
   await registrar(req.usuario.id, 'CRIAR', 'financeiro_receitas', info.lastInsertRowid, req.body);
   res.json({ id: info.lastInsertRowid });
 });
@@ -172,10 +197,11 @@ router.put('/receitas/:id', permitir('ADM'), async (req, res) => {
   const receita = await db.get('SELECT * FROM financeiro_receitas WHERE id = ?', req.params.id);
   if (!receita) return res.status(404).json({ erro: 'Não encontrada' });
 
-  const { data_medicao, obra_nome, servico, valor_bruto, fonte_pagador, data_pagamento, conta } = req.body;
-  const servicoFinal = servico || receita.servico;
-  if (!SERVICOS_VALIDOS.includes(servicoFinal)) return res.status(400).json({ erro: 'Serviço inválido' });
+  const { data_medicao, obra_nome, servico: servicoDigitado, valor_bruto, fonte_pagador, data_pagamento, conta } = req.body;
+  const servicoFinal = servicoDigitado ? encontrarServicoValido(servicoDigitado) : receita.servico;
+  if (!servicoFinal) return res.status(400).json({ erro: 'Serviço inválido' });
   if (obra_nome !== undefined && !obra_nome.trim()) return res.status(400).json({ erro: 'Obra é obrigatória' });
+
   const valorBrutoFinal = valor_bruto !== undefined ? Number(valor_bruto) : receita.valor_bruto;
   const valorLiquido = calcularValorLiquido(servicoFinal, valorBrutoFinal);
 
