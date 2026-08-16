@@ -22,6 +22,14 @@ function mesAtual() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function rotuloMes(mes) {
+  // mes no formato YYYY-MM -> "Jan/2026"
+  const [ano, m] = mes.split('-');
+  const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  return `${nomes[Number(m) - 1]}/${ano}`;
+}
+
+
 function hoje() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -86,11 +94,13 @@ function Entrada() {
   const { usuario } = useAuth();
   const ehAdm = usuario?.perfil === 'ADM';
 
-  const [mes, setMes] = useState(mesAtual());
+  const [mesesSelecionados, setMesesSelecionados] = useState([]); // vazio = mostra todos os meses
+  const [mesParaAdicionar, setMesParaAdicionar] = useState(mesAtual());
   const [filtroObra, setFiltroObra] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
   const [itens, setItens] = useState([]);
   const [obrasSugestoes, setObrasSugestoes] = useState([]);
+
 
   const [mostrarModal, setMostrarModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
@@ -104,10 +114,27 @@ function Entrada() {
   const [carregandoArquivo, setCarregandoArquivo] = useState(false);
 
   function carregar() {
-    api.get('/financeiro/receitas', { params: { mes, obra: filtroObra || undefined, status: filtroStatus || undefined } })
-      .then(res => setItens(res.data));
+    api.get('/financeiro/receitas', {
+      params: {
+        meses: mesesSelecionados.length > 0 ? mesesSelecionados : undefined,
+        obra: filtroObra || undefined,
+        status: filtroStatus || undefined
+      },
+      paramsSerializer: { indexes: null }
+    }).then(res => setItens(res.data));
   }
-  useEffect(carregar, [mes, filtroObra, filtroStatus]);
+  useEffect(carregar, [mesesSelecionados, filtroObra, filtroStatus]);
+
+  function adicionarMes() {
+    if (!mesParaAdicionar) return;
+    if (mesesSelecionados.includes(mesParaAdicionar)) return;
+    setMesesSelecionados([...mesesSelecionados, mesParaAdicionar].sort());
+  }
+
+  function removerMes(mes) {
+    setMesesSelecionados(mesesSelecionados.filter(m => m !== mes));
+  }
+
 
   useEffect(() => {
     api.get('/financeiro/obras-sugestoes').then(res => setObrasSugestoes(res.data));
@@ -231,13 +258,42 @@ function Entrada() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div>
-          <label style={{ marginRight: 8 }}>Mês:</label>
-          <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
+      <div style={{ marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label>Adicionar mês:</label>
+          <input type="month" value={mesParaAdicionar} onChange={e => setMesParaAdicionar(e.target.value)} />
+          <button className="btn-secondary btn-sm" onClick={adicionarMes}>+ Adicionar</button>
+          {mesesSelecionados.length > 0 && (
+            <button className="btn-secondary btn-sm" onClick={() => setMesesSelecionados([])}>Limpar filtro de mês</button>
+          )}
         </div>
+      </div>
 
+      {mesesSelecionados.length > 0 && (
+        <div style={{ marginBottom: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {mesesSelecionados.map(m => (
+            <span key={m} className="badge badge-pendente" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {rotuloMes(m)}
+              <button
+                onClick={() => removerMes(m)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontWeight: 700, padding: 0 }}
+                title="Remover este mês do filtro"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {mesesSelecionados.length === 0 && (
+        <p style={{ color: '#6b7280', fontSize: 12, marginTop: -4, marginBottom: 12 }}>
+          Nenhum mês selecionado — mostrando entradas de todos os meses.
+        </p>
+      )}
+
+      <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
+
           placeholder="Filtrar por obra..."
           value={filtroObra}
           onChange={e => setFiltroObra(e.target.value)}
@@ -335,12 +391,14 @@ function Entrada() {
                 </td>
               </tr>
             ))}
-            {itens.length === 0 && <tr><td colSpan={10} style={{ color: '#9ca3af' }}>Nenhuma entrada neste mês.</td></tr>}
+            {itens.length === 0 && <tr><td colSpan={10} style={{ color: '#9ca3af' }}>Nenhuma entrada encontrada.</td></tr>}
+
           </tbody>
           {itens.length > 0 && (
             <tfoot>
               <tr>
-                <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Totais do mês:</td>
+                <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Totais:</td>
+
                 <td><strong>R$ {totalBruto.toFixed(2)}</strong></td>
                 <td><strong>R$ {totalLiquido.toFixed(2)}</strong></td>
                 <td colSpan={5}></td>

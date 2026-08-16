@@ -54,12 +54,17 @@ router.get('/obras-sugestoes', async (req, res) => {
 
 // ---- Listagem ----
 router.get('/receitas', async (req, res) => {
-  const { mes, obra, status } = req.query; // mes: 'YYYY-MM'
+  const { obra, status } = req.query;
+  // meses: aceita múltiplos valores via ?meses=2026-01&meses=2026-03 (ou string única)
+  let meses = req.query.meses;
+  if (meses && !Array.isArray(meses)) meses = [meses];
+
   let sql = `SELECT * FROM financeiro_receitas WHERE 1=1`;
   const params = [];
-  if (mes) {
-    sql += ` AND to_char(data_medicao, 'YYYY-MM') = ?`;
-    params.push(mes);
+  if (meses && meses.length > 0) {
+    const placeholders = meses.map(() => `to_char(data_medicao, 'YYYY-MM') = ?`).join(' OR ');
+    sql += ` AND (${placeholders})`;
+    params.push(...meses);
   }
   if (obra) {
     sql += ' AND obra_nome ILIKE ?';
@@ -73,6 +78,7 @@ router.get('/receitas', async (req, res) => {
   const linhas = await db.all(sql, ...params);
   res.json(linhas.map(parseReceita));
 });
+
 
 // ---- Modelo de planilha (baixar) ----
 const COLUNAS = ['Data Medição', 'Obra', 'Serviço', 'Valor Bruto', 'Fonte Pag.', 'Data Pagamento', 'Conta', 'Status'];
