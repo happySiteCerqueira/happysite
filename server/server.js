@@ -29,6 +29,8 @@ app.use('/api/relatorios', require('./routes/relatorios'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/painel', require('./routes/painel'));
 app.use('/api/epi', require('./routes/epi'));
+app.use('/api/financeiro', require('./routes/financeiro'));
+
 
 
 // Serve o frontend React já buildado (produção)

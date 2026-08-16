@@ -1,4 +1,4 @@
-﻿// Só carrega o .env local se o arquivo realmente existir (evita qualquer interferência em produção,
+﻿ // Só carrega o .env local se o arquivo realmente existir (evita qualquer interferência em produção,
 // onde a variável DATABASE_URL já vem configurada pelo serviço de hospedagem, ex: Render).
 const fs = require('fs');
 const path = require('path');
@@ -331,7 +331,25 @@ async function migrate() {
       criado_por INTEGER REFERENCES usuarios(id),
       criado_em TIMESTAMP DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS financeiro_receitas (
+      id SERIAL PRIMARY KEY,
+      data_medicao DATE NOT NULL,
+      obra_nome TEXT NOT NULL,
+      servico TEXT NOT NULL CHECK(servico IN ('Pintura','Produção','Diárias','Reforma N','Reforma S')),
+
+      valor_bruto DOUBLE PRECISION NOT NULL DEFAULT 0,
+      valor_liquido DOUBLE PRECISION NOT NULL DEFAULT 0,
+      fonte_pagador TEXT,
+      data_pagamento DATE,
+      conta TEXT,
+      status TEXT NOT NULL DEFAULT 'EM_ANALISE' CHECK(status IN ('EM_ANALISE','CONFIRMADO','PAGO')),
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW()
+    );
   `);
+
 
   // Seed: serviços padrão
   const countRes = await pool.query('SELECT COUNT(*)::int c FROM servicos_padrao');

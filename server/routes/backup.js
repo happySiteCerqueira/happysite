@@ -18,9 +18,10 @@ router.use(autenticar, permitir('ADM'));
 const TABELAS = [
   'usuarios', 'colaboradores', 'obras', 'servicos_padrao', 'obra_servicos',
   'obra_servico_pessoas', 'obra_servico_celulas', 'obra_servico_quantidades', 'obra_apto_rotulos',
-  'pagamentos_antecipados', 'diarias', 'medicoes', 'auditoria'
+  'pagamentos_antecipados', 'diarias', 'medicoes', 'financeiro_receitas', 'auditoria'
 
 ];
+
 
 
 

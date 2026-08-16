@@ -79,7 +79,8 @@ export default function Layout() {
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/relatorios" style={linkStyle}>📈 Relatórios</NavLink>}
           {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
-          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
+          {temPermissao('FINANCEIRO') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
+
 
           <NavLink to="/configuracoes" style={linkStyle}>⚙️ Configurações</NavLink>
 
