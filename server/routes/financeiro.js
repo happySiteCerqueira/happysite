@@ -13,8 +13,10 @@ router.use(permissaoModulo('financeiro'));
 
 
 const SERVICOS_VALIDOS = ['Pintura', 'Produção', 'Diárias', 'Reforma N', 'Reforma S'];
-// Serviços que NÃO sofrem o desconto de 11% no valor líquido
-const SERVICOS_SEM_DESCONTO = ['Diárias', 'Reforma S'];
+// Serviços que, por padrão (planilhas antigas/sem a coluna "Com Nota"), NÃO sofriam o desconto de 11%.
+// Mantido apenas como valor padrão de importação para compatibilidade; hoje quem decide o desconto
+// é o campo "com_nota" (true = desconta 11%, false = valor líquido = valor bruto).
+const SERVICOS_SEM_DESCONTO_PADRAO = ['Diárias', 'Reforma S'];
 
 // Normaliza texto para comparação tolerante: remove acentos, espaços extras e ignora maiúsc/minúsc.
 function normalizarTexto(texto) {
@@ -34,10 +36,21 @@ function encontrarServicoValido(textoDigitado) {
 }
 
 
-function calcularValorLiquido(servico, valorBruto) {
+// Calcula o valor líquido a partir do valor bruto e do flag "com nota":
+// - comNota = true  -> desconta 11% (nota fiscal/impostos)
+// - comNota = false -> valor líquido = valor bruto (sem desconto)
+function calcularValorLiquido(comNota, valorBruto) {
   const bruto = Number(valorBruto) || 0;
-  if (SERVICOS_SEM_DESCONTO.includes(servico)) return bruto;
+  if (!comNota) return bruto;
   return Math.round(bruto * 0.89 * 100) / 100;
+}
+
+// Converte qualquer valor recebido (boolean, 'true'/'false', 1/0, undefined) em boolean.
+function paraBooleano(valor, padrao) {
+  if (valor === undefined || valor === null || valor === '') return padrao;
+  if (typeof valor === 'boolean') return valor;
+  const texto = valor.toString().trim().toLowerCase();
+  return ['true', '1', 'sim', 'yes', 'on'].includes(texto);
 }
 
 function parseReceita(r) {
@@ -45,7 +58,8 @@ function parseReceita(r) {
   return {
     ...r,
     valor_bruto: Number(r.valor_bruto),
-    valor_liquido: Number(r.valor_liquido)
+    valor_liquido: Number(r.valor_liquido),
+    com_nota: !!r.com_nota
   };
 }
 
@@ -92,7 +106,7 @@ router.get('/receitas', async (req, res) => {
 
 
 // ---- Modelo de planilha (baixar) ----
-const COLUNAS = ['Data Medição', 'Obra', 'Serviço', 'Valor Bruto', 'Fonte Pag.', 'Data Pagamento', 'Conta', 'Status'];
+const COLUNAS = ['Data Medição', 'Obra', 'Serviço', 'Valor Bruto', 'Com Nota', 'Fonte Pag.', 'Data Pagamento', 'Conta', 'Status'];
 
 router.get('/receitas/modelo', permitir('ADM'), (req, res) => {
   const exemplo = {
@@ -100,10 +114,11 @@ router.get('/receitas/modelo', permitir('ADM'), (req, res) => {
     [COLUNAS[1]]: 'Nome da obra (livre)',
     [COLUNAS[2]]: 'Pintura',
     [COLUNAS[3]]: 1000,
-    [COLUNAS[4]]: 'Nome do cliente/pagador',
-    [COLUNAS[5]]: '2026-01-20',
-    [COLUNAS[6]]: 'Banco Itaú',
-    [COLUNAS[7]]: '' // vazio/"analise" = Em Análise, "confirmado" = Confirmado, "ok" = Pago
+    [COLUNAS[4]]: 'Sim', // 'Sim' desconta 11% (líquido = bruto*0,89) | 'Não' = líquido igual ao bruto
+    [COLUNAS[5]]: 'Nome do cliente/pagador',
+    [COLUNAS[6]]: '2026-01-20',
+    [COLUNAS[7]]: 'Banco Itaú',
+    [COLUNAS[8]]: '' // vazio/"analise" = Em Análise, "confirmado" = Confirmado, "ok" = Pago
   };
   const ws = XLSX.utils.json_to_sheet([exemplo]);
   ws['!cols'] = COLUNAS.map(() => ({ wch: 24 }));
@@ -120,6 +135,16 @@ function interpretarStatus(valor) {
   if (v === 'ok') return 'PAGO';
   if (v === 'confirmado') return 'CONFIRMADO';
   return 'EM_ANALISE'; // vazio, 'analise' ou qualquer outro valor
+}
+
+// Interpreta a coluna "Com Nota" da planilha. Vazio = usa o padrão por serviço (compatibilidade
+// com planilhas antigas, que não tinham essa coluna): Diárias/Reforma S = Não; demais = Sim.
+function interpretarComNota(valor, servico) {
+  if (valor === undefined || valor === null || valor.toString().trim() === '') {
+    return !SERVICOS_SEM_DESCONTO_PADRAO.includes(servico);
+  }
+  const v = valor.toString().trim().toLowerCase();
+  return ['sim', 's', 'yes', 'true', '1'].includes(v);
 }
 
 function excelDataParaISO(valor) {
@@ -154,10 +179,11 @@ router.post('/receitas/importar', permitir('ADM'), async (req, res) => {
     const obraNome = (l[COLUNAS[1]] || '').toString().trim();
     const servicoDigitado = (l[COLUNAS[2]] || '').toString().trim();
     const valorBruto = Number(l[COLUNAS[3]]) || 0;
-    const fontePag = l[COLUNAS[4]] || null;
-    const dataPagamentoRaw = l[COLUNAS[5]];
-    const conta = l[COLUNAS[6]] || null;
-    const statusTexto = l[COLUNAS[7]];
+    const comNotaTexto = l[COLUNAS[4]];
+    const fontePag = l[COLUNAS[5]] || null;
+    const dataPagamentoRaw = l[COLUNAS[6]];
+    const conta = l[COLUNAS[7]] || null;
+    const statusTexto = l[COLUNAS[8]];
 
     const dataMedicao = excelDataParaISO(dataMedicaoRaw);
     if (!dataMedicao) { erros.push({ linha: l, motivo: 'Data de Medição inválida ou vazia' }); continue; }
@@ -170,13 +196,14 @@ router.post('/receitas/importar', permitir('ADM'), async (req, res) => {
 
     const dataPagamento = excelDataParaISO(dataPagamentoRaw);
     const status = interpretarStatus(statusTexto);
-    const valorLiquido = calcularValorLiquido(servico, valorBruto);
+    const comNota = interpretarComNota(comNotaTexto, servico);
+    const valorLiquido = calcularValorLiquido(comNota, valorBruto);
 
     await db.run(
       `INSERT INTO financeiro_receitas
-       (data_medicao, obra_nome, servico, valor_bruto, valor_liquido, fonte_pagador, data_pagamento, conta, status, criado_por)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      dataMedicao, obraNome, servico, valorBruto, valorLiquido, fontePag, dataPagamento, conta, status, req.usuario.id
+       (data_medicao, obra_nome, servico, valor_bruto, valor_liquido, com_nota, fonte_pagador, data_pagamento, conta, status, criado_por)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      dataMedicao, obraNome, servico, valorBruto, valorLiquido, comNota, fontePag, dataPagamento, conta, status, req.usuario.id
     );
     criados++;
   }
@@ -188,19 +215,20 @@ router.post('/receitas/importar', permitir('ADM'), async (req, res) => {
 
 // ---- Criar (só ADM) ----
 router.post('/receitas', permitir('ADM'), async (req, res) => {
-  const { data_medicao, obra_nome, servico: servicoDigitado, valor_bruto, fonte_pagador, data_pagamento, conta } = req.body;
+  const { data_medicao, obra_nome, servico: servicoDigitado, valor_bruto, com_nota, fonte_pagador, data_pagamento, conta } = req.body;
   if (!data_medicao) return res.status(400).json({ erro: 'Data de medição é obrigatória' });
   if (!obra_nome || !obra_nome.trim()) return res.status(400).json({ erro: 'Obra é obrigatória' });
   const servico = encontrarServicoValido(servicoDigitado);
   if (!servico) return res.status(400).json({ erro: 'Serviço inválido' });
 
-  const valorLiquido = calcularValorLiquido(servico, valor_bruto);
+  const comNota = paraBooleano(com_nota, true);
+  const valorLiquido = calcularValorLiquido(comNota, valor_bruto);
 
   const info = await db.run(
     `INSERT INTO financeiro_receitas
-     (data_medicao, obra_nome, servico, valor_bruto, valor_liquido, fonte_pagador, data_pagamento, conta, status, criado_por)
-     VALUES (?,?,?,?,?,?,?,?,'EM_ANALISE',?)`,
-    data_medicao, obra_nome.trim(), servico, Number(valor_bruto) || 0, valorLiquido,
+     (data_medicao, obra_nome, servico, valor_bruto, valor_liquido, com_nota, fonte_pagador, data_pagamento, conta, status, criado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,'EM_ANALISE',?)`,
+    data_medicao, obra_nome.trim(), servico, Number(valor_bruto) || 0, valorLiquido, comNota,
     fonte_pagador || null, data_pagamento || null, conta || null, req.usuario.id
   );
 
@@ -214,22 +242,23 @@ router.put('/receitas/:id', permitir('ADM'), async (req, res) => {
   const receita = await db.get('SELECT * FROM financeiro_receitas WHERE id = ?', req.params.id);
   if (!receita) return res.status(404).json({ erro: 'Não encontrada' });
 
-  const { data_medicao, obra_nome, servico: servicoDigitado, valor_bruto, fonte_pagador, data_pagamento, conta } = req.body;
+  const { data_medicao, obra_nome, servico: servicoDigitado, valor_bruto, com_nota, fonte_pagador, data_pagamento, conta } = req.body;
   const servicoFinal = servicoDigitado ? encontrarServicoValido(servicoDigitado) : receita.servico;
   if (!servicoFinal) return res.status(400).json({ erro: 'Serviço inválido' });
   if (obra_nome !== undefined && !obra_nome.trim()) return res.status(400).json({ erro: 'Obra é obrigatória' });
 
   const valorBrutoFinal = valor_bruto !== undefined ? Number(valor_bruto) : receita.valor_bruto;
-  const valorLiquido = calcularValorLiquido(servicoFinal, valorBrutoFinal);
+  const comNotaFinal = paraBooleano(com_nota, receita.com_nota);
+  const valorLiquido = calcularValorLiquido(comNotaFinal, valorBrutoFinal);
 
   await db.run(
     `UPDATE financeiro_receitas SET
-       data_medicao = ?, obra_nome = ?, servico = ?, valor_bruto = ?, valor_liquido = ?,
+       data_medicao = ?, obra_nome = ?, servico = ?, valor_bruto = ?, valor_liquido = ?, com_nota = ?,
        fonte_pagador = ?, data_pagamento = ?, conta = ?, atualizado_em = NOW()
      WHERE id = ?`,
     data_medicao || receita.data_medicao,
     obra_nome !== undefined ? obra_nome.trim() : receita.obra_nome,
-    servicoFinal, valorBrutoFinal, valorLiquido,
+    servicoFinal, valorBrutoFinal, valorLiquido, comNotaFinal,
     fonte_pagador !== undefined ? fonte_pagador : receita.fonte_pagador,
     data_pagamento !== undefined ? (data_pagamento || null) : receita.data_pagamento,
     conta !== undefined ? conta : receita.conta,

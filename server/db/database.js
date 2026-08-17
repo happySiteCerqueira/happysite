@@ -349,6 +349,7 @@ async function migrate() {
 
       valor_bruto DOUBLE PRECISION NOT NULL DEFAULT 0,
       valor_liquido DOUBLE PRECISION NOT NULL DEFAULT 0,
+      com_nota BOOLEAN NOT NULL DEFAULT TRUE,
       fonte_pagador TEXT,
       data_pagamento DATE,
       conta TEXT,
@@ -358,6 +359,14 @@ async function migrate() {
       atualizado_em TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  // Migração idempotente: coluna "com_nota" em financeiro_receitas (bancos já existentes antes desta alteração).
+  // Entradas antigas: assume "com nota" (com desconto de 11%), exceto Diárias/Reforma S que já eram sem desconto,
+  // preservando assim o valor_liquido histórico já calculado para cada uma.
+  if (!(await colunaExiste('financeiro_receitas', 'com_nota'))) {
+    await pool.query('ALTER TABLE financeiro_receitas ADD COLUMN com_nota BOOLEAN NOT NULL DEFAULT TRUE');
+    await pool.query(`UPDATE financeiro_receitas SET com_nota = FALSE WHERE servico IN ('Diárias','Reforma S')`);
+  }
 
 
   // Seed: serviços padrão

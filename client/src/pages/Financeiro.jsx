@@ -63,6 +63,7 @@ const RECEITA_VAZIA = {
   obra_nome: '',
   servico: SERVICOS[0],
   valor_bruto: '',
+  com_nota: true,
   fonte_pagador: '',
   data_pagamento: '',
   conta: ''
@@ -209,9 +210,11 @@ function Entrada() {
     api.get('/financeiro/obras-sugestoes').then(res => setObrasSugestoes(res.data));
   }, []);
 
-  function calcularValorLiquidoLocal(servico, valorBruto) {
+  // Calcula o valor líquido estimado localmente (mesma regra do backend): com nota desconta 11%,
+  // sem nota o líquido é igual ao bruto.
+  function calcularValorLiquidoLocal(comNota, valorBruto) {
     const bruto = Number(valorBruto) || 0;
-    if (servico === 'Diárias' || servico === 'Reforma S') return bruto;
+    if (!comNota) return bruto;
     return Math.round(bruto * 0.89 * 100) / 100;
   }
 
@@ -229,6 +232,7 @@ function Entrada() {
       obra_nome: item.obra_nome,
       servico: item.servico,
       valor_bruto: item.valor_bruto,
+      com_nota: item.com_nota !== undefined ? !!item.com_nota : true,
       fonte_pagador: item.fonte_pagador || '',
       data_pagamento: item.data_pagamento ? item.data_pagamento.slice(0, 10) : '',
       conta: item.conta || ''
@@ -408,6 +412,7 @@ function Entrada() {
               <th>Obra</th>
               <th>Serviço</th>
               <th>Valor Bruto</th>
+              <th>Com Nota</th>
               <th>Valor Líquido</th>
               <th>Fonte Pag.</th>
               <th>Data Pagamento</th>
@@ -423,6 +428,7 @@ function Entrada() {
                 <td>{item.obra_nome}</td>
                 <td>{item.servico}</td>
                 <td>R$ {formatarValorBR(item.valor_bruto)}</td>
+                <td style={{ textAlign: 'center' }}>{item.com_nota ? '✔️' : '—'}</td>
                 <td>R$ {formatarValorBR(item.valor_liquido)}</td>
 
                 <td style={{ color: '#6b7280' }}>{item.fonte_pagador || '-'}</td>
@@ -500,7 +506,7 @@ function Entrada() {
                 </td>
               </tr>
             ))}
-            {itens.length === 0 && <tr><td colSpan={10} style={{ color: '#9ca3af' }}>Nenhuma entrada encontrada.</td></tr>}
+            {itens.length === 0 && <tr><td colSpan={11} style={{ color: '#9ca3af' }}>Nenhuma entrada encontrada.</td></tr>}
 
           </tbody>
           {itens.length > 0 && (
@@ -509,6 +515,7 @@ function Entrada() {
                 <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Totais:</td>
 
                 <td><strong>R$ {formatarValorBR(totalBruto)}</strong></td>
+                <td></td>
                 <td><strong>R$ {formatarValorBR(totalLiquido)}</strong></td>
 
                 <td colSpan={5}></td>
@@ -558,9 +565,19 @@ function Entrada() {
                 value={form.valor_bruto}
                 onChange={e => setForm({ ...form, valor_bruto: e.target.value })}
               />
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={!!form.com_nota}
+                  onChange={e => setForm({ ...form, com_nota: e.target.checked })}
+                />
+                Com nota (desconta 11% do valor bruto)
+              </label>
+
               <div style={{ fontSize: 12, color: '#6b7280' }}>
-                Valor líquido estimado: <strong>R$ {formatarValorBR(calcularValorLiquidoLocal(form.servico, form.valor_bruto))}</strong>
-                {['Diárias', 'Reforma S'].includes(form.servico) ? ' (sem desconto)' : ' (11% de desconto)'}
+                Valor líquido estimado: <strong>R$ {formatarValorBR(calcularValorLiquidoLocal(form.com_nota, form.valor_bruto))}</strong>
+                {form.com_nota ? ' (11% de desconto)' : ' (sem desconto)'}
               </div>
 
 
