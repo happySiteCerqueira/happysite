@@ -612,6 +612,73 @@ function TooltipPersonalizado({ active, payload, label }) {
   );
 }
 
+// Dropdown com checkboxes (multi-seleção "boxpoint"): ao marcar/desmarcar já aplica o filtro
+// na hora, sem precisar de botão de confirmação. Fecha ao clicar fora.
+function DropdownMultiSelect({ rotulo, opcoes, selecionados, onAlternar, onLimpar }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function aoClicarFora(e) {
+      if (ref.current && !ref.current.contains(e.target)) setAberto(false);
+    }
+    document.addEventListener('mousedown', aoClicarFora);
+    return () => document.removeEventListener('mousedown', aoClicarFora);
+  }, []);
+
+  const qtd = selecionados.length;
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>{rotulo}</label>
+      <button
+        type="button"
+        className="btn-secondary btn-sm"
+        onClick={() => setAberto(a => !a)}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 160, justifyContent: 'space-between' }}
+      >
+        <span>{qtd === 0 ? 'Todos' : `${qtd} selecionado${qtd > 1 ? 's' : ''}`}</span>
+        <span style={{ fontSize: 10 }}>▾</span>
+      </button>
+
+      {aberto && (
+        <div
+          style={{
+            position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff',
+            border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            zIndex: 20, minWidth: 220, maxHeight: 260, overflowY: 'auto', padding: 8
+          }}
+        >
+          {qtd > 0 && (
+            <div
+              onClick={onLimpar}
+              style={{ padding: '4px 6px', fontSize: 12, color: '#2563eb', cursor: 'pointer', fontWeight: 600, borderBottom: '1px solid #f0f0f0', marginBottom: 4 }}
+            >
+              Limpar seleção
+            </div>
+          )}
+          {opcoes.length === 0 && <div style={{ padding: '4px 6px', fontSize: 12, color: '#9ca3af' }}>Nenhuma opção</div>}
+          {opcoes.map(op => (
+            <label
+              key={op}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', fontSize: 13, cursor: 'pointer', borderRadius: 4 }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <input
+                type="checkbox"
+                checked={selecionados.includes(op)}
+                onChange={() => onAlternar(op)}
+              />
+              {op}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Resumo() {
   // ---- Gráfico principal: valor líquido por ano/mês (todo o histórico) ----
 
@@ -642,14 +709,22 @@ function Resumo() {
 
   // ---- Gráfico configurável ----
   const [obras, setObras] = useState([]);
-
-  const [filtros, setFiltros] = useState({ data_inicio: '', data_fim: '', servico: '', obra: '' });
-  const [dadosConfiguravel, setDadosConfiguravel] = useState([]);
+  const [filtros, setFiltros] = useState({ data_inicio: '', data_fim: '' });
+  const [servicosSelecionados, setServicosSelecionados] = useState([]);
+  const [obrasSelecionadas, setObrasSelecionadas] = useState([]);
+  const [respostaConfiguravel, setRespostaConfiguravel] = useState({ agrupadoPor: null, dados: [] });
   const [carregandoConfiguravel, setCarregandoConfiguravel] = useState(false);
 
   useEffect(() => {
     api.get('/financeiro/receitas/obras-distintas').then(res => setObras(res.data));
   }, []);
+
+  function alternarServico(s) {
+    setServicosSelecionados(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+  }
+  function alternarObra(o) {
+    setObrasSelecionadas(prev => prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]);
+  }
 
   function carregarConfiguravel() {
     setCarregandoConfiguravel(true);
@@ -657,30 +732,55 @@ function Resumo() {
       params: {
         data_inicio: filtros.data_inicio || undefined,
         data_fim: filtros.data_fim || undefined,
-        servico: filtros.servico || undefined,
-        obra: filtros.obra || undefined
-      }
+        servicos: servicosSelecionados.length > 0 ? servicosSelecionados : undefined,
+        obras: obrasSelecionadas.length > 0 ? obrasSelecionadas : undefined
+      },
+      paramsSerializer: { indexes: null }
     })
-      .then(res => setDadosConfiguravel(res.data))
+      .then(res => setRespostaConfiguravel(res.data))
       .finally(() => setCarregandoConfiguravel(false));
   }
-  useEffect(carregarConfiguravel, [filtros]);
+  useEffect(carregarConfiguravel, [filtros, servicosSelecionados, obrasSelecionadas]);
 
-  const dadosGraficoConfiguravel = dadosConfiguravel.map(d => {
-    const [ano, mes] = d.mes_ano.split('-');
-    return {
-      label: `${NOMES_MESES_CURTOS[Number(mes) - 1]}/${ano.slice(2)}`,
-      valor_liquido: d.valor_liquido,
-      valor_bruto: d.valor_bruto
-    };
-  });
+  const dadosConfiguravel = respostaConfiguravel.dados || [];
+  const agrupadoPor = respostaConfiguravel.agrupadoPor; // null | 'obra' | 'servico'
+
+  // Monta os dados do gráfico: quando há agrupamento (obra ou serviço), cada mês vira uma
+  // linha com uma chave por grupo (para o Recharts desenhar uma barra colorida por grupo).
+  let dadosGraficoConfiguravel = [];
+  let gruposComparacao = [];
+  if (agrupadoPor) {
+    const porMes = {};
+    dadosConfiguravel.forEach(d => {
+      if (!porMes[d.mes_ano]) porMes[d.mes_ano] = { mes_ano: d.mes_ano };
+      porMes[d.mes_ano][d.grupo] = d.valor_liquido;
+    });
+    gruposComparacao = [...new Set(dadosConfiguravel.map(d => d.grupo))];
+    dadosGraficoConfiguravel = Object.values(porMes)
+      .sort((a, b) => a.mes_ano.localeCompare(b.mes_ano))
+      .map(d => {
+        const [ano, mes] = d.mes_ano.split('-');
+        return { ...d, label: `${NOMES_MESES_CURTOS[Number(mes) - 1]}/${ano.slice(2)}` };
+      });
+  } else {
+    dadosGraficoConfiguravel = dadosConfiguravel.map(d => {
+      const [ano, mes] = d.mes_ano.split('-');
+      return {
+        label: `${NOMES_MESES_CURTOS[Number(mes) - 1]}/${ano.slice(2)}`,
+        valor_liquido: d.valor_liquido,
+        valor_bruto: d.valor_bruto
+      };
+    });
+  }
 
   const totalConfLiquido = dadosConfiguravel.reduce((s, d) => s + d.valor_liquido, 0);
   const totalConfBruto = dadosConfiguravel.reduce((s, d) => s + d.valor_bruto, 0);
   const totalConfQtd = dadosConfiguravel.reduce((s, d) => s + d.qtd, 0);
 
   function limparFiltros() {
-    setFiltros({ data_inicio: '', data_fim: '', servico: '', obra: '' });
+    setFiltros({ data_inicio: '', data_fim: '' });
+    setServicosSelecionados([]);
+    setObrasSelecionadas([]);
   }
 
   return (
@@ -742,6 +842,9 @@ function Resumo() {
       {/* Gráfico configurável */}
       <div className="card">
         <h3 style={{ marginTop: 0 }}>⚙️ Gráfico Configurável</h3>
+        <p style={{ color: '#6b7280', fontSize: 12, marginTop: -6 }}>
+          Selecione 2 ou mais Obras (ou Serviços) para comparar o desempenho entre eles lado a lado no gráfico.
+        </p>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
           <div className="flex-col gap-2">
@@ -752,22 +855,31 @@ function Resumo() {
             <label style={{ fontSize: 12, color: '#6b7280' }}>Data Fim</label>
             <input type="date" value={filtros.data_fim} onChange={e => setFiltros({ ...filtros, data_fim: e.target.value })} />
           </div>
-          <div className="flex-col gap-2">
-            <label style={{ fontSize: 12, color: '#6b7280' }}>Serviço</label>
-            <select value={filtros.servico} onChange={e => setFiltros({ ...filtros, servico: e.target.value })}>
-              <option value="">Todos os serviços</option>
-              {SERVICOS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div className="flex-col gap-2">
-            <label style={{ fontSize: 12, color: '#6b7280' }}>Obra</label>
-            <select value={filtros.obra} onChange={e => setFiltros({ ...filtros, obra: e.target.value })}>
-              <option value="">Todas as obras</option>
-              {obras.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
+
+          <DropdownMultiSelect
+            rotulo="Serviço"
+            opcoes={SERVICOS}
+            selecionados={servicosSelecionados}
+            onAlternar={alternarServico}
+            onLimpar={() => setServicosSelecionados([])}
+          />
+
+          <DropdownMultiSelect
+            rotulo="Obra"
+            opcoes={obras}
+            selecionados={obrasSelecionadas}
+            onAlternar={alternarObra}
+            onLimpar={() => setObrasSelecionadas([])}
+          />
+
           <button className="btn-secondary btn-sm" onClick={limparFiltros}>Limpar filtros</button>
         </div>
+
+        {agrupadoPor && (
+          <div style={{ marginBottom: 12, fontSize: 12, color: '#2563eb', fontWeight: 600 }}>
+            📊 Comparando por {agrupadoPor === 'obra' ? 'Obra' : 'Serviço'}: {gruposComparacao.join(', ')}
+          </div>
+        )}
 
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
           <div className="card" style={{ background: '#f0fdf4' }}>
@@ -796,8 +908,16 @@ function Resumo() {
               <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
               <Tooltip content={<TooltipPersonalizado />} />
               <Legend />
-              <Bar name="Valor Líquido" dataKey="valor_liquido" fill="#16a34a" radius={[6, 6, 0, 0]} />
-              <Bar name="Valor Bruto" dataKey="valor_bruto" fill="#93c5fd" radius={[6, 6, 0, 0]} />
+              {agrupadoPor ? (
+                gruposComparacao.map((grupo, i) => (
+                  <Bar key={grupo} name={grupo} dataKey={grupo} fill={CORES_MESES[i % CORES_MESES.length]} radius={[6, 6, 0, 0]} />
+                ))
+              ) : (
+                <>
+                  <Bar name="Valor Líquido" dataKey="valor_liquido" fill="#16a34a" radius={[6, 6, 0, 0]} />
+                  <Bar name="Valor Bruto" dataKey="valor_bruto" fill="#93c5fd" radius={[6, 6, 0, 0]} />
+                </>
+              )}
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -805,5 +925,3 @@ function Resumo() {
     </div>
   );
 }
-
-

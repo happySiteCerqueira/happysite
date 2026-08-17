@@ -289,31 +289,55 @@ router.get('/resumo/por-mes-ano', permitir('ADM'), async (req, res) => {
   })));
 });
 
-// ---- Resumo: gráfico configurável (filtros de período, serviço e obra) - só ADM ----
+// ---- Resumo: gráfico configurável (filtros de período, serviço(s) e obra(s)) - só ADM ----
+// Aceita múltiplos valores via ?obras=A&obras=B ou ?servicos=X&servicos=Y (ou string única).
+// Quando 2+ obras são selecionadas, agrupa por mês+obra (para comparação lado a lado).
+// Senão, quando 2+ serviços são selecionados, agrupa por mês+serviço.
+// Caso contrário, agrupa apenas por mês (comportamento original, uma única barra).
 router.get('/resumo/configuravel', permitir('ADM'), async (req, res) => {
-  const { data_inicio, data_fim, servico, obra } = req.query;
+  const { data_inicio, data_fim } = req.query;
+  let obras = req.query.obras;
+  if (obras && !Array.isArray(obras)) obras = [obras];
+  let servicos = req.query.servicos;
+  if (servicos && !Array.isArray(servicos)) servicos = [servicos];
+
+  const comparaPorObra = obras && obras.length >= 2;
+  const comparaPorServico = !comparaPorObra && servicos && servicos.length >= 2;
+
+  const camposSelect = ["to_char(data_medicao, 'YYYY-MM') as mes_ano"];
+  if (comparaPorObra) camposSelect.push('obra_nome as grupo');
+  else if (comparaPorServico) camposSelect.push('servico as grupo');
 
   let sql = `
-    SELECT to_char(data_medicao, 'YYYY-MM') as mes_ano,
+    SELECT ${camposSelect.join(', ')},
            SUM(valor_liquido) as valor_liquido, SUM(valor_bruto) as valor_bruto, COUNT(*)::int as qtd
     FROM financeiro_receitas WHERE 1=1
   `;
   const params = [];
   if (data_inicio) { sql += ' AND data_medicao >= ?'; params.push(data_inicio); }
   if (data_fim) { sql += ' AND data_medicao <= ?'; params.push(data_fim); }
-  if (servico) { sql += ' AND servico = ?'; params.push(servico); }
-  if (obra) { sql += ' AND obra_nome = ?'; params.push(obra); }
-  sql += ' GROUP BY 1 ORDER BY 1';
+  if (servicos && servicos.length > 0) {
+    sql += ` AND servico IN (${servicos.map(() => '?').join(',')})`;
+    params.push(...servicos);
+  }
+  if (obras && obras.length > 0) {
+    sql += ` AND obra_nome IN (${obras.map(() => '?').join(',')})`;
+    params.push(...obras);
+  }
+  const gruposIndices = camposSelect.map((_, i) => i + 1).join(', ');
+  sql += ` GROUP BY ${gruposIndices} ORDER BY ${gruposIndices}`;
 
   const linhas = await db.all(sql, ...params);
-  res.json(linhas.map(l => ({
-    mes_ano: l.mes_ano,
-    valor_liquido: Number(l.valor_liquido) || 0,
-    valor_bruto: Number(l.valor_bruto) || 0,
-    qtd: l.qtd
-  })));
+  res.json({
+    agrupadoPor: comparaPorObra ? 'obra' : comparaPorServico ? 'servico' : null,
+    dados: linhas.map(l => ({
+      mes_ano: l.mes_ano,
+      grupo: l.grupo || null,
+      valor_liquido: Number(l.valor_liquido) || 0,
+      valor_bruto: Number(l.valor_bruto) || 0,
+      qtd: l.qtd
+    }))
+  });
 });
 
 module.exports = router;
-
-
