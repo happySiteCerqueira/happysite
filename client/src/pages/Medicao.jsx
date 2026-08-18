@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
+import { exportarMedicaoExcel, exportarMedicaoPdf } from '../utils/medicaoExport';
+
 
 function mesAtual() {
   const d = new Date();
@@ -87,8 +89,15 @@ export default function Medicao() {
           <button className="btn-primary" style={{ alignSelf: 'end' }} onClick={gerar} disabled={carregando}>
             {carregando ? 'Gerando...' : 'Gerar Planilha'}
           </button>
+          <button className="btn-secondary" style={{ alignSelf: 'end' }} onClick={() => exportarMedicaoExcel(linhas, mes)} disabled={linhas.length === 0}>
+            📊 Exportar Excel
+          </button>
+          <button className="btn-secondary" style={{ alignSelf: 'end' }} onClick={() => exportarMedicaoPdf(linhas, mes)} disabled={linhas.length === 0}>
+            📄 Exportar PDF
+          </button>
         </div>
       </div>
+
 
       <div className="card">
         <table>
