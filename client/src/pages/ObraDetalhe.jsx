@@ -25,6 +25,8 @@ export default function ObraDetalhe() {
   const [quantidadeModalCelula, setQuantidadeModalCelula] = useState('');
 
   const [mostrarConfigServico, setMostrarConfigServico] = useState(false);
+  const [recalculando, setRecalculando] = useState(false);
+
   const [importandoPrecos, setImportandoPrecos] = useState(false);
   const [novoGrupoNome, setNovoGrupoNome] = useState('');
   const [mostrarEditarServicos, setMostrarEditarServicos] = useState(false);
@@ -209,6 +211,23 @@ export default function ObraDetalhe() {
     await api.put(`/obras/servicos/${servicoAtivoId}`, { [campo]: valor });
     carregarObra();
   }
+
+  // Recalcula (retroativamente) o valor de TODAS as marcações já lançadas neste serviço,
+  // usando o valor unitário ATUAL. Útil quando o valor foi alterado depois de já existirem
+  // marcações lançadas com o valor antigo (ex: serviço estava com R$ 0,00 no momento da marcação).
+  async function recalcularValores() {
+    if (!confirm(`Recalcular os valores de TODAS as marcações já lançadas em "${servicoAtivo.nome}" (todos os meses), usando o valor unitário atual (R$ ${servicoAtivo.valor_unitario})?`)) return;
+    setRecalculando(true);
+    try {
+      const res = await api.post(`/obras/servicos/${servicoAtivoId}/recalcular-valores`, {});
+      alert(`${res.data.atualizados} marcação(ões) recalculada(s) com sucesso.`);
+      carregarCelulas();
+    } catch (err) {
+      alert(err.response?.data?.erro || 'Erro ao recalcular valores');
+    }
+    setRecalculando(false);
+  }
+
 
   async function removerServico(servicoId, nome) {
     if (!confirm(`Remover a aba de serviço "${nome}" desta obra? Isso apagará todas as marcações feitas nela.`)) return;
@@ -821,7 +840,18 @@ export default function ObraDetalhe() {
               <label>Valor unitário (R$)</label>
               <input type="number" step="0.01" defaultValue={servicoAtivo.valor_unitario}
                 onBlur={e => salvarConfigServico('valor_unitario', Number(e.target.value))} />
+
+              <button
+                className="btn-secondary btn-sm"
+                style={{ marginTop: 8 }}
+                disabled={recalculando}
+                onClick={recalcularValores}
+                title="Recalcula os valores de todas as marcações já lançadas neste serviço, usando o valor unitário atual (útil se o valor foi alterado depois de já ter marcações lançadas)"
+              >
+                {recalculando ? 'Recalculando...' : '🔄 Recalcular valores já lançados'}
+              </button>
             </div>
+
 
             {servicoAtivo.modo_execucao === 'grupo' && (
               <div style={{ marginBottom: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
