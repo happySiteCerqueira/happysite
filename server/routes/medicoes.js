@@ -143,8 +143,12 @@ router.get('/gerar', async (req, res) => {
     const totalDiarias = diaria ? diaria.total : 0;
 
     const valorBrutoTotal = p.valor_bruto + totalDiarias;
-    const valorVale = Math.min(totalAntecipado, valorBrutoTotal);
+    // O desconto (pagamento antecipado) é sempre mostrado por inteiro, mesmo que maior que o
+    // valor bruto — nesse caso o valor líquido fica negativo, indicando que a pessoa já recebeu
+    // adiantado mais do que produziu/tem a receber neste mês.
+    const valorVale = totalAntecipado;
     const valorLiquido = valorBrutoTotal - valorVale;
+
 
     const medicao = await db.get(
       'SELECT * FROM medicoes WHERE colaborador_id = ? AND mes_ciclo = ? AND obra_id IS NULL',
