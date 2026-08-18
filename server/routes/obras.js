@@ -49,14 +49,17 @@ function parseObra(o) {
 }
 
 router.get('/', async (req, res) => {
-  const { status } = req.query; // status: 'ativas' (default) | 'finalizadas' | 'todas'
+  const { status } = req.query; // status: 'ativas' (default) | 'finalizadas' | 'excluidas' | 'todas'
   let sql = 'SELECT * FROM obras WHERE 1=1';
   if (status === 'finalizadas') sql += " AND status = 'FINALIZADA'";
-  else if (status !== 'todas') sql += " AND status != 'FINALIZADA'";
+  else if (status === 'excluidas') sql += " AND status = 'EXCLUIDA'";
+  else if (status === 'todas') sql += '';
+  else sql += " AND status NOT IN ('FINALIZADA', 'EXCLUIDA')"; // 'ativas' (default)
   sql += ' ORDER BY criado_em DESC';
   const obras = await db.all(sql);
   res.json(obras.map(parseObra));
 });
+
 
 
 router.get('/:id', async (req, res) => {
@@ -158,12 +161,39 @@ router.put('/:id/reativar', permitir('RH', 'ADM'), async (req, res) => {
   res.json({ ok: true });
 });
 
-// Exclui definitivamente a obra e todos os dados vinculados (serviços, marcações, quantidades,
-// rótulos, medições, etc. — via ON DELETE CASCADE já configurado no schema). Ação irreversível,
-// por isso exige confirmação explícita (?confirmar=true) e é restrita ao ADM.
+// Move a obra para a "lixeira" (status = 'EXCLUIDA'). Não apaga nenhum dado do banco — a obra
+// some das abas "Ativas"/"Finalizadas" e passa a aparecer na aba "Excluídas", de onde pode ser
+// restaurada ou, só então, apagada definitivamente. Restrito ao ADM.
 router.delete('/:id/definitivo', permitir('ADM'), async (req, res) => {
   const obra = await db.get('SELECT * FROM obras WHERE id = ?', req.params.id);
   if (!obra) return res.status(404).json({ erro: 'Obra não encontrada' });
+  if (req.query.confirmar !== 'true') {
+    return res.status(400).json({ erro: 'Confirmação obrigatória. A obra será movida para a Lixeira (aba "Excluídas"), de onde ainda pode ser restaurada.' });
+  }
+  await db.run("UPDATE obras SET status = 'EXCLUIDA' WHERE id = ?", req.params.id);
+  await registrar(req.usuario.id, 'MOVER_LIXEIRA', 'obras', req.params.id, { nome: obra.nome });
+  res.json({ ok: true });
+});
+
+// Restaura uma obra que estava na lixeira (status 'EXCLUIDA'), voltando para 'ATIVA'.
+router.put('/:id/restaurar', permitir('ADM'), async (req, res) => {
+  const obra = await db.get('SELECT * FROM obras WHERE id = ?', req.params.id);
+  if (!obra) return res.status(404).json({ erro: 'Obra não encontrada' });
+  await db.run("UPDATE obras SET status = 'ATIVA' WHERE id = ?", req.params.id);
+  await registrar(req.usuario.id, 'RESTAURAR_LIXEIRA', 'obras', req.params.id, { nome: obra.nome });
+  res.json({ ok: true });
+});
+
+// Exclui PERMANENTEMENTE a obra e todos os dados vinculados (serviços, marcações, quantidades,
+// rótulos, medições, etc. — via ON DELETE CASCADE já configurado no schema). Ação irreversível,
+// só pode ser feita a partir da lixeira (status 'EXCLUIDA'), por isso exige confirmação explícita
+// (?confirmar=true) e é restrita ao ADM.
+router.delete('/:id/permanente', permitir('ADM'), async (req, res) => {
+  const obra = await db.get('SELECT * FROM obras WHERE id = ?', req.params.id);
+  if (!obra) return res.status(404).json({ erro: 'Obra não encontrada' });
+  if (obra.status !== 'EXCLUIDA') {
+    return res.status(400).json({ erro: 'Só é possível excluir permanentemente obras que já estejam na Lixeira.' });
+  }
   if (req.query.confirmar !== 'true') {
     return res.status(400).json({ erro: 'Confirmação obrigatória. Esta ação apaga TODOS os dados da obra (serviços, marcações, medições) e não pode ser desfeita.' });
   }
@@ -171,6 +201,7 @@ router.delete('/:id/definitivo', permitir('ADM'), async (req, res) => {
   await registrar(req.usuario.id, 'EXCLUIR_DEFINITIVO', 'obras', req.params.id, { nome: obra.nome });
   res.json({ ok: true });
 });
+
 
 
 // ---- Serviços da obra (abas) ----

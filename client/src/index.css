@@ -37,6 +37,17 @@ input, select, textarea {
 .btn-success:hover { background: #15803d; }
 .btn-sm { padding: 4px 8px; font-size: 12px; }
 
+.btn-icon-discreto {
+  background: transparent;
+  color: #9ca3af;
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.btn-icon-discreto:hover { background: #fee2e2; color: #991b1b; }
+.btn-icon-discreto:disabled { opacity: 0.5; cursor: default; }
+
+
 .card {
   background: #fff;
   border-radius: 10px;

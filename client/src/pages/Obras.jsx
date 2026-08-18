@@ -6,17 +6,18 @@ import ObraWizard from '../components/ObraWizard';
 
 export default function Obras() {
   const [obras, setObras] = useState([]);
-  const [aba, setAba] = useState('ativas'); // 'ativas' | 'finalizadas'
+  const [aba, setAba] = useState('ativas'); // 'ativas' | 'finalizadas' | 'excluidas'
   const [mostrarWizard, setMostrarWizard] = useState(false);
   const [processando, setProcessando] = useState(null);
   const [erro, setErro] = useState('');
   const { temPermissao, usuario } = useAuth();
 
   function carregar() {
-    api.get('/obras', { params: { status: aba === 'finalizadas' ? 'finalizadas' : 'ativas' } })
+    api.get('/obras', { params: { status: aba } })
       .then(res => setObras(res.data));
   }
   useEffect(carregar, [aba]);
+
 
   async function finalizar(id, e) {
     e.preventDefault(); e.stopPropagation();
@@ -43,9 +44,9 @@ export default function Obras() {
     setProcessando(null);
   }
 
-  async function excluirDefinitivo(id, nome, e) {
+  async function excluir(id, nome, e) {
     e.preventDefault(); e.stopPropagation();
-    if (!window.confirm(`ATENÇÃO: excluir definitivamente a obra "${nome}" apaga TODOS os dados (serviços, marcações, medições) e não pode ser desfeito.\n\nTem certeza que deseja continuar?`)) return;
+    if (!window.confirm(`Excluir a obra "${nome}"? Ela será movida para a Lixeira (aba "Excluídas") e ainda poderá ser restaurada depois.`)) return;
     setProcessando(id); setErro('');
     try {
       await api.delete(`/obras/${id}/definitivo`, { params: { confirmar: 'true' } });
@@ -55,6 +56,32 @@ export default function Obras() {
     }
     setProcessando(null);
   }
+
+  async function restaurar(id, e) {
+    e.preventDefault(); e.stopPropagation();
+    setProcessando(id); setErro('');
+    try {
+      await api.put(`/obras/${id}/restaurar`);
+      carregar();
+    } catch (err) {
+      setErro(err.response?.data?.erro || 'Erro ao restaurar obra');
+    }
+    setProcessando(null);
+  }
+
+  async function excluirPermanente(id, nome, e) {
+    e.preventDefault(); e.stopPropagation();
+    if (!window.confirm(`ATENÇÃO: excluir PERMANENTEMENTE a obra "${nome}" apaga TODOS os dados (serviços, marcações, medições) e não pode ser desfeito.\n\nTem certeza que deseja continuar?`)) return;
+    setProcessando(id); setErro('');
+    try {
+      await api.delete(`/obras/${id}/permanente`, { params: { confirmar: 'true' } });
+      carregar();
+    } catch (err) {
+      setErro(err.response?.data?.erro || 'Erro ao excluir obra permanentemente');
+    }
+    setProcessando(null);
+  }
+
 
   return (
     <div>
@@ -74,7 +101,13 @@ export default function Obras() {
         <button className={aba === 'finalizadas' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('finalizadas')}>
           Finalizadas
         </button>
+        {usuario?.perfil === 'ADM' && (
+          <button className={aba === 'excluidas' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('excluidas')}>
+            🗑️ Excluídas
+          </button>
+        )}
       </div>
+
 
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
@@ -87,8 +120,8 @@ export default function Obras() {
               {o.blocos_pavimentos?.length || 0} bloco(s) de pavimento • Status: {o.status}
             </div>
 
-            {temPermissao('RH') && (
-              <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {temPermissao('RH') && aba !== 'excluidas' && (
+              <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                 {aba === 'ativas' ? (
                   <button className="btn-secondary btn-sm" disabled={processando === o.id} onClick={e => finalizar(o.id, e)}>
                     ✅ Finalizar
@@ -99,20 +132,44 @@ export default function Obras() {
                   </button>
                 )}
                 {usuario?.perfil === 'ADM' && (
-                  <button className="btn-secondary btn-sm" style={{ color: '#991b1b' }} disabled={processando === o.id}
-                    onClick={e => excluirDefinitivo(o.id, o.nome, e)}>
-                    🗑️ Excluir definitivo
+                  <button
+                    className="btn-icon-discreto"
+                    title="Excluir (mover para a Lixeira)"
+                    disabled={processando === o.id}
+                    onClick={e => excluir(o.id, o.nome, e)}
+                  >
+                    🗑️
                   </button>
                 )}
               </div>
             )}
+
+            {aba === 'excluidas' && usuario?.perfil === 'ADM' && (
+              <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className="btn-primary btn-sm" disabled={processando === o.id} onClick={e => restaurar(o.id, e)}>
+                  ↩️ Restaurar
+                </button>
+                <button
+                  className="btn-icon-discreto"
+                  title="Excluir definitivamente (não pode ser desfeito)"
+                  disabled={processando === o.id}
+                  onClick={e => excluirPermanente(o.id, o.nome, e)}
+                >
+                  🗑️
+                </button>
+              </div>
+            )}
+
           </Link>
         ))}
         {obras.length === 0 && (
           <div style={{ color: '#6b7280' }}>
-            {aba === 'finalizadas' ? 'Nenhuma obra finalizada ainda.' : 'Nenhuma obra ativa cadastrada ainda.'}
+            {aba === 'finalizadas' ? 'Nenhuma obra finalizada ainda.'
+              : aba === 'excluidas' ? 'Nenhuma obra na lixeira.'
+              : 'Nenhuma obra ativa cadastrada ainda.'}
           </div>
         )}
+
       </div>
 
       {mostrarWizard && (
