@@ -103,9 +103,10 @@ export default function Medicao() {
         <table>
           <thead>
             <tr>
-              <th>Pessoa/Empresa</th><th>Tipo</th><th>Valor Bruto</th><th>Pagto. Antecipado Descontado</th>
+              <th>Pessoa/Empresa</th><th>Tipo</th><th>Valor Bruto</th><th>Pagto. Antecipado</th>
 
               <th>Valor Líquido</th><th>Status</th><th>Comprovante</th><th>Ações</th>
+
             </tr>
           </thead>
           <tbody>

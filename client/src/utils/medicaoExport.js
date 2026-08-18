@@ -8,13 +8,15 @@ export function exportarMedicaoExcel(linhas, mes) {
     'Pessoa/Empresa': item.nome,
     'Tipo': item.tipo,
     'Valor Bruto': Number(item.valor_bruto).toFixed(2),
-    'Pagto. Antecipado Descontado': Number(item.valor_vale).toFixed(2),
+    'Pagto. Antecipado': Number(item.valor_vale).toFixed(2),
     'Valor Líquido': Number(item.valor_liquido).toFixed(2),
-    'Status': item.status
+    'Status': item.status,
+    'Pix': item.pix || '-'
   }));
 
   const ws = XLSX.utils.json_to_sheet(dados);
-  ws['!cols'] = [{ wch: 28 }, { wch: 8 }, { wch: 14 }, { wch: 26 }, { wch: 14 }, { wch: 12 }];
+  ws['!cols'] = [{ wch: 28 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 24 }];
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Medição');
   const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
@@ -44,16 +46,18 @@ export function exportarMedicaoPdf(linhas, mes) {
     `R$ ${Number(item.valor_bruto).toFixed(2)}`,
     `R$ ${Number(item.valor_vale).toFixed(2)}`,
     `R$ ${Number(item.valor_liquido).toFixed(2)}`,
-    item.status
+    item.status,
+    item.pix || '-'
   ]);
 
   autoTable(doc, {
     startY: 22,
-    head: [['Pessoa/Empresa', 'Tipo', 'Valor Bruto', 'Pagto. Antecipado Descontado', 'Valor Líquido', 'Status']],
+    head: [['Pessoa/Empresa', 'Tipo', 'Valor Bruto', 'Pagto. Antecipado', 'Valor Líquido', 'Status', 'Pix']],
     body: corpo,
     styles: { fontSize: 9 },
     headStyles: { fillColor: [37, 99, 235] }
   });
+
 
   doc.save(`medicao-${mes}.pdf`);
 }
