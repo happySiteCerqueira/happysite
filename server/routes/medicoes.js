@@ -39,7 +39,7 @@ router.get('/gerar', async (req, res) => {
     }
   }
 
-  // Agrupa por colaborador todas as células marcadas no mês
+  // Agrupa por colaborador todas as células marcadas no mês (marcações em obras)
   const linhas = await db.all(`
     SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta,
            o.id as obra_id, o.nome as obra_nome, os.nome as servico_nome,
@@ -51,6 +51,26 @@ router.get('/gerar', async (req, res) => {
     WHERE cel.mes_ciclo = ? ${filtroObra}
     ORDER BY c.tipo, c.nome, o.nome, os.nome
   `, ...params);
+
+  // A pessoa deve aparecer em Medição se tiver QUALQUER lançamento no mês: marcação em obra,
+  // diária ou pagamento antecipado — mesmo que não tenha marcação em obra. Quando o filtro de
+  // obra(s) estiver ativo, diárias/antecipados só entram se a pessoa também tiver lançamento
+  // em alguma das obras filtradas (senão o filtro por obra perderia o sentido).
+  let colaboradoresExtras = [];
+  if (!obras) {
+    const diariasMes = await db.all(
+      `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta
+       FROM diarias d JOIN colaboradores c ON c.id = d.colaborador_id
+       WHERE d.mes_ciclo = ? AND d.total > 0`, mes
+    );
+    const antecipadosMes = await db.all(
+      `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta
+       FROM pagamentos_antecipados pa JOIN colaboradores c ON c.id = pa.colaborador_id
+       WHERE pa.mes_ciclo = ? AND (pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento) > 0`, mes
+    );
+    colaboradoresExtras = [...diariasMes, ...antecipadosMes];
+  }
+
 
   // Cache de obras + rótulos customizados de apartamento, pré-carregados (sem await dentro de map)
   const obraIdsUnicos = [...new Set(linhas.map(l => l.obra_id))];
@@ -93,6 +113,26 @@ router.get('/gerar', async (req, res) => {
     });
     porPessoa[l.colaborador_id].valor_bruto += l.valor;
   });
+
+  // Adiciona à lista as pessoas que têm diária/pagamento antecipado no mês mas ainda não
+  // apareceram (ou seja, não tiveram nenhuma marcação em obra no mês).
+  colaboradoresExtras.forEach(c => {
+    if (!porPessoa[c.colaborador_id]) {
+      porPessoa[c.colaborador_id] = {
+        colaborador_id: c.colaborador_id,
+        nome: c.nome,
+        tipo: c.tipo,
+        documento: c.documento,
+        pix: c.pix,
+        banco: c.banco,
+        agencia: c.agencia,
+        conta: c.conta,
+        itens: [],
+        valor_bruto: 0
+      };
+    }
+  });
+
 
   // Diárias são valores A PAGAR (somam à produção), diferente de pagamentos antecipados
   // (vale, FGTS, taxa, adiantamento etc.) que são descontos do valor líquido.
