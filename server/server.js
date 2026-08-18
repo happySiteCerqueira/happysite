@@ -10,6 +10,14 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Rota leve de "ping" para manter o serviço acordado (usada por serviços externos
+// de keep-alive gratuitos, como cron-job.org ou UptimeRobot, evitando o "cold start"
+// do plano gratuito do Render). Não requer autenticação e não acessa o banco.
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
+
 // Arquivos de comprovantes (uploads)
 const comprovantesDir = path.join(__dirname, '..', 'data', 'comprovantes');
 if (!fs.existsSync(comprovantesDir)) fs.mkdirSync(comprovantesDir, { recursive: true });
