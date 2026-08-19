@@ -124,6 +124,30 @@ router.post('/retiradas', async (req, res) => {
   }
 });
 
+// ---- Histórico geral (todas as retiradas, para a listagem com filtro por nome/período) ----
+// Precisa vir ANTES de "/retiradas/:id" para não ser interpretada como um id.
+router.get('/retiradas', async (req, res) => {
+  const { data_inicio, data_fim } = req.query;
+
+  let where = '1=1';
+  const params = [];
+  if (data_inicio) { where += ' AND r.data_retirada >= ?'; params.push(data_inicio); }
+  if (data_fim) { where += ' AND r.data_retirada <= ?'; params.push(data_fim); }
+
+  const retiradas = await db.all(
+    `SELECT r.*, c.nome as colaborador_nome, c.tipo as colaborador_tipo
+     FROM epi_retiradas r
+     JOIN colaboradores c ON c.id = r.colaborador_id
+     WHERE ${where}
+     ORDER BY r.data_retirada DESC, r.id DESC`,
+    ...params
+  );
+  for (const r of retiradas) {
+    r.itens = await db.all('SELECT * FROM epi_retirada_itens WHERE retirada_id = ?', r.id);
+  }
+  res.json(retiradas);
+});
+
 router.get('/retiradas/:id', async (req, res) => {
 
   const retirada = await db.get('SELECT * FROM epi_retiradas WHERE id = ?', req.params.id);
@@ -133,9 +157,11 @@ router.get('/retiradas/:id', async (req, res) => {
   res.json({ ...retirada, colaborador, itens });
 });
 
+
 // ---- Histórico por colaborador ----
 
 router.get('/historico/:colaboradorId', async (req, res) => {
+
 
   const colaborador = await db.get('SELECT * FROM colaboradores WHERE id = ?', req.params.colaboradorId);
   if (!colaborador) return res.status(404).json({ erro: 'Colaborador/empreiteiro não encontrado' });

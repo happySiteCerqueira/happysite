@@ -435,43 +435,89 @@ function AbaEstoque() {
 }
 
 // ---- ABA HISTÓRICO ----
+// Carrega automaticamente todas as retiradas (mais recentes primeiro) e permite filtrar
+// por nome do colaborador/empreiteiro e por período, sem precisar buscar "de nome em nome".
 function AbaHistorico() {
-  const [pessoas, setPessoas] = useState([]);
-  const [colaboradorId, setColaboradorId] = useState('');
-  const [historico, setHistorico] = useState(null);
+  const [retiradas, setRetiradas] = useState([]);
   const [carregando, setCarregando] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
 
-  useEffect(() => {
-    api.get('/prestadores', { params: { status: 'todos' } }).then(res => setPessoas(res.data));
-  }, []);
-
-  useEffect(() => {
-    if (!colaboradorId) { setHistorico(null); return; }
+  function carregar() {
     setCarregando(true);
-    api.get(`/epi/historico/${colaboradorId}`).then(res => setHistorico(res.data)).finally(() => setCarregando(false));
-  }, [colaboradorId]);
+    const params = {};
+    if (dataInicio) params.data_inicio = dataInicio;
+    if (dataFim) params.data_fim = dataFim;
+    api.get('/epi/retiradas', { params }).then(res => setRetiradas(res.data)).finally(() => setCarregando(false));
+  }
+  useEffect(carregar, [dataInicio, dataFim]);
+
+  const filtradas = retiradas.filter(r =>
+    !busca.trim() || r.colaborador_nome.toLowerCase().includes(busca.trim().toLowerCase())
+  );
+
+  function limparFiltros() {
+    setBusca('');
+    setDataInicio('');
+    setDataFim('');
+  }
 
   return (
     <div>
-      <div className="card" style={{ marginBottom: 16, maxWidth: 500 }}>
-        <label style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>Selecione o colaborador/empreiteiro</label>
-        <select value={colaboradorId} onChange={e => setColaboradorId(e.target.value)} style={{ width: '100%' }}>
-          <option value="">Selecione...</option>
-          {pessoas.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-        </select>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="flex gap-4" style={{ flexWrap: 'wrap', alignItems: 'end' }}>
+          <div className="flex-col gap-2" style={{ minWidth: 220, flex: 1 }}>
+            <label style={{ fontSize: 12 }}>Filtrar por nome</label>
+            <input
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Digite o nome do colaborador/empreiteiro..."
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div className="flex-col gap-2">
+            <label style={{ fontSize: 12 }}>De</label>
+            <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
+          </div>
+          <div className="flex-col gap-2">
+            <label style={{ fontSize: 12 }}>Até</label>
+            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+          </div>
+          {(busca || dataInicio || dataFim) && (
+            <button className="btn-secondary btn-sm" onClick={limparFiltros}>✖ Limpar filtros</button>
+          )}
+        </div>
       </div>
 
       {carregando && <div>Carregando...</div>}
 
-      {historico && !carregando && (
+      {!carregando && (
         <div className="card" style={{ overflowX: 'auto' }}>
-          <h3>Retiradas de {historico.colaborador.nome}</h3>
-          {historico.retiradas.length === 0 && <p style={{ color: '#9ca3af' }}>Nenhuma retirada registrada.</p>}
-          {historico.retiradas.map(r => (
+          <h3>Retiradas registradas ({filtradas.length})</h3>
+          {filtradas.length === 0 && <p style={{ color: '#9ca3af' }}>Nenhuma retirada encontrada.</p>}
+          {filtradas.map(r => (
             <div key={r.id} style={{ borderBottom: '1px solid #e5e7eb', padding: '10px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong>{r.data_retirada?.split('T')[0]?.split('-').reverse().join('/')}</strong>
-                <button className="btn-secondary btn-sm" onClick={() => gerarTermoEpiPdf({ ...r, colaborador: historico.colaborador })}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <div>
+                  <strong>{r.colaborador_nome}</strong>
+                  <span style={{ marginLeft: 8, color: '#6b7280', fontSize: 13 }}>
+                    {r.data_retirada?.split('T')[0]?.split('-').reverse().join('/')}
+                  </span>
+                  {r.assinatura ? (
+                    <span style={{ marginLeft: 10, fontSize: 12, color: '#166534', background: '#dcfce7', padding: '2px 8px', borderRadius: 10 }}>
+                      ✅ Assinado digitalmente
+                    </span>
+                  ) : (
+                    <span style={{ marginLeft: 10, fontSize: 12, color: '#92400e', background: '#fef3c7', padding: '2px 8px', borderRadius: 10 }}>
+                      ⚠️ Sem assinatura
+                    </span>
+                  )}
+                </div>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => gerarTermoEpiPdf({ ...r, colaborador: { nome: r.colaborador_nome, tipo: r.colaborador_tipo } })}
+                >
                   📄 Gerar Termo (PDF)
                 </button>
               </div>
@@ -485,3 +531,5 @@ function AbaHistorico() {
     </div>
   );
 }
+
+
