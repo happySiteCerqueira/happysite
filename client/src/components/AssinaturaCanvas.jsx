@@ -133,10 +133,38 @@ export default function AssinaturaCanvas({ onChange, largura = 500, altura = 180
     emitirValor();
   }
 
+  // Confere de fato os pixels desenhados no canvas, em vez de confiar apenas na flag "vazio"
+  // (que pode ficar incorretamente marcada como preenchida com um toque acidental/mínimo,
+  // ou incorretamente vazia após redimensionamentos). Conta quantos pixels não-brancos existem
+  // e só considera "assinado" se houver uma quantidade mínima de traço real desenhado.
+  function possuiTracoSuficiente(canvas) {
+    try {
+      const ctx = canvas.getContext('2d');
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let pixelsDesenhados = 0;
+      const limiteMinimo = 40; // mínimo de pixels não-brancos para considerar um traço válido
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+        // pixel "branco" (fundo) tem r,g,b altos e alpha 255; qualquer coisa visivelmente diferente conta
+        if (a > 0 && (r < 250 || g < 250 || b < 250)) {
+          pixelsDesenhados++;
+          if (pixelsDesenhados >= limiteMinimo) return true;
+        }
+      }
+      return false;
+    } catch {
+      // Se por algum motivo não for possível ler os pixels, confia na flag padrão
+      return !vazioRef.current;
+    }
+  }
+
   function emitirValor() {
     const canvas = canvasRef.current;
-    onChange(vazioRef.current ? null : canvas.toDataURL('image/png'));
+    const assinado = !vazioRef.current && possuiTracoSuficiente(canvas);
+    if (!assinado && !vazioRef.current) setVazio(true);
+    onChange(assinado ? canvas.toDataURL('image/png') : null);
   }
+
 
   // Handlers de mouse (desktop) continuam via props sintéticas do React normalmente
   function onMouseDown(e) { e.preventDefault(); iniciarEm(e.clientX, e.clientY); }
