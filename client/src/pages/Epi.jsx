@@ -443,6 +443,7 @@ function AbaHistorico() {
   const [busca, setBusca] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [retiradaParaAssinar, setRetiradaParaAssinar] = useState(null); // retirada selecionada para completar assinatura
 
   function carregar() {
     setCarregando(true);
@@ -452,6 +453,7 @@ function AbaHistorico() {
     api.get('/epi/retiradas', { params }).then(res => setRetiradas(res.data)).finally(() => setCarregando(false));
   }
   useEffect(carregar, [dataInicio, dataFim]);
+
 
   const filtradas = retiradas.filter(r =>
     !busca.trim() || r.colaborador_nome.toLowerCase().includes(busca.trim().toLowerCase())
@@ -514,13 +516,24 @@ function AbaHistorico() {
                     </span>
                   )}
                 </div>
-                <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => gerarTermoEpiPdf({ ...r, colaborador: { nome: r.colaborador_nome, tipo: r.colaborador_tipo } })}
-                >
-                  📄 Gerar Termo (PDF)
-                </button>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {!r.assinatura && (
+                    <button
+                      className="btn-primary btn-sm"
+                      onClick={() => setRetiradaParaAssinar(r)}
+                    >
+                      ✍️ Assinar / Anexar
+                    </button>
+                  )}
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => gerarTermoEpiPdf({ ...r, colaborador: { nome: r.colaborador_nome, tipo: r.colaborador_tipo } })}
+                  >
+                    📄 Gerar Termo (PDF)
+                  </button>
+                </div>
               </div>
+
               <ul style={{ margin: '6px 0 0 18px', fontSize: 13, color: '#374151' }}>
                 {r.itens.map((it, idx) => <li key={idx}>{it.descricao} {it.ca ? `(C.A. ${it.ca})` : ''} — Qtd: {it.quantidade}</li>)}
               </ul>
@@ -528,8 +541,110 @@ function AbaHistorico() {
           ))}
         </div>
       )}
+
+      {retiradaParaAssinar && (
+        <ModalCompletarAssinatura
+          retirada={retiradaParaAssinar}
+          onFechar={() => setRetiradaParaAssinar(null)}
+          onSalvo={() => { setRetiradaParaAssinar(null); carregar(); }}
+        />
+      )}
     </div>
   );
 }
+
+// Modal exibido para retiradas sem assinatura registrada no histórico: permite escolher entre
+// desenhar a assinatura agora (canvas) ou anexar uma foto/scan do termo já assinado em papel
+// (via câmera do celular ou upload de arquivo).
+function ModalCompletarAssinatura({ retirada, onFechar, onSalvo }) {
+  const [modo, setModo] = useState(null); // null | 'desenhar' | 'foto'
+  const [assinaturaDesenhada, setAssinaturaDesenhada] = useState(null);
+  const [fotoPreview, setFotoPreview] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  function selecionarFoto(e) {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+    if (!arquivo.type.startsWith('image/')) {
+      setErro('Selecione um arquivo de imagem (foto do termo assinado).');
+      return;
+    }
+    setErro('');
+    const reader = new FileReader();
+    reader.onload = () => setFotoPreview(reader.result);
+    reader.readAsDataURL(arquivo);
+  }
+
+  async function salvar() {
+    const valor = modo === 'desenhar' ? assinaturaDesenhada : fotoPreview;
+    if (!valor) { setErro(modo === 'desenhar' ? 'Desenhe a assinatura antes de salvar.' : 'Selecione ou tire uma foto do documento assinado.'); return; }
+    setErro('');
+    setSalvando(true);
+    try {
+      await api.put(`/epi/retiradas/${retirada.id}/assinatura`, { assinatura: valor });
+      onSalvo();
+    } catch (err) {
+      setErro(err.response?.data?.erro || 'Erro ao salvar assinatura');
+    }
+    setSalvando(false);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onFechar}>
+      <div className="modal-content" style={{ width: 480, maxWidth: '95vw' }} onClick={e => e.stopPropagation()}>
+        <h4 style={{ marginTop: 0 }}>Completar assinatura — {retirada.colaborador_nome}</h4>
+        <p style={{ color: '#6b7280', fontSize: 13 }}>
+          Esta retirada está sem assinatura registrada. Escolha como deseja completá-la:
+        </p>
+
+        {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
+
+        {!modo && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+            <button className="btn-primary" style={{ flex: 1 }} onClick={() => setModo('desenhar')}>✍️ Assinar agora</button>
+            <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setModo('foto')}>📷 Escanear / Enviar foto</button>
+          </div>
+        )}
+
+        {modo === 'desenhar' && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>Assinatura do recebedor</label>
+            <AssinaturaCanvas onChange={setAssinaturaDesenhada} />
+          </div>
+        )}
+
+        {modo === 'foto' && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>Foto do termo assinado (câmera ou upload)</label>
+            <input type="file" accept="image/*" capture="environment" onChange={selecionarFoto} />
+            {fotoPreview && (
+              <img src={fotoPreview} alt="Pré-visualização" style={{ marginTop: 10, maxWidth: '100%', maxHeight: 260, borderRadius: 6, border: '1px solid #d1d5db' }} />
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          {modo && (
+            <button
+              className="btn-secondary"
+              onClick={() => { setModo(null); setAssinaturaDesenhada(null); setFotoPreview(null); setErro(''); }}
+              style={{ flex: 1 }}
+            >
+              ← Voltar
+            </button>
+          )}
+          <button className="btn-secondary" onClick={onFechar} style={{ flex: 1 }}>Cancelar</button>
+          {modo && (
+            <button className="btn-primary" onClick={salvar} disabled={salvando} style={{ flex: 1 }}>
+              {salvando ? 'Salvando...' : '✅ Confirmar'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 

@@ -157,6 +157,21 @@ router.get('/retiradas/:id', async (req, res) => {
   res.json({ ...retirada, colaborador, itens });
 });
 
+// Anexa/atualiza a assinatura (desenhada ou foto/scan do termo assinado em papel) de uma retirada
+// já existente. Usado no Histórico para completar retiradas que ficaram sem assinatura.
+router.put('/retiradas/:id/assinatura', async (req, res) => {
+  const { assinatura } = req.body;
+  if (!assinatura) return res.status(400).json({ erro: 'Assinatura (imagem) é obrigatória' });
+
+  const retirada = await db.get('SELECT * FROM epi_retiradas WHERE id = ?', req.params.id);
+  if (!retirada) return res.status(404).json({ erro: 'Retirada não encontrada' });
+
+  await db.run('UPDATE epi_retiradas SET assinatura = ? WHERE id = ?', assinatura, req.params.id);
+  await registrar(req.usuario.id, 'ANEXAR_ASSINATURA_EPI', 'epi_retiradas', req.params.id, {});
+  res.json({ ok: true });
+});
+
+
 
 // ---- Histórico por colaborador ----
 
