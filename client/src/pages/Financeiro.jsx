@@ -175,10 +175,12 @@ function Entrada() {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState(RECEITA_VAZIA);
+  const [obraNovaModo, setObraNovaModo] = useState(false); // true = mostra campo de texto para cadastrar obra nova
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const [msg, setMsg] = useState('');
   const [processandoStatusId, setProcessandoStatusId] = useState(null);
+
 
   const inputImportarRef = useRef();
   const [carregandoArquivo, setCarregandoArquivo] = useState(false);
@@ -221,6 +223,7 @@ function Entrada() {
   function abrirNovo() {
     setEditandoId(null);
     setForm(RECEITA_VAZIA);
+    setObraNovaModo(false);
     setErro('');
     setMostrarModal(true);
   }
@@ -237,9 +240,22 @@ function Entrada() {
       data_pagamento: item.data_pagamento ? item.data_pagamento.slice(0, 10) : '',
       conta: item.conta || ''
     });
+    // Se a obra do item editado ainda não estiver na lista de sugestões, já abre no modo "nova obra"
+    setObraNovaModo(!!item.obra_nome && !obrasSugestoes.includes(item.obra_nome));
     setErro('');
     setMostrarModal(true);
   }
+
+  function selecionarObra(valor) {
+    if (valor === '__NOVA__') {
+      setObraNovaModo(true);
+      setForm(prev => ({ ...prev, obra_nome: '' }));
+    } else {
+      setObraNovaModo(false);
+      setForm(prev => ({ ...prev, obra_nome: valor }));
+    }
+  }
+
 
   async function salvar() {
     setErro('');
@@ -543,15 +559,35 @@ function Entrada() {
               <input type="date" value={form.data_medicao} onChange={e => setForm({ ...form, data_medicao: e.target.value })} />
 
               <label>Obra</label>
-              <input
-                list="obras-sugestoes-financeiro"
-                value={form.obra_nome}
-                onChange={e => setForm({ ...form, obra_nome: e.target.value })}
-                placeholder="Digite o nome da obra..."
-              />
-              <datalist id="obras-sugestoes-financeiro">
-                {obrasSugestoes.map(nome => <option key={nome} value={nome} />)}
-              </datalist>
+              {!obraNovaModo ? (
+                <select value={form.obra_nome} onChange={e => selecionarObra(e.target.value)}>
+                  <option value="">Selecione a obra...</option>
+                  {[...obrasSugestoes].sort((a, b) => a.localeCompare(b, 'pt-BR')).map(nome => (
+                    <option key={nome} value={nome}>{nome}</option>
+                  ))}
+                  <option value="__NOVA__">➕ Cadastrar nova obra...</option>
+                </select>
+              ) : (
+                <div className="flex-col gap-2">
+                  <input
+                    value={form.obra_nome}
+                    onChange={e => setForm({ ...form, obra_nome: e.target.value })}
+                    placeholder="Digite o nome da nova obra..."
+                    autoFocus
+                  />
+                  {obrasSugestoes.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => selecionarObra(obrasSugestoes[0] || '')}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      ← Selecionar obra já existente
+                    </button>
+                  )}
+                </div>
+              )}
+
 
               <label>Serviço</label>
               <select value={form.servico} onChange={e => setForm({ ...form, servico: e.target.value })}>
