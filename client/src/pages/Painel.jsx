@@ -200,10 +200,11 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
             </thead>
             <tbody>
               {colaboradoresExperiencia.map(c => (
-                <tr key={c.id}>
+                <tr key={c.id} style={c.alerta ? { background: '#fef9c3' } : undefined}>
                   <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: c.cor, display: 'inline-block' }}></span>
                     {c.nome}
+                    {c.alerta && <span title={`Faltam ${c.dias_restantes} dia(s) para o próximo vencimento`}>⚠️</span>}
                   </td>
                   <td>{formatarDataSimples(c.data_admissao)}</td>
                   <td>{formatarDataSimples(c.data_45_dias)}</td>
@@ -231,7 +232,9 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                         <span className="badge badge-pendente">Experiência vencida</span>
                       )
                     ) : (
-                      <span style={{ color: '#9ca3af', fontSize: 12 }}>Em experiência ({c.dias_corridos}/90 dias)</span>
+                      <span style={{ color: c.alerta ? '#92400e' : '#9ca3af', fontSize: 12, fontWeight: c.alerta ? 700 : 400 }}>
+                        Em experiência ({c.dias_corridos}/90 dias)
+                      </span>
                     )}
                   </td>
                 </tr>

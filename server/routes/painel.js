@@ -116,10 +116,15 @@ router.get('/', async (req, res) => {
     WHERE ativo = 1 AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL
     ORDER BY data_admissao
   `);
+  const LIMITE_ALERTA_DIAS = 4; // colaboradores a até 4 dias do próximo vencimento (45 ou 90) sobem para o topo e ficam em alerta (amarelo)
   const colaboradoresExperiencia = emExperiencia.map(c => {
     const admissao = new Date(c.data_admissao);
     const data45 = new Date(admissao); data45.setUTCDate(data45.getUTCDate() + 44);
     const data90 = new Date(admissao); data90.setUTCDate(data90.getUTCDate() + 89);
+    const vencido = c.dias_corridos >= 90;
+    // Dias restantes até o próximo marco relevante: enquanto não passou dos 45 dias, o alvo é a
+    // 1ª experiência; depois disso (e antes de vencer), o alvo passa a ser a 2ª experiência (90 dias).
+    const diasRestantes = c.dias_corridos < 45 ? (45 - c.dias_corridos) : (90 - c.dias_corridos);
     return {
       id: c.id,
       nome: c.nome,
@@ -128,9 +133,13 @@ router.get('/', async (req, res) => {
       data_45_dias: data45.toISOString().slice(0, 10),
       data_90_dias: data90.toISOString().slice(0, 10),
       dias_corridos: c.dias_corridos,
-      vencido: c.dias_corridos >= 90
+      dias_restantes: diasRestantes,
+      vencido,
+      alerta: !vencido && diasRestantes <= LIMITE_ALERTA_DIAS
     };
   });
+  // Prioriza no topo quem está mais perto de vencer (ou já venceu) o próximo marco.
+  colaboradoresExperiencia.sort((a, b) => a.dias_restantes - b.dias_restantes);
 
   const aniversariantesNascimento = [];
   const aniversariantesEmpresa = [];
