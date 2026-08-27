@@ -116,7 +116,7 @@ router.get('/', async (req, res) => {
     WHERE ativo = 1 AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL
     ORDER BY data_admissao
   `);
-  const LIMITE_ALERTA_DIAS = 4; // colaboradores a até 4 dias do próximo vencimento (45 ou 90) sobem para o topo e ficam em alerta (amarelo)
+  const LIMITE_ALERTA_DIAS = 6; // colaboradores a até 6 dias do próximo vencimento (45 ou 90) sobem para o topo e ficam em alerta (amarelo)
   const colaboradoresExperiencia = emExperiencia.map(c => {
     const admissao = new Date(c.data_admissao);
     const data45 = new Date(admissao); data45.setUTCDate(data45.getUTCDate() + 44);
