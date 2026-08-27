@@ -444,6 +444,22 @@ async function migrate() {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN data_admissao DATE');
   }
 
+  // Migração idempotente: status do período de experiência (usado no Painel: quadro "Colaboradores em
+  // Experiência"). Todo colaborador nasce como 'EFETIVADO' por padrão (coluna DEFAULT); no momento em que
+  // esta coluna é criada, fazemos um backfill único: quem foi admitido há menos de 90 dias entra como
+  // 'EM_EXPERIENCIA' (para já aparecer no quadro normalmente), e os demais (sem data de admissão, ou já
+  // com 90+ dias) ficam como já efetivados automaticamente, sem exigir decisão retroativa do RH.
+  if (!(await colunaExiste('colaboradores', 'experiencia_status'))) {
+    await pool.query(`
+      ALTER TABLE colaboradores ADD COLUMN experiencia_status TEXT NOT NULL DEFAULT 'EFETIVADO'
+      CHECK (experiencia_status IN ('EM_EXPERIENCIA','EFETIVADO','DISPENSADO'))
+    `);
+    await pool.query(`
+      UPDATE colaboradores SET experiencia_status = 'EM_EXPERIENCIA'
+      WHERE data_admissao IS NOT NULL AND (CURRENT_DATE - data_admissao) < 90
+    `);
+  }
+
   // Migração idempotente: perfis novos (SUPERVISOR, APONTADOR) no CHECK de usuarios.perfil
   const temSupervisor = await constraintContem('usuarios', 'perfil', 'SUPERVISOR');
   if (!temSupervisor) {

@@ -60,6 +60,13 @@ function nomeMesExtenso(mesStr) {
   return `${nomes[mes - 1]} de ${ano}`;
 }
 
+// Formata uma data 'YYYY-MM-DD' como dd/mm/aaaa, sem depender de timezone (evita "voltar" um dia).
+function formatarDataSimples(dataStr) {
+  if (!dataStr) return '-';
+  const [ano, mes, dia] = String(dataStr).slice(0, 10).split('-');
+  return `${dia}/${mes}/${ano}`;
+}
+
 export default function Painel() {
   const { usuario } = useAuth();
   const ehAdm = usuario?.perfil === 'ADM';
@@ -69,10 +76,11 @@ export default function Painel() {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
 
-  useEffect(() => {
+  function carregar() {
     setCarregando(true);
-    api.get('/painel', { params: { mes } }).then(res => setDados(res.data)).finally(() => setCarregando(false));
-  }, [mes]);
+    return api.get('/painel', { params: { mes } }).then(res => setDados(res.data)).finally(() => setCarregando(false));
+  }
+  useEffect(carregar, [mes]);
 
   const obras = dados?.obras || [];
 
@@ -95,7 +103,7 @@ export default function Painel() {
 
       {!carregando && ehAdm && aba === 'geral' && <AbaVisaoGeral obras={obras} />}
       {!carregando && (aba === 'indicadores' || !ehAdm) && (
-        <AbaIndicadores mes={mes} setMes={setMes} dados={dados} obras={obras} />
+        <AbaIndicadores mes={mes} setMes={setMes} dados={dados} obras={obras} recarregar={carregar} />
       )}
     </div>
   );
@@ -140,11 +148,30 @@ function AbaVisaoGeral({ obras }) {
   );
 }
 
-function AbaIndicadores({ mes, setMes, dados, obras }) {
+function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
+  const { temPermissao } = useAuth();
+  const podeDecidirExperiencia = temPermissao('RH');
   const aniversariantesNascimento = dados?.aniversariantes_nascimento || [];
   const aniversariantesEmpresa = dados?.aniversariantes_empresa || [];
   const estoqueBaixo = dados?.estoque_baixo || [];
   const funcionariosDoMes = dados?.funcionarios_do_mes || [];
+  const colaboradoresExperiencia = dados?.colaboradores_experiencia || [];
+  const [processandoId, setProcessandoId] = useState(null);
+  const [erroExperiencia, setErroExperiencia] = useState('');
+
+  async function decidirExperiencia(colaborador, decisao) {
+    const acao = decisao === 'EFETIVAR' ? 'efetivar' : 'dispensar';
+    if (!window.confirm(`Confirma ${acao} "${colaborador.nome}"?`)) return;
+    setErroExperiencia('');
+    setProcessandoId(colaborador.id);
+    try {
+      await api.put(`/painel/experiencia/${colaborador.id}`, { decisao });
+      await recarregar();
+    } catch (err) {
+      setErroExperiencia(err.response?.data?.erro || 'Erro ao registrar decisão');
+    }
+    setProcessandoId(null);
+  }
 
   return (
     <div>
@@ -152,6 +179,66 @@ function AbaIndicadores({ mes, setMes, dados, obras }) {
         <label style={{ fontSize: 13, fontWeight: 600 }}>Mês de referência:</label>
         <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
         <span style={{ color: '#6b7280', fontSize: 13 }}>{nomeMesExtenso(mes)}</span>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h4 style={{ marginTop: 0 }}>🧪 Colaboradores em Experiência</h4>
+        {erroExperiencia && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 8, borderRadius: 6, marginBottom: 8, fontSize: 13 }}>{erroExperiencia}</div>}
+        {colaboradoresExperiencia.length === 0 && (
+          <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum colaborador em período de experiência no momento.</p>
+        )}
+        {colaboradoresExperiencia.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Colaborador</th>
+                <th>Admissão</th>
+                <th>1ª exp. (45 dias)</th>
+                <th>2ª exp. (90 dias)</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {colaboradoresExperiencia.map(c => (
+                <tr key={c.id}>
+                  <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 3, background: c.cor, display: 'inline-block' }}></span>
+                    {c.nome}
+                  </td>
+                  <td>{formatarDataSimples(c.data_admissao)}</td>
+                  <td>{formatarDataSimples(c.data_45_dias)}</td>
+                  <td>{formatarDataSimples(c.data_90_dias)}</td>
+                  <td>
+                    {c.vencido ? (
+                      podeDecidirExperiencia ? (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button
+                            className="btn-success btn-sm"
+                            disabled={processandoId === c.id}
+                            onClick={() => decidirExperiencia(c, 'EFETIVAR')}
+                          >
+                            ✔ Efetivar
+                          </button>
+                          <button
+                            className="btn-danger btn-sm"
+                            disabled={processandoId === c.id}
+                            onClick={() => decidirExperiencia(c, 'DISPENSAR')}
+                          >
+                            ✖ Dispensar
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="badge badge-pendente">Experiência vencida</span>
+                      )
+                    ) : (
+                      <span style={{ color: '#9ca3af', fontSize: 12 }}>Em experiência ({c.dias_corridos}/90 dias)</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>

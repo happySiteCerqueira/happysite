@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db/database');
-const { autenticar } = require('../utils/auth');
+const { autenticar, permitir } = require('../utils/auth');
+const { registrar } = require('../utils/auditoria');
 
 const router = express.Router();
 
@@ -102,6 +103,32 @@ router.get('/', async (req, res) => {
     'SELECT id, nome, tipo, cor, data_nascimento, data_admissao FROM colaboradores WHERE ativo = 1'
   );
 
+  // ---- 2.1) Colaboradores em período de experiência (45 + 45 = 90 dias corridos da admissão) ----
+  // Independe do mês selecionado no filtro de Indicadores: sempre reflete a situação atual (hoje).
+  // Continua aparecendo mesmo após vencer os 90 dias, até o RH decidir Efetivar ou Dispensar.
+  const emExperiencia = await db.all(`
+    SELECT id, nome, cor, data_admissao,
+           (CURRENT_DATE - data_admissao)::int as dias_corridos
+    FROM colaboradores
+    WHERE ativo = 1 AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL
+    ORDER BY data_admissao
+  `);
+  const colaboradoresExperiencia = emExperiencia.map(c => {
+    const admissao = new Date(c.data_admissao);
+    const data45 = new Date(admissao); data45.setUTCDate(data45.getUTCDate() + 45);
+    const data90 = new Date(admissao); data90.setUTCDate(data90.getUTCDate() + 90);
+    return {
+      id: c.id,
+      nome: c.nome,
+      cor: c.cor,
+      data_admissao: c.data_admissao,
+      data_45_dias: data45.toISOString().slice(0, 10),
+      data_90_dias: data90.toISOString().slice(0, 10),
+      dias_corridos: c.dias_corridos,
+      vencido: c.dias_corridos >= 90
+    };
+  });
+
   const aniversariantesNascimento = [];
   const aniversariantesEmpresa = [];
 
@@ -163,8 +190,29 @@ router.get('/', async (req, res) => {
     aniversariantes_nascimento: aniversariantesNascimento,
     aniversariantes_empresa: aniversariantesEmpresa,
     estoque_baixo: estoqueBaixo,
-    funcionarios_do_mes: funcionariosDoMes
+    funcionarios_do_mes: funcionariosDoMes,
+    colaboradores_experiencia: colaboradoresExperiencia
   });
+});
+
+// Decisão do RH/ADM ao final do período de experiência (45+45 dias): efetivar mantém o colaborador
+// ativo normalmente; dispensar desliga o cadastro (mesmo comportamento de "Desligar" usado em Prestadores).
+router.put('/experiencia/:id', permitir('RH', 'ADM'), async (req, res) => {
+  const { decisao } = req.body; // 'EFETIVAR' | 'DISPENSAR'
+  if (!['EFETIVAR', 'DISPENSAR'].includes(decisao)) {
+    return res.status(400).json({ erro: 'Decisão inválida. Use EFETIVAR ou DISPENSAR.' });
+  }
+  const colaborador = await db.get('SELECT * FROM colaboradores WHERE id = ?', req.params.id);
+  if (!colaborador) return res.status(404).json({ erro: 'Colaborador não encontrado' });
+
+  if (decisao === 'EFETIVAR') {
+    await db.run("UPDATE colaboradores SET experiencia_status = 'EFETIVADO' WHERE id = ?", req.params.id);
+    await registrar(req.usuario.id, 'EFETIVAR_COLABORADOR', 'colaboradores', req.params.id, {});
+  } else {
+    await db.run("UPDATE colaboradores SET experiencia_status = 'DISPENSADO', ativo = 0 WHERE id = ?", req.params.id);
+    await registrar(req.usuario.id, 'DISPENSAR_COLABORADOR', 'colaboradores', req.params.id, {});
+  }
+  res.json({ ok: true });
 });
 
 module.exports = router;
