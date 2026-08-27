@@ -106,17 +106,20 @@ router.get('/', async (req, res) => {
   // ---- 2.1) Colaboradores em período de experiência (45 + 45 = 90 dias corridos da admissão) ----
   // Independe do mês selecionado no filtro de Indicadores: sempre reflete a situação atual (hoje).
   // Continua aparecendo mesmo após vencer os 90 dias, até o RH decidir Efetivar ou Dispensar.
+  // Contagem inclusiva: o próprio dia da admissão já conta como "dia 1" do período. Por isso o
+  // vencimento da 1ª experiência (45 dias) cai em admissão + 44 dias corridos, e o da 2ª (90 dias)
+  // em admissão + 89 dias corridos (um dia antes do que daria uma soma direta de 45/90).
   const emExperiencia = await db.all(`
     SELECT id, nome, cor, data_admissao,
-           (CURRENT_DATE - data_admissao)::int as dias_corridos
+           (CURRENT_DATE - data_admissao)::int + 1 as dias_corridos
     FROM colaboradores
     WHERE ativo = 1 AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL
     ORDER BY data_admissao
   `);
   const colaboradoresExperiencia = emExperiencia.map(c => {
     const admissao = new Date(c.data_admissao);
-    const data45 = new Date(admissao); data45.setUTCDate(data45.getUTCDate() + 45);
-    const data90 = new Date(admissao); data90.setUTCDate(data90.getUTCDate() + 90);
+    const data45 = new Date(admissao); data45.setUTCDate(data45.getUTCDate() + 44);
+    const data90 = new Date(admissao); data90.setUTCDate(data90.getUTCDate() + 89);
     return {
       id: c.id,
       nome: c.nome,
