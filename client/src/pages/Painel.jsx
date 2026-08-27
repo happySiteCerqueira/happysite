@@ -200,11 +200,28 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
             </thead>
             <tbody>
               {colaboradoresExperiencia.map(c => (
-                <tr key={c.id} style={c.alerta ? { background: '#fef9c3' } : undefined}>
-                  <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <tr
+                  key={c.id}
+                  style={c.alerta ? { background: '#fef3c7' } : undefined}
+                >
+                  <td style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    borderLeft: c.alerta ? '4px solid #f59e0b' : '4px solid transparent'
+                  }}>
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: c.cor, display: 'inline-block' }}></span>
                     {c.nome}
-                    {c.alerta && <span title={`Faltam ${c.dias_restantes} dia(s) para o próximo vencimento`}>⚠️</span>}
+                    {c.alerta && (
+                      <span
+                        title={`Faltam ${c.dias_restantes} dia(s) para o próximo vencimento`}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          background: '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700,
+                          padding: '2px 8px', borderRadius: 10, marginLeft: 4
+                        }}
+                      >
+                        ⚠️ Faltam {c.dias_restantes} dia{c.dias_restantes === 1 ? '' : 's'}
+                      </span>
+                    )}
                   </td>
                   <td>{formatarDataSimples(c.data_admissao)}</td>
                   <td>{formatarDataSimples(c.data_45_dias)}</td>
