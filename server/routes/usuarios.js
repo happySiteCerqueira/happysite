@@ -20,7 +20,9 @@ router.post('/', async (req, res) => {
   const perfisValidos = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
   if (!perfisValidos.includes(perfil)) return res.status(400).json({ erro: 'Perfil inválido' });
 
-  const existe = await db.get('SELECT id FROM usuarios WHERE login = ?', login);
+  // Verifica duplicidade ignorando maiúsculas/minúsculas (ILIKE), já que o login passou a ser
+  // reconhecido no momento do login sem diferenciar caixa (ver server/routes/auth.js).
+  const existe = await db.get('SELECT id FROM usuarios WHERE login ILIKE ?', login);
   if (existe) return res.status(400).json({ erro: 'Login já existe' });
 
   const hash = bcrypt.hashSync(senha, 10);

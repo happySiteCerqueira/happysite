@@ -10,7 +10,9 @@ router.post('/login', async (req, res) => {
   const { login, senha } = req.body;
   if (!login || !senha) return res.status(400).json({ erro: 'Login e senha são obrigatórios' });
 
-  const usuario = await db.get('SELECT * FROM usuarios WHERE login = ? AND ativo = 1', login);
+  // Login reconhecido sem diferenciar maiúsculas/minúsculas (ILIKE), mas a senha continua
+  // exigindo correspondência exata (comparada via bcrypt logo abaixo).
+  const usuario = await db.get('SELECT * FROM usuarios WHERE login ILIKE ? AND ativo = 1', login);
   if (!usuario) return res.status(401).json({ erro: 'Usuário ou senha inválidos' });
 
   const ok = bcrypt.compareSync(senha, usuario.senha_hash);
