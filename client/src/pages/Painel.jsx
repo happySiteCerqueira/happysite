@@ -158,6 +158,12 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
   const colaboradoresExperiencia = dados?.colaboradores_experiencia || [];
   const [processandoId, setProcessandoId] = useState(null);
   const [erroExperiencia, setErroExperiencia] = useState('');
+  const [verTodosExperiencia, setVerTodosExperiencia] = useState(false);
+
+  // Por padrão, mostra apenas quem precisa de atenção agora (em alerta, a poucos dias do próximo
+  // vencimento, ou já com decisão pendente). "Ver todos" exibe a lista completa como está hoje.
+  const emDestaqueExperiencia = colaboradoresExperiencia.filter(c => c.alerta || c.decisao_pendente);
+  const listaExperienciaExibida = verTodosExperiencia ? colaboradoresExperiencia : emDestaqueExperiencia;
 
   async function decidirExperiencia(colaborador, decisao) {
     const rotulos = { CONTINUAR: 'continuar a experiência', EFETIVAR: 'efetivar', DISPENSAR: 'dispensar' };
@@ -187,7 +193,10 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
         {colaboradoresExperiencia.length === 0 && (
           <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum colaborador em período de experiência no momento.</p>
         )}
-        {colaboradoresExperiencia.length > 0 && (
+        {colaboradoresExperiencia.length > 0 && !verTodosExperiencia && emDestaqueExperiencia.length === 0 && (
+          <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum colaborador precisando de atenção no momento.</p>
+        )}
+        {colaboradoresExperiencia.length > 0 && listaExperienciaExibida.length > 0 && (
           <table>
             <thead>
               <tr>
@@ -200,7 +209,7 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
               </tr>
             </thead>
             <tbody>
-              {colaboradoresExperiencia.map(c => (
+              {listaExperienciaExibida.map(c => (
                 <tr
                   key={c.id}
                   style={c.alerta ? { background: '#fef3c7' } : undefined}
@@ -275,6 +284,15 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
               ))}
             </tbody>
           </table>
+        )}
+        {colaboradoresExperiencia.length > 0 && (
+          <div style={{ marginTop: 10, textAlign: 'right' }}>
+            <button className="btn-secondary btn-sm" onClick={() => setVerTodosExperiencia(v => !v)}>
+              {verTodosExperiencia
+                ? '▲ Ver apenas em alerta'
+                : `▼ Ver todos (${colaboradoresExperiencia.length})`}
+            </button>
+          </div>
         )}
       </div>
 
