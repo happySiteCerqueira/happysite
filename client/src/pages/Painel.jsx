@@ -252,7 +252,7 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                       )
                     ) : (
                       <span style={{ color: c.alerta ? '#92400e' : '#9ca3af', fontSize: 12, fontWeight: c.alerta ? 700 : 400 }}>
-                        Em experiência ({c.dias_corridos}/90 dias)
+                        {c.dias_corridos}/90 dias
                       </span>
                     )}
                   </td>
