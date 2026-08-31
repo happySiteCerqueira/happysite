@@ -36,7 +36,7 @@ app.use('/api/medicoes', require('./routes/medicoes'));
 app.use('/api/relatorios', require('./routes/relatorios'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/painel', require('./routes/painel'));
-BANCO DEapp.use('/api/financeiro', require('./routes/financeiro'));
+app.use('/api/financeiro', require('./routes/financeiro'));
 app.use('/api/permissoes', require('./routes/permissoes'));
 
 
