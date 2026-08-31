@@ -192,6 +192,7 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
             <thead>
               <tr>
                 <th>Colaborador</th>
+                <th>Função</th>
                 <th>Admissão</th>
                 <th>1ª exp. (45 dias)</th>
                 <th>2ª exp. (90 dias)</th>
@@ -223,6 +224,7 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                       </span>
                     )}
                   </td>
+                  <td style={{ color: '#6b7280' }}>{c.funcao || '-'}</td>
                   <td>{formatarDataSimples(c.data_admissao)}</td>
                   <td>{formatarDataSimples(c.data_45_dias)}</td>
                   <td>{formatarDataSimples(c.data_90_dias)}</td>

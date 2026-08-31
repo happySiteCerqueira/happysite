@@ -1,4 +1,4 @@
-// Script de correção retroativa (execução única): verifica todas as assinaturas já salvas
+u // Script de correção retroativa (execução única): verifica todas as assinaturas já salvas
 // em epi_retiradas e, para aquelas que estão praticamente em branco (poucos pixels desenhados),
 // remove o valor do campo "assinatura" (marca como NULL), corrigindo o selo "Assinado digitalmente"
 // exibido no histórico do EPI. Usa a mesma lógica de limiar mínimo do componente AssinaturaCanvas.jsx.

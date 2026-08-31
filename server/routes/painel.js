@@ -110,7 +110,7 @@ router.get('/', async (req, res) => {
   // vencimento da 1ª experiência (45 dias) cai em admissão + 44 dias corridos, e o da 2ª (90 dias)
   // em admissão + 89 dias corridos (um dia antes do que daria uma soma direta de 45/90).
   const emExperiencia = await db.all(`
-    SELECT id, nome, cor, data_admissao,
+    SELECT id, nome, cor, funcao, data_admissao,
            (CURRENT_DATE - data_admissao)::int + 1 as dias_corridos
     FROM colaboradores
     WHERE ativo = 1 AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL
@@ -129,6 +129,7 @@ router.get('/', async (req, res) => {
       id: c.id,
       nome: c.nome,
       cor: c.cor,
+      funcao: c.funcao,
       data_admissao: c.data_admissao,
       data_45_dias: data45.toISOString().slice(0, 10),
       data_90_dias: data90.toISOString().slice(0, 10),
