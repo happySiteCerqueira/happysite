@@ -460,6 +460,13 @@ async function migrate() {
     `);
   }
 
+  // Migração idempotente: marca se o colaborador já teve a 1ª experiência (45 dias) confirmada pelo
+  // RH/ADM (decisão "Continuar experiência"). Enquanto EM_EXPERIENCIA e já tiver passado dos 45 dias
+  // sem essa confirmação, o Painel pede a decisão "Continuar experiência ou Dispensar".
+  if (!(await colunaExiste('colaboradores', 'confirmado_45_dias'))) {
+    await pool.query('ALTER TABLE colaboradores ADD COLUMN confirmado_45_dias INTEGER NOT NULL DEFAULT 0');
+  }
+
   // Migração idempotente: perfis novos (SUPERVISOR, APONTADOR) no CHECK de usuarios.perfil
   const temSupervisor = await constraintContem('usuarios', 'perfil', 'SUPERVISOR');
   if (!temSupervisor) {

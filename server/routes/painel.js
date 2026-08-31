@@ -110,7 +110,7 @@ router.get('/', async (req, res) => {
   // vencimento da 1ª experiência (45 dias) cai em admissão + 44 dias corridos, e o da 2ª (90 dias)
   // em admissão + 89 dias corridos (um dia antes do que daria uma soma direta de 45/90).
   const emExperiencia = await db.all(`
-    SELECT id, nome, cor, funcao, data_admissao,
+    SELECT id, nome, cor, funcao, data_admissao, confirmado_45_dias,
            (CURRENT_DATE - data_admissao)::int + 1 as dias_corridos
     FROM colaboradores
     WHERE ativo = 1 AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL
@@ -121,10 +121,23 @@ router.get('/', async (req, res) => {
     const admissao = new Date(c.data_admissao);
     const data45 = new Date(admissao); data45.setUTCDate(data45.getUTCDate() + 44);
     const data90 = new Date(admissao); data90.setUTCDate(data90.getUTCDate() + 89);
-    const vencido = c.dias_corridos >= 90;
-    // Dias restantes até o próximo marco relevante: enquanto não passou dos 45 dias, o alvo é a
-    // 1ª experiência; depois disso (e antes de vencer), o alvo passa a ser a 2ª experiência (90 dias).
-    const diasRestantes = c.dias_corridos < 45 ? (45 - c.dias_corridos) : (90 - c.dias_corridos);
+
+    // Enquanto a 1ª experiência (45 dias) ainda não foi confirmada pelo RH ("Continuar experiência"),
+    // o marco-alvo é sempre os 45 dias — mesmo que os dias corridos já tenham ultrapassado 90 (caso de
+    // colaboradores antigos que nunca passaram por essa decisão). Só depois de confirmada a 1ª etapa
+    // o marco-alvo passa a ser a 2ª experiência (90 dias).
+    const confirmou45 = !!c.confirmado_45_dias;
+    let diasRestantes, decisaoPendente, etapa;
+    if (!confirmou45) {
+      diasRestantes = 45 - c.dias_corridos;
+      decisaoPendente = diasRestantes <= 0 ? '45' : null;
+      etapa = '1a';
+    } else {
+      diasRestantes = 90 - c.dias_corridos;
+      decisaoPendente = diasRestantes <= 0 ? '90' : null;
+      etapa = '2a';
+    }
+
     return {
       id: c.id,
       nome: c.nome,
@@ -135,11 +148,12 @@ router.get('/', async (req, res) => {
       data_90_dias: data90.toISOString().slice(0, 10),
       dias_corridos: c.dias_corridos,
       dias_restantes: diasRestantes,
-      vencido,
-      alerta: !vencido && diasRestantes <= LIMITE_ALERTA_DIAS
+      etapa, // '1a' (rumo aos 45 dias) | '2a' (rumo aos 90 dias, já confirmada a 1ª etapa)
+      decisao_pendente: decisaoPendente, // null | '45' | '90'
+      alerta: !decisaoPendente && diasRestantes <= LIMITE_ALERTA_DIAS
     };
   });
-  // Prioriza no topo quem está mais perto de vencer (ou já venceu) o próximo marco.
+  // Prioriza no topo quem está mais perto de vencer (ou já venceu/pendente de decisão) o próximo marco.
   colaboradoresExperiencia.sort((a, b) => a.dias_restantes - b.dias_restantes);
 
   const aniversariantesNascimento = [];
@@ -208,17 +222,23 @@ router.get('/', async (req, res) => {
   });
 });
 
-// Decisão do RH/ADM ao final do período de experiência (45+45 dias): efetivar mantém o colaborador
-// ativo normalmente; dispensar desliga o cadastro (mesmo comportamento de "Desligar" usado em Prestadores).
+// Decisão do RH/ADM nos marcos do período de experiência:
+// - Aos 45 dias: 'CONTINUAR' (segue em experiência até os 90 dias) ou 'DISPENSAR'.
+// - Aos 90 dias: 'EFETIVAR' (encerra o período, cadastro segue normal) ou 'DISPENSAR'.
+// 'DISPENSAR' em qualquer um dos dois marcos apenas desativa o cadastro (ativo=0), sem apagar
+// nenhum histórico já lançado para esse colaborador.
 router.put('/experiencia/:id', permitir('RH', 'ADM'), async (req, res) => {
-  const { decisao } = req.body; // 'EFETIVAR' | 'DISPENSAR'
-  if (!['EFETIVAR', 'DISPENSAR'].includes(decisao)) {
-    return res.status(400).json({ erro: 'Decisão inválida. Use EFETIVAR ou DISPENSAR.' });
+  const { decisao } = req.body; // 'CONTINUAR' | 'EFETIVAR' | 'DISPENSAR'
+  if (!['CONTINUAR', 'EFETIVAR', 'DISPENSAR'].includes(decisao)) {
+    return res.status(400).json({ erro: 'Decisão inválida. Use CONTINUAR, EFETIVAR ou DISPENSAR.' });
   }
   const colaborador = await db.get('SELECT * FROM colaboradores WHERE id = ?', req.params.id);
   if (!colaborador) return res.status(404).json({ erro: 'Colaborador não encontrado' });
 
-  if (decisao === 'EFETIVAR') {
+  if (decisao === 'CONTINUAR') {
+    await db.run('UPDATE colaboradores SET confirmado_45_dias = 1 WHERE id = ?', req.params.id);
+    await registrar(req.usuario.id, 'CONTINUAR_EXPERIENCIA_COLABORADOR', 'colaboradores', req.params.id, {});
+  } else if (decisao === 'EFETIVAR') {
     await db.run("UPDATE colaboradores SET experiencia_status = 'EFETIVADO' WHERE id = ?", req.params.id);
     await registrar(req.usuario.id, 'EFETIVAR_COLABORADOR', 'colaboradores', req.params.id, {});
   } else {

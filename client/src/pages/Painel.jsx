@@ -160,8 +160,8 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
   const [erroExperiencia, setErroExperiencia] = useState('');
 
   async function decidirExperiencia(colaborador, decisao) {
-    const acao = decisao === 'EFETIVAR' ? 'efetivar' : 'dispensar';
-    if (!window.confirm(`Confirma ${acao} "${colaborador.nome}"?`)) return;
+    const rotulos = { CONTINUAR: 'continuar a experiência', EFETIVAR: 'efetivar', DISPENSAR: 'dispensar' };
+    if (!window.confirm(`Confirma ${rotulos[decisao]} "${colaborador.nome}"?`)) return;
     setErroExperiencia('');
     setProcessandoId(colaborador.id);
     try {
@@ -229,16 +229,26 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                   <td>{formatarDataSimples(c.data_45_dias)}</td>
                   <td>{formatarDataSimples(c.data_90_dias)}</td>
                   <td>
-                    {c.vencido ? (
+                    {c.decisao_pendente ? (
                       podeDecidirExperiencia ? (
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          <button
-                            className="btn-success btn-sm"
-                            disabled={processandoId === c.id}
-                            onClick={() => decidirExperiencia(c, 'EFETIVAR')}
-                          >
-                            ✔ Efetivar
-                          </button>
+                          {c.decisao_pendente === '45' ? (
+                            <button
+                              className="btn-success btn-sm"
+                              disabled={processandoId === c.id}
+                              onClick={() => decidirExperiencia(c, 'CONTINUAR')}
+                            >
+                              ➜ Continuar experiência
+                            </button>
+                          ) : (
+                            <button
+                              className="btn-success btn-sm"
+                              disabled={processandoId === c.id}
+                              onClick={() => decidirExperiencia(c, 'EFETIVAR')}
+                            >
+                              ✔ Efetivar
+                            </button>
+                          )}
                           <button
                             className="btn-danger btn-sm"
                             disabled={processandoId === c.id}
@@ -248,11 +258,16 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                           </button>
                         </div>
                       ) : (
-                        <span className="badge badge-pendente">Experiência vencida</span>
+                        <span className="badge badge-pendente">
+                          {c.decisao_pendente === '45' ? '1ª experiência vencida' : 'Experiência vencida'}
+                        </span>
                       )
                     ) : (
-                      <span style={{ color: c.alerta ? '#92400e' : '#9ca3af', fontSize: 12, fontWeight: c.alerta ? 700 : 400 }}>
-                        {c.dias_corridos}/90 dias
+                      // Sem alerta: exibição simples e discreta, sem chamar atenção.
+                      <span style={{ color: '#9ca3af', fontSize: 12 }}>
+                        {c.etapa === '1a'
+                          ? `Faltam ${c.dias_restantes} dia${c.dias_restantes === 1 ? '' : 's'} p/ 1ª experiência`
+                          : `Faltam ${c.dias_restantes} dia${c.dias_restantes === 1 ? '' : 's'} p/ 2ª experiência`}
                       </span>
                     )}
                   </td>
