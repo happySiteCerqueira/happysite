@@ -71,7 +71,7 @@ export default function Painel() {
   const { usuario } = useAuth();
   const ehAdm = usuario?.perfil === 'ADM';
 
-  const [aba, setAba] = useState(ehAdm ? 'geral' : 'indicadores'); // ADM: 'geral' (padrão) | 'indicadores'. Demais perfis: só 'indicadores'.
+  const [aba, setAba] = useState('indicadores'); // Sempre abre em 'indicadores' por padrão (ADM também pode alternar para 'geral').
   const [mes, setMes] = useState(mesAtual());
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
