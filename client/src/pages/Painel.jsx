@@ -266,8 +266,8 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                       // Sem alerta: exibição simples e discreta, sem chamar atenção.
                       <span style={{ color: '#9ca3af', fontSize: 12 }}>
                         {c.etapa === '1a'
-                          ? `Faltam ${c.dias_restantes} dia${c.dias_restantes === 1 ? '' : 's'} p/ 1ª experiência`
-                          : `Faltam ${c.dias_restantes} dia${c.dias_restantes === 1 ? '' : 's'} p/ 2ª experiência`}
+                          ? `${c.dias_restantes} dia${c.dias_restantes === 1 ? '' : 's'} p/ 1ª experiência`
+                          : `${c.dias_restantes} dia${c.dias_restantes === 1 ? '' : 's'} p/ 2ª experiência`}
                       </span>
                     )}
                   </td>
