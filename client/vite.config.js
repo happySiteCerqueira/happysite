@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // 'autoUpdate' baixa a nova versão em segundo plano, mas sozinho NÃO garante que a aba aberta
+      // vá usá-la imediatamente — por isso combinamos com skipWaiting/clientsClaim (abaixo) e com a
+      // lógica em main.jsx que recarrega a página assim que uma versão nova é detectada. Isso evita
+      // a "tela branca" que acontecia após um deploy: o Service Worker antigo insistia em servir um
+      // bundle JS com hash que já não existia mais no servidor.
       registerType: 'autoUpdate',
       includeAssets: ['logo.png', 'apple-touch-icon.png'],
       manifest: {
@@ -32,7 +37,12 @@ export default defineConfig({
             urlPattern: /^\/api\/.*/,
             handler: 'NetworkOnly'
           }
-        ]
+        ],
+        // Assim que um novo Service Worker termina de instalar, ele assume o controle imediatamente
+        // (em vez de esperar todas as abas antigas fecharem) e remove caches de versões anteriores.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true
       }
     })
   ],

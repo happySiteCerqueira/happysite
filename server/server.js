@@ -3,9 +3,26 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const db = require('./db/database'); // garante criação/migração do banco
+const { verificarRotasRegistradas } = require('./utils/verificarRotas');
+const { iniciarBackupAutomatico } = require('./utils/backupAutomatico');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Proteção contra o cenário que já aconteceu: uma rota inteira (ex: EPI) existir em
+// server/routes/ mas não estar registrada abaixo via app.use(...), fazendo o módulo sumir do
+// site silenciosamente. Se detectar isso, o servidor recusa subir (falha o deploy de propósito),
+// em vez de publicar uma versão quebrada — o Render mantém a versão anterior (funcional) no ar.
+const rotasFaltando = verificarRotasRegistradas(__filename, path.join(__dirname, 'routes'));
+if (rotasFaltando.length > 0) {
+  console.error('====================================');
+  console.error(' ERRO CRÍTICO: rota(s) não registrada(s) em server.js!');
+  console.error(' Arquivo(s) existem em server/routes/ mas faltam o app.use correspondente:');
+  rotasFaltando.forEach(r => console.error(`   - ${r}.js`));
+  console.error(' Corrija adicionando: app.use(\'/api/<nome>\', require(\'./routes/<nome>\'));');
+  console.error('====================================');
+  process.exit(1);
+}
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -60,6 +77,9 @@ db.pronto
       console.log(` Local:  http://localhost:${PORT}`);
       console.log(' Acesse pela rede usando o IP deste computador.');
       console.log('====================================');
+      // Backup automático diário de segurança (não substitui o backup manual, apenas adiciona
+      // uma rede de proteção extra caso algo dê errado sem ninguém perceber a tempo).
+      iniciarBackupAutomatico();
     });
   })
   .catch(e => {

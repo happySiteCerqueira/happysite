@@ -56,15 +56,40 @@ router.put('/itens/:id', async (req, res) => {
   const { descricao, ca, estoque_minimo } = req.body;
   const item = await db.get('SELECT * FROM epi_itens WHERE id = ?', req.params.id);
   if (!item) return res.status(404).json({ erro: 'Item não encontrado' });
+
+  // Valida a descrição: nunca deixa vazia (evita "apagar" acidentalmente o nome do item ao
+  // salvar um formulário com o campo em branco por engano).
+  const descricaoFinal = descricao !== undefined ? String(descricao).trim() : item.descricao;
+  if (!descricaoFinal) return res.status(400).json({ erro: 'Descrição não pode ficar vazia' });
+
+  // Evita duplicar itens: se a nova descrição já pertence a OUTRO item ativo, bloqueia a edição
+  // em vez de silenciosamente criar dois registros com o mesmo nome no estoque.
+  const duplicado = await db.get(
+    'SELECT id FROM epi_itens WHERE LOWER(descricao) = LOWER(?) AND ativo = 1 AND id != ?',
+    descricaoFinal, req.params.id
+  );
+  if (duplicado) return res.status(400).json({ erro: `Já existe outro item ativo com a descrição "${descricaoFinal}"` });
+
+  const estoqueMinimoFinal = estoque_minimo !== undefined && estoque_minimo !== '' ? Number(estoque_minimo) : item.estoque_minimo;
+  if (Number.isNaN(estoqueMinimoFinal) || estoqueMinimoFinal < 0) {
+    return res.status(400).json({ erro: 'Estoque mínimo inválido' });
+  }
+
   await db.run('UPDATE epi_itens SET descricao = ?, ca = ?, estoque_minimo = ? WHERE id = ?',
-    descricao || item.descricao, ca ?? item.ca, estoque_minimo !== undefined ? Number(estoque_minimo) : item.estoque_minimo, req.params.id);
+    descricaoFinal, ca !== undefined ? (ca || null) : item.ca, estoqueMinimoFinal, req.params.id);
+  await registrar(req.usuario.id, 'EDITAR_ITEM_EPI', 'epi_itens', req.params.id, { descricao: descricaoFinal, ca, estoque_minimo: estoqueMinimoFinal });
   res.json({ ok: true });
 });
 
+// Desativa (soft delete) um item de EPI — os dados nunca são apagados do banco, apenas marcados
+// como inativos (ativo=0), preservando todo o histórico de movimentos/retiradas já vinculado a ele.
 router.delete('/itens/:id', permitir('ADM'), async (req, res) => {
 
+  const item = await db.get('SELECT * FROM epi_itens WHERE id = ?', req.params.id);
+  if (!item) return res.status(404).json({ erro: 'Item não encontrado' });
+
   await db.run('UPDATE epi_itens SET ativo = 0 WHERE id = ?', req.params.id);
-  await registrar(req.usuario.id, 'DESATIVAR_ITEM_EPI', 'epi_itens', req.params.id, {});
+  await registrar(req.usuario.id, 'DESATIVAR_ITEM_EPI', 'epi_itens', req.params.id, { descricao: item.descricao, quantidade_no_momento: item.quantidade });
   res.json({ ok: true });
 });
 

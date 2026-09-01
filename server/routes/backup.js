@@ -5,6 +5,7 @@ const multer = require('multer');
 const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
 const { registrar } = require('../utils/auditoria');
+const { TABELAS_BACKUP } = require('../utils/tabelasBackup');
 
 const router = express.Router();
 
@@ -15,12 +16,7 @@ const upload = multer({ dest: path.join(__dirname, '..', '..', 'data', 'tmp') })
 
 router.use(autenticar, permitir('ADM'));
 
-const TABELAS = [
-  'usuarios', 'colaboradores', 'obras', 'servicos_padrao', 'obra_servicos',
-  'obra_servico_pessoas', 'obra_servico_celulas', 'obra_servico_quantidades', 'obra_apto_rotulos',
-  'pagamentos_antecipados', 'diarias', 'medicoes', 'financeiro_receitas', 'auditoria'
-
-];
+const TABELAS = TABELAS_BACKUP;
 
 
 
