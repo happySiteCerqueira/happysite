@@ -54,6 +54,11 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    // Gera .map junto com os arquivos JS de produção: não muda nada para o usuário final
+    // (o navegador só baixa o .map se o DevTools estiver aberto), mas permite localizar a linha
+    // exata do código-fonte original quando um erro minificado aparecer no console (ex:
+    // "index-CDD0hwCv.js:8 Uncaught TypeError: l is not a function" vira algo legível).
+    sourcemap: true
   }
 })
