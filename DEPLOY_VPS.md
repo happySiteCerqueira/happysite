@@ -1,11 +1,26 @@
-# Guia de Deploy — HappySite em VPS próprio (DigitalOcean)
+# Guia de Deploy — HappySite em VPS próprio (AWS Lightsail)
 
-Este guia coloca o sistema inteiro (banco de dados + backend + frontend) rodando em um único
-servidor (VPS), com HTTPS automático, resolvendo a lentidão e as "telas brancas" causadas pela
-hibernação dos planos gratuitos do Render e do Neon.
+> ✅ **Status: já migrado e em produção.** O servidor já foi criado e configurado. Este documento
+> serve como referência de como foi feito e para consultas futuras (ex: recriar o servidor).
 
-Domínio configurado neste guia: **app.cerqueiraengenharia.com.br**
-Domínio registrado em: **Registro.br**
+Domínio: **https://app.cerqueiraengenharia.com.br** (registrado no Registro.br)
+Servidor: AWS Lightsail, instância `cerqueira-engenharia`, região **us-east-1 (Virginia)**
+IP estático: `3.228.110.68`
+Bundle: `micro_3_0` (US$7/mês, 1 GB RAM, 2 vCPU, 40 GB SSD)
+
+> **Nota sobre a região:** o ideal seria São Paulo (sa-east-1, menor latência para o Brasil), mas
+> essa conta AWS recebeu "ServiceException" ao tentar criar instâncias lá (comum em contas novas,
+> que às vezes só liberam certas regiões após um tempo de uso). Usamos Virginia (us-east-1)
+> enquanto isso — ainda assim, infinitamente mais rápido que a hibernação do plano gratuito
+> anterior (Render + Neon). Pode-se tentar recriar em São Paulo mais tarde seguindo os mesmos
+> passos, bastando trocar a região.
+
+As credenciais de acesso (chave SSH, senha do banco) estão salvas em:
+`C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` (fora do repositório, por segurança).
+
+---
+
+## Guia original (para recriar o servidor do zero, se necessário)
 
 Siga os passos NA ORDEM. Cada passo indica claramente onde clicar.
 
