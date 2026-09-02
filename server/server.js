@@ -64,7 +64,20 @@ app.use('/api/permissoes', require('./routes/permissoes'));
 const clientBuildPath = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
-  app.get(/^(?!\/api).*/, (req, res) => {
+  // Fallback do SPA: só serve o index.html para rotas de navegação (sem extensão de arquivo,
+  // ex: /epi, /obras/5). Requisições a arquivos estáticos que não existem mais (ex: um bundle
+  // JS/CSS antigo com hash de um deploy anterior, /manifest.webmanifest, /sw.js, etc.) recebem
+  // um 404 de verdade em vez do HTML da aplicação.
+  //
+  // Isso corrige a "tela branca" que podia acontecer logo após um deploy: como o nome dos
+  // arquivos JS muda a cada build (hash no nome), se o navegador (por cache do Service Worker
+  // ou HTTP normal) ainda pedisse o arquivo antigo, essa rota coringa devolvia o index.html com
+  // status 200 no lugar do JS — o navegador tentava executar aquele HTML como script, falhava
+  // silenciosamente, e a página nunca chegava a renderizar (React nunca montava).
+  app.get(/^(?!\/api).*/, (req, res, next) => {
+    const ultimoSegmento = req.path.split('/').pop() || '';
+    const pareceArquivoEstatico = ultimoSegmento.includes('.');
+    if (pareceArquivoEstatico) return next(); // deixa cair no 404 padrão do Express
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
 }
