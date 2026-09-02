@@ -5,50 +5,89 @@ servidor (VPS), com HTTPS automático, resolvendo a lentidão e as "telas branca
 hibernação dos planos gratuitos do Render e do Neon.
 
 Domínio configurado neste guia: **app.cerqueiraengenharia.com.br**
+Domínio registrado em: **Registro.br**
+
+Siga os passos NA ORDEM. Cada passo indica claramente onde clicar.
 
 ---
 
-## 1. Criar o servidor (Droplet) na DigitalOcean
+## PASSO 1 — Criar conta na DigitalOcean
 
-1. Crie uma conta em https://www.digitalocean.com (se ainda não tiver).
-2. Clique em **Create → Droplets**.
-3. Configurações recomendadas:
-   - **Region**: São Paulo (mais próximo do Brasil, menor latência)
-   - **Image**: Ubuntu 24.04 (LTS) x64
-   - **Size**: Basic → Regular → **$6/mês** (1 GB RAM / 1 vCPU) é suficiente para este sistema
-   - **Authentication**: Password (mais simples) ou SSH Key (mais seguro, se souber usar)
-4. Clique em **Create Droplet** e aguarde ~1 minuto até ele ficar pronto.
-5. Anote o **endereço IP** mostrado no painel (ex: `164.90.123.45`).
+1. Acesse **https://www.digitalocean.com** e clique em **Sign Up** (canto superior direito).
+2. Crie a conta com e-mail e senha (ou "Sign up with Google/GitHub").
+3. Você precisará cadastrar um cartão de crédito (é padrão de qualquer provedor de nuvem, mas você
+   só paga pelo que usar — o Droplet recomendado custa US$6/mês, cobrado proporcional ao uso).
 
-## 2. Apontar o domínio para o servidor
+## PASSO 2 — Criar o servidor (Droplet)
 
-No painel onde o domínio `cerqueiraengenharia.com.br` está registrado, adicione um registro DNS:
+1. No painel da DigitalOcean, clique no botão verde **Create** (topo da tela) → **Droplets**.
+2. Em **Choose Region**: selecione **São Paulo** (ícone do Brasil).
+3. Em **Choose an image**: deixe selecionado **Ubuntu**, versão **24.04 (LTS) x64**.
+4. Em **Choose Size**:
+   - Selecione a aba **Basic**
+   - Em "CPU options", deixe **Regular** (Disk type: SSD)
+   - Escolha a opção de **$6/mo** (1 GB RAM / 1 CPU / 25 GB SSD) — suficiente para este sistema
+5. Em **Authentication**: selecione **Password**, crie uma senha forte para o servidor e
+   **anote essa senha** (você vai precisar dela no próximo passo).
+6. Em **Finalize Details → Hostname**: pode deixar o nome padrão ou trocar para `happysite`.
+7. Clique no botão verde **Create Droplet** (final da página) e aguarde ~1 minuto.
+8. Quando o Droplet aparecer como "Active", **copie o endereço IP** mostrado na lista
+   (formato: `164.90.xxx.xxx`). Você vai usar esse IP nos próximos passos.
 
-| Tipo | Nome/Host | Valor/Aponta para |
-|------|-----------|--------------------|
-| A    | `app`     | (o IP do Droplet, ex: `164.90.123.45`) |
+## PASSO 3 — Apontar o subdomínio no Registro.br
 
-Isso faz `app.cerqueiraengenharia.com.br` apontar para o servidor. A propagação do DNS pode levar
-de alguns minutos até algumas horas.
+1. Acesse **https://registro.br** e clique em **Login** (topo direito), entre com sua conta.
+2. No menu, vá em **Meus Domínios** (ou "Domínios" no menu superior).
+3. Clique no domínio **cerqueiraengenharia.com.br** para abrir os detalhes dele.
+4. Procure e clique na aba/seção **DNS** (às vezes aparece como "Editar Zona" ou "DNS").
+5. Se aparecer a pergunta sobre qual servidor DNS usar, mantenha a opção padrão do Registro.br
+   ("Usar servidores DNS do Registro.br"), que já vem configurada — não precisa mexer nisso.
+6. Procure a opção **Editor de Zona** (pode estar em "Avançado" ou similar) e clique para
+   **Adicionar um novo registro**.
+7. Preencha o novo registro exatamente assim:
+   - **Nome/Host**: `app`
+   - **Tipo**: `A`
+   - **Dados/Valor**: o IP do Droplet que você copiou no Passo 2 (ex: `164.90.123.45`)
+   - **TTL**: pode deixar o valor padrão (geralmente 3600)
+8. Clique em **Salvar** / **Adicionar registro**.
+9. Aguarde a propagação do DNS — geralmente funciona entre 10 minutos e algumas horas. Para
+   conferir se já propagou, você pode acessar https://dnschecker.org, digitar
+   `app.cerqueiraengenharia.com.br` e conferir se o IP mostrado bate com o do seu Droplet.
 
-## 3. Acessar o servidor e instalar o Docker
+## PASSO 4 — Conectar no servidor pela primeira vez
 
-No Windows, abra o **PowerShell** e conecte via SSH (troque `SEU_IP` pelo IP do Droplet):
+No seu computador Windows, abra o **PowerShell** (pode ser o mesmo terminal que já usamos) e digite:
 
 ```powershell
-ssh root@SEU_IP
+ssh root@SEU_IP_AQUI
 ```
 
-Digite a senha que a DigitalOcean te enviou por e-mail (ou mostrou na criação, se escolheu senha).
+(troque `SEU_IP_AQUI` pelo IP copiado no Passo 2)
 
-Dentro do servidor (já conectado via SSH), rode este bloco único para instalar o Docker:
+- Na primeira conexão, vai aparecer uma pergunta tipo `Are you sure you want to continue connecting?`
+  — digite `yes` e aperte Enter.
+- Em seguida, vai pedir a senha — digite a senha que você criou no Passo 2 (a senha não aparece
+  na tela enquanto você digita, isso é normal, apenas digite e aperte Enter).
+- Se conectou certo, o terminal vai mostrar algo como `root@happysite:~#`.
+
+## PASSO 5 — Instalar o Docker no servidor
+
+Já dentro do servidor (terminal mostrando `root@happysite:~#`), cole este comando e aperte Enter:
 
 ```bash
 curl -fsSL https://get.docker.com | sh
+```
+
+Aguarde terminar (leva 1-2 minutos, vai mostrar várias linhas passando). Depois, cole este outro
+comando e aperte Enter:
+
+```bash
 apt-get install -y docker-compose-plugin git
 ```
 
-## 4. Baixar o projeto no servidor
+Se aparecer uma pergunta `Do you want to continue? [Y/n]`, digite `Y` e aperte Enter.
+
+## PASSO 6 — Baixar o projeto no servidor
 
 ```bash
 cd /opt
@@ -56,53 +95,70 @@ git clone https://github.com/happySiteCerqueira/happysite.git
 cd happysite
 ```
 
-## 5. Configurar a senha do banco de dados
+## PASSO 7 — Configurar a senha do banco de dados
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Troque `troque-por-uma-senha-forte-e-unica` por uma senha forte de verdade (ex: uma frase longa
-com números). Salve com `Ctrl+O`, Enter, depois `Ctrl+X` para sair.
+Isso abre um editor de texto simples dentro do terminal. Você vai ver uma linha assim:
 
-## 6. Subir tudo (banco + aplicação + HTTPS)
+```
+DB_PASSWORD=troque-por-uma-senha-forte-e-unica
+```
+
+Use as setas do teclado para navegar até depois do `=` e apague `troque-por-uma-senha-forte-e-unica`,
+digitando uma senha forte no lugar (ex: `HappySite2026SenhaForte!`). Depois:
+- Aperte `Ctrl + O` (letra O, não zero) para salvar → aparece "File Name to Write", só aperte Enter.
+- Aperte `Ctrl + X` para sair do editor.
+
+## PASSO 8 — Subir o sistema (banco + aplicação + HTTPS automático)
 
 ```bash
 docker compose up -d --build
 ```
 
-Isso vai:
-- Baixar e iniciar o Postgres
-- Buildar a imagem da aplicação (frontend + backend)
-- Iniciar o Caddy, que sozinho já emite e renova o certificado HTTPS via Let's Encrypt
-
-A primeira execução leva alguns minutos (build da imagem). Acompanhe com:
+Isso vai demorar de 3 a 6 minutos na primeira vez (baixando imagens e compilando o site). Para
+acompanhar o progresso em tempo real:
 
 ```bash
 docker compose logs -f app
 ```
 
-Quando aparecer `HappySite - Servidor iniciado!`, está pronto. Pressione `Ctrl+C` para sair dos logs
-(isso não para o servidor, só sai da visualização).
+Quando aparecer no terminal a mensagem:
 
-## 7. Acessar o sistema
+```
+====================================
+ HappySite - Servidor iniciado!
+====================================
+```
 
-Abra no navegador: **https://app.cerqueiraengenharia.com.br**
+está tudo pronto! Aperte `Ctrl + C` para sair da visualização de logs (isso não desliga nada, só
+para de mostrar na tela).
 
-Login padrão inicial (mesmo usado nas outras instalações): `admin` / `admin` — troque a senha assim
-que entrar.
+## PASSO 9 — Acessar o sistema
 
-## 8. Migrar os dados do banco antigo (Neon) para o novo servidor
+Abra o navegador e acesse: **https://app.cerqueiraengenharia.com.br**
 
-Se você já tem dados no banco antigo (Neon) que quer trazer para o novo servidor, use a tela
-**Backup** do próprio sistema:
+- Pode levar 10-30 segundos na primeira vez, enquanto o Caddy emite o certificado HTTPS automático.
+- Se aparecer erro de "site não pode ser acessado", aguarde mais um pouco (o DNS pode ainda estar
+  propagando — veja o Passo 3) e tente de novo.
+- Login inicial: usuário `admin`, senha `admin` — troque a senha assim que entrar.
 
-1. No sistema **antigo** (ainda no Render/Neon): vá em **Configurações → Backup → Exportar backup
-   agora**. Isso baixa um arquivo `.json` com todos os dados.
-2. No sistema **novo** (recém-criado no VPS, ainda vazio): vá em **Configurações → Backup →
-   Importar backup**, selecione o arquivo `.json` baixado, e confirme.
-3. Pronto — todos os colaboradores, obras, EPI, financeiro, etc. estarão no novo servidor.
+## PASSO 10 — Migrar os dados do sistema antigo (Render/Neon) para o novo
+
+1. **No sistema ANTIGO** (ainda no endereço `happysite-6oi6.onrender.com`): faça login, vá em
+   **Configurações → Backup** e clique em **Exportar backup agora**. Um arquivo `.json` será
+   baixado no seu computador.
+2. **No sistema NOVO** (`app.cerqueiraengenharia.com.br`, recém-criado): faça login como admin,
+   vá em **Configurações → Backup**, na seção **Importar backup** selecione o arquivo `.json`
+   baixado no passo anterior e clique em **Importar e substituir**.
+3. Pronto! Todos os colaboradores, obras, EPI, financeiro, usuários etc. estarão no novo servidor,
+   idênticos ao sistema antigo.
+4. Depois de confirmar que está tudo certo no novo sistema, você pode desligar o serviço antigo no
+   Render (não é obrigatório, mas evita pagar por algo que não usa mais, se um dia decidir dar
+   upgrade nele).
 
 ## Comandos úteis do dia a dia
 
@@ -143,3 +199,17 @@ docker compose up -d --build
   salvando dentro do volume `app_backups`.
 - Como não há mais hibernação (nem do Render, nem do Neon), o site fica sempre ativo, sem cold
   start — resolve a lentidão e as "telas brancas" ao trocar de aba.
+
+## Se algo der errado
+
+- **`docker compose up -d --build` deu erro**: rode `docker compose logs` (sem `-f`) para ver a
+  mensagem de erro completa e me envie o texto que aparecer.
+- **SSH não conecta**: confira se copiou o IP certo do Droplet (Passo 2) e se está usando a senha
+  criada na hora de criar o Droplet.
+- **Site não abre / "não pode ser acessado"**: confira se o DNS já propagou (Passo 3, usando
+  dnschecker.org) e se o comando `docker compose ps` mostra todos os serviços como "Up".
+- **Certificado HTTPS não aparece / erro de certificado**: normalmente é porque o DNS ainda não
+  propagou quando o Caddy tentou emitir o certificado. Aguarde a propagação e rode
+  `docker compose restart caddy`.
+- **Esqueceu a senha do servidor**: no painel da DigitalOcean, abra o Droplet e use a opção
+  **Access → Launch Droplet Console** para acessar sem precisar de senha SSH (usa o navegador).
