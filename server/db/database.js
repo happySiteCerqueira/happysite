@@ -20,9 +20,15 @@ console.log(
   '| fim:', JSON.stringify(databaseUrl.slice(-15))
 );
 
+// SSL é exigido por provedores de nuvem (ex: Neon, Render Postgres), mas um Postgres rodando
+// localmente (ex: dentro de um VPS via Docker, no mesmo servidor da aplicação) normalmente não
+// usa/aceita SSL. Controlado pela variável DB_SSL: default "true" (mantém compatibilidade com o
+// que já estava em produção); defina DB_SSL=false no .env de um servidor com Postgres local.
+const usarSSL = (process.env.DB_SSL || 'true').trim().toLowerCase() !== 'false';
+
 const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: { rejectUnauthorized: false }
+  ssl: usarSSL ? { rejectUnauthorized: false } : false
 });
 
 // ---- Camada de compatibilidade: traduz SQL estilo SQLite (placeholders "?") para Postgres ($1,$2,...) ----

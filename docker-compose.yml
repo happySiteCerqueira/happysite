@@ -1,0 +1,55 @@
+version: '3.8'
+
+# Stack completa do HappySite rodando num único VPS: banco de dados (Postgres), aplicação
+# (backend + frontend juntos) e Caddy (proxy reverso com HTTPS automático via Let's Encrypt).
+# Tudo isolado em containers, tudo no mesmo servidor/conta — sem depender de serviços externos
+# que hibernam (Render/Neon gratuitos), resolvendo a lentidão e "tela branca" por cold start.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: happysite
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: happysite
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happysite"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://happysite:${DB_PASSWORD}@db:5432/happysite
+      DB_SSL: "false"
+      PORT: 3001
+    volumes:
+      - app_data:/app/data
+      - app_backups:/app/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  db_data:
+  app_data:
+  app_backups:
+  caddy_data:
+  caddy_config:

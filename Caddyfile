@@ -1,0 +1,5 @@
+# Configuração do Caddy: HTTPS automático (Let's Encrypt) para o domínio, com renovação
+# automática do certificado — não precisa fazer nada manual depois de configurado.
+app.cerqueiraengenharia.com.br {
+	reverse_proxy app:3001
+}
