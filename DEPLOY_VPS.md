@@ -4,9 +4,9 @@
 > serve como referência de como foi feito e para consultas futuras (ex: recriar o servidor).
 
 Domínio: **https://app.cerqueiraengenharia.com.br** (registrado no Registro.br)
-Servidor: AWS Lightsail, instância `cerqueira-engenharia`, região **us-east-1 (Virginia)**
+Servidor: AWS Lightsail, instância `cerqueira-engenharia-2gb`, região **us-east-1 (Virginia)**
 IP estático: `3.228.110.68`
-Bundle: `micro_3_0` (US$7/mês, 1 GB RAM, 2 vCPU, 40 GB SSD)
+Bundle: `small_3_0` (US$12/mês, 2 GB RAM, 2 vCPU, 60 GB SSD)
 
 > **Nota sobre a região:** o ideal seria São Paulo (sa-east-1, menor latência para o Brasil), mas
 > essa conta AWS recebeu "ServiceException" ao tentar criar instâncias lá (comum em contas novas,
@@ -14,6 +14,13 @@ Bundle: `micro_3_0` (US$7/mês, 1 GB RAM, 2 vCPU, 40 GB SSD)
 > enquanto isso — ainda assim, infinitamente mais rápido que a hibernação do plano gratuito
 > anterior (Render + Neon). Pode-se tentar recriar em São Paulo mais tarde seguindo os mesmos
 > passos, bastando trocar a região.
+
+> **Nota sobre o upgrade de memória (02/09/2026):** a instância inicial (`micro_3_0`, 1 GB RAM)
+> ficava sem memória suficiente ao rodar o build do Docker junto com os 3 containers ativos,
+> deixando o servidor momentaneamente sem responder (inclusive travando o próprio SSH) — essa
+> era a causa da "tela branca" ao navegar. Fizemos upgrade para `small_3_0` (2 GB RAM) via
+> snapshot + nova instância + realocação do IP estático, sem perda de dados. Desde então, os
+> builds completam normalmente sem instabilidade.
 
 As credenciais de acesso (chave SSH, senha do banco) estão salvas em:
 `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` (fora do repositório, por segurança).
