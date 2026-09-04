@@ -54,7 +54,7 @@ function AbaRetirada() {
   const [sucesso, setSucesso] = useState(null); // guarda a retirada criada, para permitir gerar o PDF
 
   useEffect(() => {
-    api.get('/prestadores', { params: { status: 'ativos' } }).then(res => setPessoas(res.data));
+    api.get('/epi/colaboradores').then(res => setPessoas(res.data));
     api.get('/epi/itens').then(res => setItensEstoque(res.data));
   }, []);
 

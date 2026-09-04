@@ -8,6 +8,18 @@ const router = express.Router();
 
 router.use(autenticar, permissaoModulo('epi'));
 
+// Lista de colaboradores/empreiteiros ativos, usada no seletor da aba "Retirada". Existe aqui
+// (em vez de depender de /api/prestadores) porque aquela rota exige a permissão separada do
+// módulo "prestadores" — perfis com acesso ao EPI (MESTRE, ENGENHEIRO, SUPERVISOR, APONTADOR)
+// não têm necessariamente acesso a Prestadores, o que fazia a lista de colaboradores aparecer
+// vazia na hora de registrar uma retirada, mesmo esses perfis tendo acesso normal ao módulo EPI.
+router.get('/colaboradores', async (req, res) => {
+  const colaboradores = await db.all(
+    "SELECT id, nome, tipo FROM colaboradores WHERE ativo = 1 ORDER BY nome"
+  );
+  res.json(colaboradores);
+});
+
 // ---- Estoque ----
 
 router.get('/itens', async (req, res) => {
