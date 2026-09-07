@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../api/api';
 import { exportarMedicaoExcel, exportarMedicaoPdf, exportarMedicaoDetalhadoExcel, exportarMedicaoDetalhadoPdf } from '../utils/medicaoExport';
 import { useApuracao } from '../context/ApuracaoContext';
@@ -119,30 +119,7 @@ export default function Medicao() {
           >
             {atualizandoTudo ? '🔄 Atualizando...' : '🔄 Atualizar tudo'}
           </button>
-          <button className="btn-secondary" style={{ alignSelf: 'end' }} onClick={() => exportarMedicaoExcel(linhas, mes)} disabled={linhas.length === 0}>
-            📊 Exportar Excel
-          </button>
-          <button className="btn-secondary" style={{ alignSelf: 'end' }} onClick={() => exportarMedicaoPdf(linhas, mes)} disabled={linhas.length === 0}>
-            📄 Exportar PDF
-          </button>
-          <button
-            className="btn-secondary"
-            style={{ alignSelf: 'end' }}
-            onClick={() => exportarMedicaoDetalhadoExcel(linhas, mes)}
-            disabled={linhas.length === 0}
-            title="Exporta o detalhe do valor bruto (obra/serviço/local/qtd/valor) e o detalhe do pagamento antecipado (vale, FGTS, taxa, pagto, vale extra, adiantamento)"
-          >
-            📊 Exportar com detalhe (Excel)
-          </button>
-          <button
-            className="btn-secondary"
-            style={{ alignSelf: 'end' }}
-            onClick={() => exportarMedicaoDetalhadoPdf(linhas, mes)}
-            disabled={linhas.length === 0}
-            title="Exporta o detalhe do valor bruto (obra/serviço/local/qtd/valor) e o detalhe do pagamento antecipado (vale, FGTS, taxa, pagto, vale extra, adiantamento)"
-          >
-            📄 Exportar com detalhe (PDF)
-          </button>
+          <BotaoExportar linhas={linhas} mes={mes} />
         </div>
       </div>
 
@@ -213,4 +190,66 @@ export default function Medicao() {
       </div>
     </div>
   );
+
+// Botão único "Exportar" com dropdown (Excel, Excel com detalhe, PDF, PDF com detalhe), para deixar
+// a barra de ações mais limpa em vez de 4 botões separados. Fecha ao clicar fora dele.
+function BotaoExportar({ linhas, mes }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function aoClicarFora(e) {
+      if (ref.current && !ref.current.contains(e.target)) setAberto(false);
+    }
+    document.addEventListener('mousedown', aoClicarFora);
+    return () => document.removeEventListener('mousedown', aoClicarFora);
+  }, []);
+
+  function opcaoClicada(fn) {
+    fn(linhas, mes);
+    setAberto(false);
+  }
+
+  const opcoes = [
+    { rotulo: '📊 Excel', fn: exportarMedicaoExcel },
+    { rotulo: '📊 Excel com detalhe', fn: exportarMedicaoDetalhadoExcel },
+    { rotulo: '📄 PDF', fn: exportarMedicaoPdf },
+    { rotulo: '📄 PDF com detalhe', fn: exportarMedicaoDetalhadoPdf }
+  ];
+
+  return (
+    <div ref={ref} style={{ position: 'relative', alignSelf: 'end' }}>
+      <button
+        type="button"
+        className="btn-secondary"
+        onClick={() => setAberto(a => !a)}
+        disabled={linhas.length === 0}
+      >
+        ⬇️ Exportar ▾
+      </button>
+      {aberto && (
+        <div
+          style={{
+            position: 'absolute', top: '100%', right: 0, marginTop: 4, background: '#fff',
+            border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            zIndex: 20, minWidth: 200, padding: 4
+          }}
+        >
+          {opcoes.map(op => (
+            <div
+              key={op.rotulo}
+              onClick={() => opcaoClicada(op.fn)}
+              style={{ padding: '8px 10px', fontSize: 13, cursor: 'pointer', borderRadius: 4, whiteSpace: 'nowrap' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              {op.rotulo}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 }
