@@ -280,6 +280,96 @@ router.post('/:id/reabrir', require('../utils/auth').permitir('ADM'), async (req
   res.json({ ok: true });
 });
 
+// "Atualizar tudo": varredura geral que recalcula, em TODOS os meses, os valores de serviços de
+// obra (usando a quantidade atual da tela "Quantidades" e o valor unitário/preço específico
+// atuais) e de diárias (usando o valor de diária atual do cadastro do colaborador). Corrige o
+// caso em que o valor da diária ou de um serviço foi alterado DEPOIS de já existir lançamento
+// no mês, e a Medição continuava mostrando o valor antigo. Meses com medição já PAGA são
+// preservados intactos (não são recalculados), para não alterar algo que já foi pago.
+router.post('/atualizar-tudo', async (req, res) => {
+  const mesesPagos = await db.all(
+    "SELECT DISTINCT colaborador_id, mes_ciclo FROM medicoes WHERE status = 'PAGO'"
+  );
+  const ehMesPago = (colaboradorId, mes) =>
+    mesesPagos.some(m => m.colaborador_id === colaboradorId && m.mes_ciclo === mes);
+
+  let servicosAtualizados = 0;
+  let diariasAtualizadas = 0;
+
+  await db.transaction(async (trx) => {
+    // ---- 1) Serviços de obra: recalcula célula por célula (individual e grupo) ----
+    const servicos = await trx.all('SELECT * FROM obra_servicos WHERE ativo = 1');
+    for (const servico of servicos) {
+      const celulas = await trx.all('SELECT * FROM obra_servico_celulas WHERE obra_servico_id = ?', servico.id);
+      if (celulas.length === 0) continue;
+
+      const quantidadesCadastradas = await trx.all('SELECT * FROM obra_servico_quantidades WHERE obra_servico_id = ?', servico.id);
+      const qtdPorCelula = {};
+      quantidadesCadastradas.forEach(q => { qtdPorCelula[q.celula_key] = q.quantidade; });
+
+      const precosEspecificos = await trx.all('SELECT * FROM colaborador_precos WHERE obra_servico_id = ?', servico.id);
+      const precoPorColaborador = {};
+      precosEspecificos.forEach(p => { precoPorColaborador[p.colaborador_id] = p.valor_unitario; });
+
+      const grupos = {};
+      celulas.forEach(c => {
+        const chave = `${c.celula_key}|${c.mes_ciclo}`;
+        if (!grupos[chave]) grupos[chave] = [];
+        grupos[chave].push(c);
+      });
+
+      for (const chave of Object.keys(grupos)) {
+        const linhas = grupos[chave];
+        const [celulaKey, mesCiclo] = chave.split('|');
+
+        // Pula meses já pagos: verifica se QUALQUER membro dessa marcação já teve medição paga
+        // naquele mês (preserva o valor histórico de quem já recebeu).
+        if (linhas.some(l => ehMesPago(l.colaborador_id, mesCiclo))) continue;
+
+        const qtdAtual = qtdPorCelula[celulaKey] !== undefined ? qtdPorCelula[celulaKey] : linhas[0].quantidade;
+
+        if (linhas[0].grupo_id) {
+          const valorTotal = qtdAtual * (servico.valor_unitario || 0);
+          const valorPorMembro = valorTotal / linhas.length;
+          for (const linha of linhas) {
+            await trx.run('UPDATE obra_servico_celulas SET quantidade = ?, valor = ? WHERE id = ?',
+              qtdAtual, valorPorMembro, linha.id);
+            servicosAtualizados++;
+          }
+        } else {
+          for (const linha of linhas) {
+            const valorUnitario = precoPorColaborador[linha.colaborador_id] !== undefined
+              ? precoPorColaborador[linha.colaborador_id]
+              : (servico.valor_unitario || 0);
+            const valor = qtdAtual * valorUnitario;
+            await trx.run('UPDATE obra_servico_celulas SET quantidade = ?, valor = ? WHERE id = ?',
+              qtdAtual, valor, linha.id);
+            servicosAtualizados++;
+          }
+        }
+      }
+    }
+
+    // ---- 2) Diárias: recalcula total usando o valor de diária ATUAL do cadastro da pessoa ----
+    const diarias = await trx.all('SELECT * FROM diarias WHERE quantidade > 0');
+    for (const d of diarias) {
+      if (ehMesPago(d.colaborador_id, d.mes_ciclo)) continue;
+      const pessoa = await trx.get('SELECT valor_diaria FROM colaboradores WHERE id = ?', d.colaborador_id);
+      if (!pessoa) continue;
+      const valorUnitarioAtual = pessoa.valor_diaria || 0;
+      const novoTotal = d.quantidade * valorUnitarioAtual;
+      if (novoTotal !== d.total || valorUnitarioAtual !== d.valor_unitario_usado) {
+        await trx.run('UPDATE diarias SET valor_unitario_usado = ?, total = ? WHERE id = ?',
+          valorUnitarioAtual, novoTotal, d.id);
+        diariasAtualizadas++;
+      }
+    }
+  });
+
+  await registrar(req.usuario.id, 'ATUALIZAR_TUDO_MEDICAO', 'medicoes', null, { servicosAtualizados, diariasAtualizadas });
+  res.json({ ok: true, servicosAtualizados, diariasAtualizadas });
+});
+
 // Pendências: medições aprovadas mas não pagas
 router.get('/pendencias', async (req, res) => {
   const pendentes = await db.all(`
