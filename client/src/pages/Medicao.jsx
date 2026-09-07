@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
 import { exportarMedicaoExcel, exportarMedicaoPdf } from '../utils/medicaoExport';
-
-
-function mesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+import { useApuracao } from '../context/ApuracaoContext';
 
 export default function Medicao() {
-  const [mes, setMes] = useState(mesAtual());
+  // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
+  const { mes, setMes } = useApuracao();
   const [obras, setObras] = useState([]);
   const [obrasSelecionadas, setObrasSelecionadas] = useState([]);
   const [todasObras, setTodasObras] = useState(true);

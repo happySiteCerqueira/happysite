@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
+import { ApuracaoProvider } from './context/ApuracaoContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 // Registra o Service Worker do PWA e recarrega a página automaticamente assim que uma nova versão
@@ -53,7 +54,9 @@ createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <ApuracaoProvider>
+            <App />
+          </ApuracaoProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

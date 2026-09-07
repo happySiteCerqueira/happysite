@@ -46,6 +46,7 @@ export function AuthProvider({ children }) {
   function logout() {
     localStorage.removeItem('hs_token');
     localStorage.removeItem('hs_usuario');
+    sessionStorage.removeItem('hs_mes_apuracao'); // ao sair, a Data de Apuração volta ao mês vigente no próximo login
     setUsuario(null);
     setPermissoesModulo([]);
   }

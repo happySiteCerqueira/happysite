@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
+import { useApuracao } from '../context/ApuracaoContext';
 
 const ROTULOS = {
   vale: 'Vale',
@@ -10,13 +11,9 @@ const ROTULOS = {
   adiantamento: 'Adiantamento'
 };
 
-function mesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
 export default function PagamentosAntecipados() {
-  const [mes, setMes] = useState(mesAtual());
+  // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
+  const { mes, setMes } = useApuracao();
   const [planilha, setPlanilha] = useState({ PJ: [], CPF: [], colunas: { PF: [], PJ: [] } });
   const [salvandoKey, setSalvandoKey] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState(''); // '' | 'CPF' | 'PJ'

@@ -1,13 +1,8 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import { useApuracao } from '../context/ApuracaoContext';
 import Cadastro from './Cadastro';
-
-
-function mesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
 
 // Formata uma data (Date, string ISO ou 'YYYY-MM-DD') como dd/mm/aaaa, ignorando timezone
 // (usa os componentes UTC para evitar que colunas DATE do Postgres "voltem" um dia por fuso).
@@ -85,7 +80,8 @@ function ListaPrestadores() {
   const [filtroFuncao, setFiltroFuncao] = useState('');
 
   const [selecionado, setSelecionado] = useState(null); // histórico (visualização)
-  const [mes, setMes] = useState(mesAtual());
+  // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
+  const { mes, setMes } = useApuracao();
   const [historico, setHistorico] = useState(null);
   const [carregandoHist, setCarregandoHist] = useState(false);
   const [processando, setProcessando] = useState(null);

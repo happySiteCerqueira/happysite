@@ -2,14 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import { useApuracao } from '../context/ApuracaoContext';
 import PredioDesenho from '../components/PredioDesenho';
 import ObraWizard from '../components/ObraWizard';
 import { gerarListaCelulas } from '../utils/celulasPredio';
-
-function mesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
 
 export default function ObraDetalhe() {
   const { id } = useParams();
@@ -20,7 +16,8 @@ export default function ObraDetalhe() {
   const [todasPessoas, setTodasPessoas] = useState([]);
   const [grupos, setGrupos] = useState([]);
   const [marcacoes, setMarcacoes] = useState({});
-  const [mes, setMes] = useState(mesAtual());
+  // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
+  const { mes, setMes } = useApuracao();
   const [celulaSelecionada, setCelulaSelecionada] = useState(null);
   const [quantidadeModalCelula, setQuantidadeModalCelula] = useState('');
 

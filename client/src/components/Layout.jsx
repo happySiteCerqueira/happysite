@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useApuracao } from '../context/ApuracaoContext';
+
+function rotuloMesApuracao(mes) {
+  const [ano, m] = mes.split('-');
+  const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  return `${nomes[Number(m) - 1]}/${ano}`;
+}
 
 // Mapa usado só para exibir um título amigável na barra superior mobile
 const TITULOS_ROTA = [
@@ -24,8 +31,10 @@ function tituloDaRota(pathname) {
 
 export default function Layout() {
   const { usuario, logout, temPermissao } = useAuth();
+  const { mes, setMes, mesVigente } = useApuracao();
   const location = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
+  const [editandoMes, setEditandoMes] = useState(false);
 
   // Fecha o menu automaticamente ao navegar para outra tela (clique num link do menu mobile)
   useEffect(() => {
@@ -89,6 +98,43 @@ export default function Layout() {
         </div>
       </aside>
       <main className="layout-conteudo">
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            background: mes !== mesVigente ? '#fef3c7' : '#f1f5f9',
+            border: `1px solid ${mes !== mesVigente ? '#f59e0b' : '#e2e8f0'}`,
+            borderRadius: 8, padding: '8px 14px', marginBottom: 16
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>📅 Data de Apuração:</span>
+          {editandoMes ? (
+            <input
+              type="month"
+              autoFocus
+              value={mes}
+              onChange={e => { if (e.target.value) setMes(e.target.value); }}
+              onBlur={() => setEditandoMes(false)}
+              style={{ fontSize: 13 }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => setEditandoMes(true)}
+              title="Clique para alterar o mês de apuração usado em Medição, Diárias, Pagamentos Antecipados, Prestadores e Obras"
+            >
+              {rotuloMesApuracao(mes)} ✏️
+            </button>
+          )}
+          {mes !== mesVigente && (
+            <button type="button" className="btn-secondary btn-sm" onClick={() => setMes(mesVigente)}>
+              ↺ Voltar para o mês vigente ({rotuloMesApuracao(mesVigente)})
+            </button>
+          )}
+          <span style={{ fontSize: 11, color: '#6b7280' }}>
+            Vale para Medição, Diárias, Pagamentos Antecipados, Prestadores e Obras. Reinicia para o mês vigente ao sair/entrar novamente no sistema.
+          </span>
+        </div>
         <Outlet />
       </main>
     </div>

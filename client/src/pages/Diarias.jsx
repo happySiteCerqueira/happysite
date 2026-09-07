@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
-
-function mesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+import { useApuracao } from '../context/ApuracaoContext';
 
 export default function Diarias() {
-  const [mes, setMes] = useState(mesAtual());
+  // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
+  const { mes, setMes } = useApuracao();
   const [itens, setItens] = useState([]);
   const [salvandoId, setSalvandoId] = useState(null);
   const [busca, setBusca] = useState('');
