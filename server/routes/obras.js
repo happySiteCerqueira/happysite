@@ -561,6 +561,70 @@ router.get('/servicos/:servicoId/celulas', async (req, res) => {
   res.json(await db.all(sql, ...params));
 });
 
+// Recalcula o valor de TODAS as marcações já lançadas neste serviço (todos os meses), usando
+// sempre os dados MAIS ATUAIS: a quantidade cadastrada agora na tela "Quantidades" para cada
+// célula (não a quantidade que ficou gravada na hora da marcação original) e o valor unitário
+// atual do serviço (considerando preço específico do colaborador, se houver). Corrige o caso em
+// que a quantidade foi alterada DEPOIS de já ter marcações lançadas com o valor antigo.
+router.post('/servicos/:servicoId/recalcular-valores', permitir('ENGENHEIRO', 'MESTRE', 'ADM', 'RH'), async (req, res) => {
+  const servico = await db.get('SELECT * FROM obra_servicos WHERE id = ?', req.params.servicoId);
+  if (!servico) return res.status(404).json({ erro: 'Serviço não encontrado' });
+
+  const celulas = await db.all('SELECT * FROM obra_servico_celulas WHERE obra_servico_id = ?', req.params.servicoId);
+  const quantidadesCadastradas = await db.all('SELECT * FROM obra_servico_quantidades WHERE obra_servico_id = ?', req.params.servicoId);
+  const qtdPorCelula = {};
+  quantidadesCadastradas.forEach(q => { qtdPorCelula[q.celula_key] = q.quantidade; });
+
+  const precosEspecificos = await db.all('SELECT * FROM colaborador_precos WHERE obra_servico_id = ?', req.params.servicoId);
+  const precoPorColaborador = {};
+  precosEspecificos.forEach(p => { precoPorColaborador[p.colaborador_id] = p.valor_unitario; });
+
+  // Agrupa por (celula_key, mes_ciclo) para tratar corretamente marcações em grupo, que gravam
+  // uma linha por membro mas precisam manter o valor TOTAL dividido igualmente entre eles.
+  const grupos = {};
+  celulas.forEach(c => {
+    const chave = `${c.celula_key}|${c.mes_ciclo}`;
+    if (!grupos[chave]) grupos[chave] = [];
+    grupos[chave].push(c);
+  });
+
+  let atualizadas = 0;
+  await db.transaction(async (trx) => {
+    for (const chave of Object.keys(grupos)) {
+      const linhas = grupos[chave];
+      const [celulaKey] = chave.split('|');
+      // Quantidade atual cadastrada para esta célula; se nunca foi definida, mantém a que já
+      // estava gravada na própria marcação (fallback, evita zerar por engano).
+      const qtdAtual = qtdPorCelula[celulaKey] !== undefined ? qtdPorCelula[celulaKey] : linhas[0].quantidade;
+
+      if (linhas[0].grupo_id) {
+        // Marcação em grupo: valor total dividido igualmente entre os membros atuais da linha.
+        const valorTotal = qtdAtual * (servico.valor_unitario || 0);
+        const valorPorMembro = valorTotal / linhas.length;
+        for (const linha of linhas) {
+          await trx.run('UPDATE obra_servico_celulas SET quantidade = ?, valor = ? WHERE id = ?',
+            qtdAtual, valorPorMembro, linha.id);
+          atualizadas++;
+        }
+      } else {
+        // Marcação individual: respeita preço específico do colaborador, se houver.
+        for (const linha of linhas) {
+          const valorUnitario = precoPorColaborador[linha.colaborador_id] !== undefined
+            ? precoPorColaborador[linha.colaborador_id]
+            : (servico.valor_unitario || 0);
+          const valor = qtdAtual * valorUnitario;
+          await trx.run('UPDATE obra_servico_celulas SET quantidade = ?, valor = ? WHERE id = ?',
+            qtdAtual, valor, linha.id);
+          atualizadas++;
+        }
+      }
+    }
+  });
+
+  await registrar(req.usuario.id, 'RECALCULAR_VALORES', 'obra_servicos', req.params.servicoId, { atualizadas });
+  res.json({ ok: true, atualizadas });
+});
+
 router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'ADM', 'RH'), async (req, res) => {
   const { celula_key, colaborador_id, grupo_id, mes_ciclo, quantidade } = req.body;
   if (!celula_key || !mes_ciclo) return res.status(400).json({ erro: 'celula_key e mes_ciclo são obrigatórios' });
