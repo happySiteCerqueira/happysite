@@ -141,6 +141,8 @@ export default function ObraDetalhe() {
   const servicoAtivo = obra?.servicos?.find(s => s.id === servicoAtivoId);
   const pessoasPorId = {};
   todasPessoas.forEach(p => { pessoasPorId[p.id] = p; });
+  const gruposPorId = {};
+  grupos.forEach(g => { gruposPorId[g.id] = g; });
 
   function abrirSelecaoPessoa(celulaKey) {
     if (!temPermissao('ENGENHEIRO', 'MESTRE', 'RH')) return;
@@ -722,6 +724,7 @@ export default function ObraDetalhe() {
               modoMedicao={servicoAtivo.modo_medicao}
               marcacoes={marcacoes}
               pessoasPorId={pessoasPorId}
+              gruposPorId={gruposPorId}
               onClickCelula={abrirSelecaoPessoa}
               rotulosAptos={rotulosAptos}
               quantidadesMapa={quantidadesMapa}

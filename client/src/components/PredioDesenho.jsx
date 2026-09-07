@@ -27,7 +27,7 @@ function nomePavimento(numAndar) {
   return `${numAndar}º Andar`;
 }
 
-export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCelula, pessoasPorId, escala, rotulosAptos, quantidadesMapa }) {
+export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCelula, pessoasPorId, gruposPorId, escala, rotulosAptos, quantidadesMapa }) {
 
   if (!obra) return null;
   const blocos = obra.blocos_pavimentos || [];
@@ -98,10 +98,18 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
     return !(qtd > 0);
   }
 
+  // Quando a célula foi marcada por um GRUPO, usa a cor do próprio grupo (mesma cor mostrada no
+  // badge "Liberados para executar"), em vez da cor individual do primeiro membro daquela
+  // marcação — assim o desenho segue o mesmo padrão de cores usado em toda a tela, facilitando
+  // a visualização de quem (pessoa ou grupo) executou cada célula.
   function corCelula(key) {
     if (semQuantidade(key)) return '#9ca3af';
     const marc = marcacoes?.[key];
     if (!marc) return '#e5e7eb';
+    if (marc.grupo_id) {
+      const grupo = gruposPorId?.[marc.grupo_id];
+      return grupo?.cor || '#7c3aed';
+    }
     const pessoa = pessoasPorId?.[marc.colaborador_id];
     return pessoa?.cor || '#9ca3af';
   }
