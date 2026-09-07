@@ -128,12 +128,27 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
     return pessoa?.cor || '#9ca3af';
   }
 
+  // Resolve o nome de quem executou uma marcação (pessoa individual, ou grupo + seus membros),
+  // usado no tooltip das células históricas (já executadas em um mês anterior).
+  function nomeExecutor(marc) {
+    if (!marc) return '';
+    if (marc.grupo_id) {
+      const grupo = gruposPorId?.[marc.grupo_id];
+      const nomesMembros = (marc.membrosGrupo || [])
+        .map(id => pessoasPorId?.[id]?.nome)
+        .filter(Boolean);
+      const sufixo = nomesMembros.length > 0 ? ` (${nomesMembros.join(', ')})` : '';
+      return `${grupo?.nome_grupo || 'Grupo'}${sufixo}`;
+    }
+    return pessoasPorId?.[marc.colaborador_id]?.nome || 'Desconhecido';
+  }
+
   function renderCelula(key, largura = LARGURA_CEL, extra = {}, texto = '') {
     const cor = corCelula(key);
     const marc = marcacoes?.[key];
     const bloqueada = !!marc?.historica;
     const titulo = bloqueada
-      ? `${key} — já executado em ${rotuloMesAno(marc.mes_ciclo)}`
+      ? `${key} — já executado em ${rotuloMesAno(marc.mes_ciclo)} por ${nomeExecutor(marc)}`
       : key;
     return (
       <div
