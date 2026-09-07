@@ -200,6 +200,7 @@ async function migrate() {
       -- outra). Quando vinculado, todas as linhas (incluindo a original) apontam para o MESMO
       -- valor — usado para propagar automaticamente adição/remoção de membros entre elas.
       grupo_vinculo_id INTEGER,
+      cor TEXT NOT NULL DEFAULT '#7c3aed',
       criado_em TIMESTAMP DEFAULT NOW()
     );
 
@@ -482,6 +483,12 @@ async function migrate() {
   // adição/remoção de membros entre "cópias" do mesmo grupo em diferentes obras — botão "Add Obras").
   if (!(await colunaExiste('obra_servico_grupos', 'grupo_vinculo_id'))) {
     await pool.query('ALTER TABLE obra_servico_grupos ADD COLUMN grupo_vinculo_id INTEGER');
+  }
+
+  // Migração idempotente: coluna "cor" em obra_servico_grupos (identificação visual do grupo,
+  // usada no desenho do prédio e na lista de "Liberados para executar").
+  if (!(await colunaExiste('obra_servico_grupos', 'cor'))) {
+    await pool.query("ALTER TABLE obra_servico_grupos ADD COLUMN cor TEXT NOT NULL DEFAULT '#7c3aed'");
   }
 
   // Migração idempotente: perfis novos (SUPERVISOR, APONTADOR) no CHECK de usuarios.perfil

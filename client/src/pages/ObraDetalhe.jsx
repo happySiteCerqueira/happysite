@@ -313,6 +313,11 @@ export default function ObraDetalhe() {
     carregarGrupos();
   }
 
+  async function alterarCorGrupo(grupoId, cor) {
+    await api.put(`/obras/grupos/${grupoId}/cor`, { cor });
+    carregarGrupos();
+  }
+
   // ---- "Add Obras": disponibiliza um grupo em outras obras (mesmo serviço, mesmo nome) ----
   async function abrirAddObras(grupoId) {
     const { data } = await api.get(`/obras/grupos/${grupoId}/obras-vinculadas`);
@@ -703,10 +708,15 @@ export default function ObraDetalhe() {
 
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
             <span style={{ fontSize: 12, color: '#6b7280', alignSelf: 'center' }}>Liberados para executar:</span>
+            {servicoAtivo.modo_execucao === 'grupo' && grupos.map(g => (
+              <span key={`grupo-${g.id}`} className="badge" style={{ background: g.cor || '#7c3aed' }}>
+                👥 {g.nome_grupo}
+              </span>
+            ))}
             {pessoasLiberadas.map(p => (
               <span key={p.id} className="badge" style={{ background: p.cor }}>{p.nome}</span>
             ))}
-            {pessoasLiberadas.length === 0 && <span style={{ fontSize: 12, color: '#9ca3af' }}>Nenhum vinculado ainda</span>}
+            {pessoasLiberadas.length === 0 && grupos.length === 0 && <span style={{ fontSize: 12, color: '#9ca3af' }}>Nenhum vinculado ainda</span>}
           </div>
 
           <div style={{ overflowX: 'auto', paddingBottom: 10 }}>
@@ -745,7 +755,7 @@ export default function ObraDetalhe() {
               {servicoAtivo?.modo_execucao === 'grupo' ? (
                 <>
                   {grupos.map(g => (
-                    <button key={g.id} className="btn-secondary" onClick={() => marcarGrupo(g.id)}>
+                    <button key={g.id} className="btn-secondary" style={{ borderLeft: `6px solid ${g.cor || '#7c3aed'}` }} onClick={() => marcarGrupo(g.id)}>
                       👥 {g.nome_grupo} ({g.membros.length} pessoa{g.membros.length !== 1 ? 's' : ''})
                     </button>
                   ))}
@@ -900,6 +910,13 @@ export default function ObraDetalhe() {
                 {grupos.map(g => (
                   <div key={g.id} className="card" style={{ marginBottom: 8, padding: 10 }}>
                     <div className="flex gap-2" style={{ alignItems: 'center', marginBottom: 6 }}>
+                      <input
+                        type="color"
+                        value={g.cor || '#7c3aed'}
+                        onChange={e => alterarCorGrupo(g.id, e.target.value)}
+                        title="Alterar cor do grupo"
+                        style={{ width: 28, height: 28, padding: 0, border: '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer' }}
+                      />
                       <strong style={{ flex: 1 }}>
                         👥 {g.nome_grupo}
                         {g.grupo_vinculo_id && <span title="Este grupo está vinculado a outras obras" style={{ marginLeft: 6 }}>🔗</span>}

@@ -286,6 +286,21 @@ router.delete('/grupos/:grupoId', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'),
   res.json({ ok: true });
 });
 
+// Atualiza a cor do grupo, propagando para todas as "cópias" vinculadas em outras obras
+// (mesma lógica de sincronização usada para membros — ver idsGruposVinculados logo abaixo).
+router.put('/grupos/:grupoId/cor', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'), async (req, res) => {
+  const { cor } = req.body;
+  if (!cor || !/^#[0-9a-fA-F]{6}$/.test(cor)) return res.status(400).json({ erro: 'Cor inválida (use o formato #RRGGBB)' });
+
+  const idsAlvo = await idsGruposVinculados(req.params.grupoId);
+  if (idsAlvo.length === 0) return res.status(404).json({ erro: 'Grupo não encontrado' });
+  for (const id of idsAlvo) {
+    await db.run('UPDATE obra_servico_grupos SET cor = ? WHERE id = ?', cor, id);
+  }
+  await registrar(req.usuario.id, 'ALTERAR_COR_GRUPO', 'obra_servico_grupos', req.params.grupoId, { cor, propagado_para: idsAlvo });
+  res.json({ ok: true });
+});
+
 // Retorna os ids de todos os grupos "irmãos" (mesmo vínculo) de um grupo, incluindo ele mesmo.
 // Se o grupo não estiver vinculado a nenhum outro (grupo_vinculo_id null), retorna só ele mesmo.
 async function idsGruposVinculados(grupoId) {
@@ -383,8 +398,8 @@ router.put('/grupos/:grupoId/obras-vinculadas', permitir('RH', 'ADM', 'ENGENHEIR
       if (!servicoDestino) continue;
 
       const novoGrupo = await trx.run(
-        'INSERT INTO obra_servico_grupos (obra_servico_id, nome_grupo, grupo_vinculo_id) VALUES (?,?,?)',
-        obraServicoId, grupo.nome_grupo, vinculoId
+        'INSERT INTO obra_servico_grupos (obra_servico_id, nome_grupo, grupo_vinculo_id, cor) VALUES (?,?,?,?)',
+        obraServicoId, grupo.nome_grupo, vinculoId, grupo.cor
       );
       for (const m of membrosAtuais) {
         await trx.run('INSERT INTO obra_servico_grupo_membros (grupo_id, colaborador_id) VALUES (?,?)',
