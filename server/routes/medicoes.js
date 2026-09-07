@@ -189,6 +189,18 @@ router.get('/gerar', async (req, res) => {
       return numeroAndarDoRotulo(a.celula_label) - numeroAndarDoRotulo(b.celula_label);
     });
 
+    // Detalhamento do pagamento antecipado (usado na exportação "com detalhe"), abrindo cada
+    // componente individual do desconto (Vale, FGTS, Taxa, Pagto, Vale Extra, Adiantamento),
+    // em vez de mostrar apenas o total já somado.
+    const detalhePagamento = l ? {
+      vale: l.vale || 0,
+      fgts: l.fgts || 0,
+      taxa: l.taxa || 0,
+      pagto: l.pagto || 0,
+      vale_extra: l.vale_extra || 0,
+      adiantamento: l.adiantamento || 0
+    } : null;
+
     return {
       ...p,
       itens,
@@ -196,6 +208,7 @@ router.get('/gerar', async (req, res) => {
       valor_diarias: totalDiarias,
       valor_bruto: valorBrutoTotal,
       valor_vale: valorVale,
+      detalhe_pagamento: detalhePagamento,
       saldo_vale_disponivel: totalAntecipado,
       valor_liquido: valorLiquido,
       medicao_id: medicao ? medicao.id : null,

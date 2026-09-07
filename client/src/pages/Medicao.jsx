@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
-import { exportarMedicaoExcel, exportarMedicaoPdf } from '../utils/medicaoExport';
+import { exportarMedicaoExcel, exportarMedicaoPdf, exportarMedicaoDetalhadoExcel, exportarMedicaoDetalhadoPdf } from '../utils/medicaoExport';
 import { useApuracao } from '../context/ApuracaoContext';
+
+// Formata valores no padrão brasileiro: "." como separador de milhar/milhão e "," para os centavos
+// (ex: 1234567.8 -> "1.234.567,80"), usado em toda a tela de Medição.
+function formatarValorBR(valor) {
+  return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export default function Medicao() {
   // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
@@ -44,7 +50,7 @@ export default function Medicao() {
 
   async function pagar(item) {
     if (!item.medicao_id) return alert('Confirme a medição antes de marcar como pago.');
-    if (!confirm(`Confirmar pagamento de R$ ${item.valor_liquido.toFixed(2)} para ${item.nome}?`)) return;
+    if (!confirm(`Confirmar pagamento de R$ ${formatarValorBR(item.valor_liquido)} para ${item.nome}?`)) return;
     // Comprovante é opcional aqui; pode ser anexado depois pelo botão "📎 Anexar comprovante".
     await api.post(`/medicoes/${item.medicao_id}/pagar`, {});
     gerar();
@@ -119,6 +125,24 @@ export default function Medicao() {
           <button className="btn-secondary" style={{ alignSelf: 'end' }} onClick={() => exportarMedicaoPdf(linhas, mes)} disabled={linhas.length === 0}>
             📄 Exportar PDF
           </button>
+          <button
+            className="btn-secondary"
+            style={{ alignSelf: 'end' }}
+            onClick={() => exportarMedicaoDetalhadoExcel(linhas, mes)}
+            disabled={linhas.length === 0}
+            title="Exporta o detalhe do valor bruto (obra/serviço/local/qtd/valor) e o detalhe do pagamento antecipado (vale, FGTS, taxa, pagto, vale extra, adiantamento)"
+          >
+            📊 Exportar com detalhe (Excel)
+          </button>
+          <button
+            className="btn-secondary"
+            style={{ alignSelf: 'end' }}
+            onClick={() => exportarMedicaoDetalhadoPdf(linhas, mes)}
+            disabled={linhas.length === 0}
+            title="Exporta o detalhe do valor bruto (obra/serviço/local/qtd/valor) e o detalhe do pagamento antecipado (vale, FGTS, taxa, pagto, vale extra, adiantamento)"
+          >
+            📄 Exportar com detalhe (PDF)
+          </button>
         </div>
       </div>
 
@@ -143,9 +167,9 @@ export default function Medicao() {
                     </button>
                   </td>
                   <td>{item.tipo}</td>
-                  <td>R$ {item.valor_bruto.toFixed(2)}</td>
-                  <td>R$ {item.valor_vale.toFixed(2)}</td>
-                  <td><strong>R$ {item.valor_liquido.toFixed(2)}</strong></td>
+                  <td>R$ {formatarValorBR(item.valor_bruto)}</td>
+                  <td>R$ {formatarValorBR(item.valor_vale)}</td>
+                  <td><strong>R$ {formatarValorBR(item.valor_liquido)}</strong></td>
                   <td><span className={`badge badge-${item.status.toLowerCase()}`}>{item.status}</span></td>
                   <td>
                     <div className="flex-col gap-2">
@@ -174,7 +198,7 @@ export default function Medicao() {
                         <thead><tr><th>Obra</th><th>Serviço</th><th>Local</th><th>Qtd</th><th>Valor</th></tr></thead>
                         <tbody>
                           {item.itens.map((it, i) => (
-                            <tr key={i}><td>{it.obra}</td><td>{it.servico}</td><td>{it.celula_label || it.celula}</td><td>{it.quantidade}</td><td>R$ {it.valor.toFixed(2)}</td></tr>
+                            <tr key={i}><td>{it.obra}</td><td>{it.servico}</td><td>{it.celula_label || it.celula}</td><td>{it.quantidade}</td><td>R$ {formatarValorBR(it.valor)}</td></tr>
                           ))}
                         </tbody>
                       </table>
