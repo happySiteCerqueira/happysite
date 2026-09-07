@@ -27,7 +27,7 @@ function nomePavimento(numAndar) {
   return `${numAndar}º Andar`;
 }
 
-export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCelula, pessoasPorId, gruposPorId, escala, rotulosAptos, quantidadesMapa }) {
+export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCelula, onClickCelulaHistorica, pessoasPorId, gruposPorId, escala, rotulosAptos, quantidadesMapa }) {
 
   if (!obra) return null;
   const blocos = obra.blocos_pavimentos || [];
@@ -146,25 +146,29 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
   function renderCelula(key, largura = LARGURA_CEL, extra = {}, texto = '') {
     const cor = corCelula(key);
     const marc = marcacoes?.[key];
-    const bloqueada = !!marc?.historica;
-    const titulo = bloqueada
-      ? `${key} — já executado em ${rotuloMesAno(marc.mes_ciclo)} por ${nomeExecutor(marc)}`
+    const historica = !!marc?.historica;
+    const titulo = historica
+      ? `${key} — já executado em ${rotuloMesAno(marc.mes_ciclo)} por ${nomeExecutor(marc)} (clique para ver detalhes)`
       : key;
     return (
       <div
         key={key}
-        onClick={() => { if (!bloqueada && onClickCelula) onClickCelula(key); }}
+        onClick={() => {
+          if (historica && onClickCelulaHistorica) { onClickCelulaHistorica(key, marc); return; }
+          if (!historica && onClickCelula) onClickCelula(key);
+        }}
         title={titulo}
         style={{
           width: largura, height: ALTURA_CEL, background: cor,
-          border: '1px solid #9ca3af', borderRadius: 4, cursor: (onClickCelula && !bloqueada) ? 'pointer' : 'default',
+          border: '1px solid #9ca3af', borderRadius: 4,
+          cursor: (historica ? !!onClickCelulaHistorica : !!onClickCelula) ? 'pointer' : 'default',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           fontSize: 10, fontWeight: 600, color: '#374151',
           flexShrink: 0, ...extra
         }}
       >
         {texto}
-        {bloqueada && <span style={{ fontSize: 8, fontWeight: 700, color: '#166534' }}>{rotuloMesAno(marc.mes_ciclo)}</span>}
+        {historica && <span style={{ fontSize: 8, fontWeight: 700, color: '#166534' }}>{rotuloMesAno(marc.mes_ciclo)}</span>}
       </div>
     );
   }

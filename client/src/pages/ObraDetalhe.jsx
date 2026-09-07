@@ -20,6 +20,9 @@ export default function ObraDetalhe() {
   const { mes, setMes } = useApuracao();
   const [celulaSelecionada, setCelulaSelecionada] = useState(null);
   const [quantidadeModalCelula, setQuantidadeModalCelula] = useState('');
+  // Modal somente leitura: mostra quem executou uma célula já marcada em um mês anterior
+  // (histórica), sem permitir editar/remarcar.
+  const [celulaHistoricaSelecionada, setCelulaHistoricaSelecionada] = useState(null);
 
   const [mostrarConfigServico, setMostrarConfigServico] = useState(false);
   const [recalculando, setRecalculando] = useState(false);
@@ -176,6 +179,19 @@ export default function ObraDetalhe() {
     setCelulaSelecionada(celulaKey);
     const qtdAtual = quantidadesMapa[celulaKey];
     setQuantidadeModalCelula(qtdAtual != null ? String(qtdAtual) : '');
+  }
+
+  // Abre o modal somente leitura mostrando quem executou uma célula já marcada em um mês
+  // anterior (histórica) — não permite editar/remarcar, apenas consultar.
+  function abrirCelulaHistorica(celulaKey, marc) {
+    setCelulaHistoricaSelecionada({ celulaKey, marc });
+  }
+
+  function rotuloMesAno(mesCiclo) {
+    if (!mesCiclo) return '';
+    const [ano, m] = mesCiclo.split('-');
+    const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    return `${nomes[Number(m) - 1]}/${ano}`;
   }
 
 
@@ -753,6 +769,7 @@ export default function ObraDetalhe() {
               pessoasPorId={pessoasPorId}
               gruposPorId={gruposPorId}
               onClickCelula={abrirSelecaoPessoa}
+              onClickCelulaHistorica={abrirCelulaHistorica}
               rotulosAptos={rotulosAptos}
               quantidadesMapa={quantidadesMapa}
             />
@@ -817,6 +834,55 @@ export default function ObraDetalhe() {
         </div>
       )}
 
+
+      {celulaHistoricaSelecionada && (() => {
+        const { celulaKey, marc } = celulaHistoricaSelecionada;
+        const ehGrupo = !!marc.grupo_id;
+        const grupo = ehGrupo ? gruposPorId[marc.grupo_id] : null;
+        const nomesMembros = ehGrupo
+          ? (marc.membrosGrupo || []).map(idMembro => pessoasPorId[idMembro]?.nome).filter(Boolean)
+          : [];
+        const nomePessoa = !ehGrupo ? pessoasPorId[marc.colaborador_id]?.nome : null;
+        return (
+          <div className="modal-overlay" onClick={() => setCelulaHistoricaSelecionada(null)}>
+            <div className="modal-content" style={{ width: 340 }} onClick={e => e.stopPropagation()}>
+              <h4>{rotulosAptos[celulaKey] || celulaKey}</h4>
+              <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6 }}>
+                Já executado em <strong>{rotuloMesAno(marc.mes_ciclo)}</strong>. Este item não pode ser remarcado.
+              </p>
+
+              <div className="card" style={{ marginTop: 8, marginBottom: 8 }}>
+                {ehGrupo ? (
+                  <>
+                    <div className="flex gap-2" style={{ alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ width: 14, height: 14, borderRadius: 4, background: grupo?.cor || '#7c3aed', display: 'inline-block' }} />
+                      <strong>👥 {grupo?.nome_grupo || 'Grupo'}</strong>
+                    </div>
+                    {nomesMembros.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                        {nomesMembros.map((nome, i) => <li key={i}>{nome}</li>)}
+                      </ul>
+                    ) : (
+                      <span style={{ fontSize: 12, color: '#9ca3af' }}>Membros não identificados.</span>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex gap-2" style={{ alignItems: 'center' }}>
+                    <span style={{ width: 14, height: 14, borderRadius: 4, background: pessoasPorId[marc.colaborador_id]?.cor || '#9ca3af', display: 'inline-block' }} />
+                    <strong>{nomePessoa || 'Colaborador não identificado'}</strong>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ fontSize: 13, marginBottom: 12 }}>
+                Quantidade: <strong>{marc.quantidade}</strong> • Valor: <strong>R$ {Number(marc.valor || 0).toFixed(2)}</strong>
+              </div>
+
+              <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setCelulaHistoricaSelecionada(null)}>Fechar</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {mostrarAlterarNome && celulaSelecionada && (
         <div className="modal-overlay" onClick={() => setMostrarAlterarNome(false)}>
