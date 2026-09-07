@@ -126,14 +126,41 @@ export default function ObraDetalhe() {
 
   function carregarCelulas() {
     if (!servicoAtivoId) return;
-    api.get(`/obras/servicos/${servicoAtivoId}/celulas`, { params: { mes } }).then(res => {
-      const map = {};
+    // Busca as marcações de TODOS os meses deste serviço (sem filtrar por "mes"), para que uma
+    // célula já executada em um mês anterior não "suma" (fique cinza, como se nunca tivesse sido
+    // marcada) ao trocar a Data de Apuração para o mês seguinte. Se a célula tiver marcação no mês
+    // atualmente selecionado, ela continua com o comportamento normal (clicável, cor da pessoa/
+    // grupo). Se só tiver marcação em outro mês, é exibida em verde clarinho e fica bloqueada
+    // (não é possível marcar de novo), mostrando o mês/ano em que foi executada.
+    api.get(`/obras/servicos/${servicoAtivoId}/celulas`).then(res => {
+      const porCelula = {};
       res.data.forEach(c => {
-        // Se já houver uma marcação nessa célula (modo grupo grava várias linhas), guarda a primeira
-        // e acumula os membros do grupo para exibir no tooltip/cor.
-        if (!map[c.celula_key]) map[c.celula_key] = { ...c, membrosGrupo: [] };
-        if (c.grupo_id) map[c.celula_key].membrosGrupo.push(c.colaborador_id);
+        if (!porCelula[c.celula_key]) porCelula[c.celula_key] = [];
+        porCelula[c.celula_key].push(c);
       });
+
+      const map = {};
+      Object.keys(porCelula).forEach(key => {
+        const linhas = porCelula[key];
+        const linhasDoMesAtual = linhas.filter(l => l.mes_ciclo === mes);
+
+        if (linhasDoMesAtual.length > 0) {
+          const base = linhasDoMesAtual[0];
+          map[key] = { ...base, membrosGrupo: [] };
+          linhasDoMesAtual.forEach(l => { if (l.grupo_id) map[key].membrosGrupo.push(l.colaborador_id); });
+          return;
+        }
+
+        // Sem marcação no mês atual: usa a marcação já feita em outro mês (a mais recente entre
+        // elas), exibida como histórica/bloqueada.
+        const mesesOrdenados = [...new Set(linhas.map(l => l.mes_ciclo))].sort().reverse();
+        const mesMaisRecente = mesesOrdenados[0];
+        const linhasDoMesHistorico = linhas.filter(l => l.mes_ciclo === mesMaisRecente);
+        const base = linhasDoMesHistorico[0];
+        map[key] = { ...base, membrosGrupo: [], historica: true };
+        linhasDoMesHistorico.forEach(l => { if (l.grupo_id) map[key].membrosGrupo.push(l.colaborador_id); });
+      });
+
       setMarcacoes(map);
     });
   }

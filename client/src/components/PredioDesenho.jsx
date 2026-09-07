@@ -98,13 +98,27 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
     return !(qtd > 0);
   }
 
+  // Formata "YYYY-MM" para um rótulo curto e legível, ex: "2026-08" -> "Ago/2026".
+  function rotuloMesAno(mesCiclo) {
+    if (!mesCiclo) return '';
+    const [ano, m] = mesCiclo.split('-');
+    const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    return `${nomes[Number(m) - 1]}/${ano}`;
+  }
+
+  const VERDE_HISTORICO = '#dcfce7'; // verde bem clarinho para marcações já executadas em mês anterior
+
   // Quando a célula foi marcada por um GRUPO, usa a cor do próprio grupo (mesma cor mostrada no
   // badge "Liberados para executar"), em vez da cor individual do primeiro membro daquela
   // marcação — assim o desenho segue o mesmo padrão de cores usado em toda a tela, facilitando
   // a visualização de quem (pessoa ou grupo) executou cada célula.
+  // Marcações "históricas" (executadas em um mês diferente do selecionado na Data de Apuração)
+  // sempre aparecem em verde clarinho, independente de quem executou, para não sumir do desenho
+  // ao trocar de mês e para deixar claro que aquele item já foi concluído anteriormente.
   function corCelula(key) {
-    if (semQuantidade(key)) return '#9ca3af';
     const marc = marcacoes?.[key];
+    if (marc?.historica) return VERDE_HISTORICO;
+    if (semQuantidade(key)) return '#9ca3af';
     if (!marc) return '#e5e7eb';
     if (marc.grupo_id) {
       const grupo = gruposPorId?.[marc.grupo_id];
@@ -116,19 +130,26 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
 
   function renderCelula(key, largura = LARGURA_CEL, extra = {}, texto = '') {
     const cor = corCelula(key);
+    const marc = marcacoes?.[key];
+    const bloqueada = !!marc?.historica;
+    const titulo = bloqueada
+      ? `${key} — já executado em ${rotuloMesAno(marc.mes_ciclo)}`
+      : key;
     return (
       <div
         key={key}
-        onClick={() => onClickCelula && onClickCelula(key)}
-        title={key}
+        onClick={() => { if (!bloqueada && onClickCelula) onClickCelula(key); }}
+        title={titulo}
         style={{
           width: largura, height: ALTURA_CEL, background: cor,
-          border: '1px solid #9ca3af', borderRadius: 4, cursor: onClickCelula ? 'pointer' : 'default',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600, color: '#374151',
+          border: '1px solid #9ca3af', borderRadius: 4, cursor: (onClickCelula && !bloqueada) ? 'pointer' : 'default',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          fontSize: 10, fontWeight: 600, color: '#374151',
           flexShrink: 0, ...extra
         }}
       >
         {texto}
+        {bloqueada && <span style={{ fontSize: 8, fontWeight: 700, color: '#166534' }}>{rotuloMesAno(marc.mes_ciclo)}</span>}
       </div>
     );
   }
