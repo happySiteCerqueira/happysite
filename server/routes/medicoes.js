@@ -8,6 +8,19 @@ const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar } = require('../utils/auditoria');
 const { rotuloCelula } = require('../utils/celulasLabel');
 
+// Extrai o número do andar a partir do rótulo já formatado (ex: "3º Andar - Apto 302" -> 3).
+// Itens sem andar (Térreo, Fundação, Diárias, etc.) recebem um número bem alto para ficarem
+// depois dos andares numerados na ordenação, mas ainda organizados de forma previsível entre si.
+function numeroAndarDoRotulo(rotulo) {
+  if (!rotulo) return 9999;
+  const m = /^(\d+)º\s*Andar/.exec(rotulo);
+  if (m) return Number(m[1]);
+  if (/^Térreo/i.test(rotulo)) return -1; // térreo antes dos andares numerados
+  if (/^Fundação/i.test(rotulo)) return -2;
+  if (/^Transição/i.test(rotulo)) return -1.5;
+  return 9999;
+}
+
 
 const router = express.Router();
 
@@ -168,6 +181,14 @@ router.get('/gerar', async (req, res) => {
       });
     }
 
+    // Ordena os itens internamente: por Serviço (alfabético) e, dentro do mesmo serviço, pelo
+    // andar em ordem crescente (numérico, não como texto — evita "10º Andar" vir antes de "2º Andar").
+    itens.sort((a, b) => {
+      const porServico = (a.servico || '').localeCompare(b.servico || '', 'pt-BR', { sensitivity: 'base' });
+      if (porServico !== 0) return porServico;
+      return numeroAndarDoRotulo(a.celula_label) - numeroAndarDoRotulo(b.celula_label);
+    });
+
     return {
       ...p,
       itens,
@@ -185,6 +206,14 @@ router.get('/gerar', async (req, res) => {
 
 
 
+
+  // Ordem alfabética por nome do colaborador, mantendo os agrupados por tipo (CPF/PJ) como já
+  // era feito na consulta original — colaboradores primeiro em ordem alfabética, depois empreiteiros.
+  resultado.sort((a, b) => {
+    const porTipo = (a.tipo || '').localeCompare(b.tipo || '');
+    if (porTipo !== 0) return porTipo;
+    return (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' });
+  });
 
   res.json(resultado);
 });
