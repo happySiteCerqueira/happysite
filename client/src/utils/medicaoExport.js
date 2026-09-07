@@ -143,14 +143,17 @@ export function exportarMedicaoDetalhadoExcel(linhas, mes) {
 }
 
 // ---- Exportação DETALHADA (PDF) ----
-// Mesma ideia da versão Excel, mas em um único documento: resumo geral, seguido pelo
-// detalhamento do valor bruto e do pagamento antecipado de cada pessoa.
+// Documento em modo RETRATO, espaçamento compacto para caber mais conteúdo por página.
+// Estrutura: resumo geral no topo, e para cada pessoa: nome -> tabela de serviços -> tabela de
+// pagamento antecipado -> resumo individual (Total Serviço / Total Pagto. Antecipado / Saldo).
 export function exportarMedicaoDetalhadoPdf(linhas, mes) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const margem = 10;
+  const largura = 210 - margem * 2;
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(`Medição Mensal (Detalhada) - ${mes}`, 14, 15);
+  doc.setFontSize(13);
+  doc.text(`Medição Mensal (Detalhada) - ${mes}`, margem, 12);
 
   const corpoResumo = linhas.map(item => [
     item.nome,
@@ -163,58 +166,75 @@ export function exportarMedicaoDetalhadoPdf(linhas, mes) {
   ]);
 
   autoTable(doc, {
-    startY: 22,
-    head: [['Pessoa/Empresa', 'Tipo', 'Valor Bruto', 'Pagto. Antecipado', 'Valor Líquido', 'Status', 'Pix']],
+    startY: 17,
+    margin: { left: margem, right: margem },
+    head: [['Pessoa/Empresa', 'Tipo', 'Valor Bruto', 'Pagto. Ant.', 'Valor Líquido', 'Status', 'Pix']],
     body: corpoResumo,
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [37, 99, 235] }
+    styles: { fontSize: 7, cellPadding: 1.5 },
+    headStyles: { fillColor: [37, 99, 235], fontSize: 7 },
+    columnStyles: { 6: { cellWidth: 30 } }
   });
 
-  let y = doc.lastAutoTable.finalY + 10;
+  let y = doc.lastAutoTable.finalY + 6;
 
   linhas.forEach(item => {
-    if (y > 180) { doc.addPage(); y = 15; }
+    // Estimativa da altura mínima necessária para não deixar o bloco de uma pessoa cortado
+    // entre páginas: nome + cabeçalho da tabela; se não couber, começa em página nova.
+    if (y > 270) { doc.addPage(); y = 12; }
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(item.nome, 14, y);
-    y += 5;
+    doc.setFontSize(10);
+    doc.text(item.nome, margem, y);
+    y += 4;
 
     if (item.itens && item.itens.length > 0) {
+      if (y > 275) { doc.addPage(); y = 12; }
       autoTable(doc, {
         startY: y,
-        margin: { left: 14 },
+        margin: { left: margem, right: margem },
         head: [['Obra', 'Serviço', 'Local', 'Qtd', 'Valor']],
         body: item.itens.map(it => [
           it.obra, it.servico, it.celula_label || it.celula || '-', String(it.quantidade), `R$ ${formatarValorBR(it.valor)}`
         ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [100, 116, 139] },
-        tableWidth: 160
+        styles: { fontSize: 7, cellPadding: 1.2 },
+        headStyles: { fillColor: [100, 116, 139], fontSize: 7 },
+        tableWidth: largura
       });
-      y = doc.lastAutoTable.finalY + 4;
+      y = doc.lastAutoTable.finalY + 2;
     }
 
-    if (item.detalhe_pagamento) {
-      const dp = item.detalhe_pagamento;
-      const componentes = Object.keys(ROTULOS_PAGAMENTO)
-        .filter(chave => dp[chave] > 0)
-        .map(chave => [ROTULOS_PAGAMENTO[chave], `R$ ${formatarValorBR(dp[chave])}`]);
-      if (componentes.length > 0) {
-        if (y > 190) { doc.addPage(); y = 15; }
-        autoTable(doc, {
-          startY: y,
-          margin: { left: 14 },
-          head: [['Detalhe do Pagamento Antecipado', 'Valor']],
-          body: componentes,
-          styles: { fontSize: 8 },
-          headStyles: { fillColor: [217, 119, 6] },
-          tableWidth: 100
-        });
-        y = doc.lastAutoTable.finalY + 8;
-      }
+    const dp = item.detalhe_pagamento;
+    const componentes = dp
+      ? Object.keys(ROTULOS_PAGAMENTO).filter(chave => dp[chave] > 0).map(chave => [ROTULOS_PAGAMENTO[chave], `R$ ${formatarValorBR(dp[chave])}`])
+      : [];
+    if (componentes.length > 0) {
+      if (y > 275) { doc.addPage(); y = 12; }
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margem, right: margem },
+        head: [['Detalhe do Pagamento Antecipado', 'Valor']],
+        body: componentes,
+        styles: { fontSize: 7, cellPadding: 1.2 },
+        headStyles: { fillColor: [217, 119, 6], fontSize: 7 },
+        tableWidth: largura
+      });
+      y = doc.lastAutoTable.finalY + 2;
     }
-    y += 2;
+
+    // Resumo individual: Total Serviço, Total Pagto. Antecipado, Saldo (valor líquido)
+    if (y > 275) { doc.addPage(); y = 12; }
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margem, right: margem },
+      body: [[
+        `Total Serviço: R$ ${formatarValorBR(item.valor_bruto)}`,
+        `Total Pagto. Antecipado: R$ ${formatarValorBR(item.valor_vale)}`,
+        `Saldo: R$ ${formatarValorBR(item.valor_liquido)}`
+      ]],
+      styles: { fontSize: 7.5, fontStyle: 'bold', cellPadding: 1.5, fillColor: [243, 244, 246] },
+      tableWidth: largura
+    });
+    y = doc.lastAutoTable.finalY + 6;
   });
 
   doc.save(`medicao-detalhado-${mes}.pdf`);
