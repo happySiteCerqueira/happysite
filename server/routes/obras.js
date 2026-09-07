@@ -286,23 +286,123 @@ router.delete('/grupos/:grupoId', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'),
   res.json({ ok: true });
 });
 
+// Retorna os ids de todos os grupos "irmãos" (mesmo vínculo) de um grupo, incluindo ele mesmo.
+// Se o grupo não estiver vinculado a nenhum outro (grupo_vinculo_id null), retorna só ele mesmo.
+async function idsGruposVinculados(grupoId) {
+  const grupo = await db.get('SELECT * FROM obra_servico_grupos WHERE id = ?', grupoId);
+  if (!grupo) return [];
+  if (!grupo.grupo_vinculo_id) return [grupo.id];
+  const linhas = await db.all('SELECT id FROM obra_servico_grupos WHERE grupo_vinculo_id = ?', grupo.grupo_vinculo_id);
+  return linhas.map(l => l.id);
+}
+
+// Adicionar/remover membro propaga automaticamente para todos os grupos vinculados (mesmas
+// pessoas em todas as obras marcadas via "Add Obras"), já que o vínculo é permanente/sincronizado.
 router.post('/grupos/:grupoId/membros', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'), async (req, res) => {
   const { colaborador_id } = req.body;
-  try {
-    await db.run('INSERT INTO obra_servico_grupo_membros (grupo_id, colaborador_id) VALUES (?,?)',
-      req.params.grupoId, colaborador_id);
-  } catch (e) { /* já existe */ }
-  await registrar(req.usuario.id, 'ADD_MEMBRO_GRUPO', 'obra_servico_grupos', req.params.grupoId, { colaborador_id });
+  const idsAlvo = await idsGruposVinculados(req.params.grupoId);
+  for (const id of idsAlvo) {
+    try {
+      await db.run('INSERT INTO obra_servico_grupo_membros (grupo_id, colaborador_id) VALUES (?,?)', id, colaborador_id);
+    } catch (e) { /* já existe */ }
+  }
+  await registrar(req.usuario.id, 'ADD_MEMBRO_GRUPO', 'obra_servico_grupos', req.params.grupoId, { colaborador_id, propagado_para: idsAlvo });
   res.json({ ok: true });
 });
 
 router.delete('/grupos/:grupoId/membros/:colaboradorId', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'), async (req, res) => {
-  await db.run('DELETE FROM obra_servico_grupo_membros WHERE grupo_id = ? AND colaborador_id = ?',
-    req.params.grupoId, req.params.colaboradorId);
-  await registrar(req.usuario.id, 'REMOVER_MEMBRO_GRUPO', 'obra_servico_grupos', req.params.grupoId, { colaborador_id: req.params.colaboradorId });
+  const idsAlvo = await idsGruposVinculados(req.params.grupoId);
+  for (const id of idsAlvo) {
+    await db.run('DELETE FROM obra_servico_grupo_membros WHERE grupo_id = ? AND colaborador_id = ?', id, req.params.colaboradorId);
+  }
+  await registrar(req.usuario.id, 'REMOVER_MEMBRO_GRUPO', 'obra_servico_grupos', req.params.grupoId, { colaborador_id: req.params.colaboradorId, propagado_para: idsAlvo });
   res.json({ ok: true });
 });
 
+// ---- "Add Obras": disponibiliza um grupo em outras obras, no serviço de mesmo nome ----
+
+// Lista as obras ativas (exceto a atual) que possuem um serviço de mesmo nome do serviço deste
+// grupo, indicando quais já estão vinculadas (mesmo grupo_vinculo_id) — usado no popup com
+// checkboxes para marcar em quais obras o grupo deve ficar disponível.
+router.get('/grupos/:grupoId/obras-vinculadas', async (req, res) => {
+  const grupo = await db.get('SELECT * FROM obra_servico_grupos WHERE id = ?', req.params.grupoId);
+  if (!grupo) return res.status(404).json({ erro: 'Grupo não encontrado' });
+  const servico = await db.get('SELECT * FROM obra_servicos WHERE id = ?', grupo.obra_servico_id);
+  const obraAtual = await db.get('SELECT * FROM obras WHERE id = ?', servico.obra_id);
+
+  const obrasComServico = await db.all(`
+    SELECT o.id as obra_id, o.nome as obra_nome, os.id as obra_servico_id
+    FROM obras o
+    JOIN obra_servicos os ON os.obra_id = o.id AND os.nome = ? AND os.ativo = 1
+    WHERE o.status NOT IN ('FINALIZADA','EXCLUIDA') AND o.id != ?
+    ORDER BY o.nome
+  `, servico.nome, obraAtual.id);
+
+  let gruposVinculados = grupo.grupo_vinculo_id
+    ? await db.all('SELECT * FROM obra_servico_grupos WHERE grupo_vinculo_id = ?', grupo.grupo_vinculo_id)
+    : [grupo];
+  const obraServicoIdsJaVinculados = new Set(gruposVinculados.map(g => g.obra_servico_id));
+
+  const obras = obrasComServico.map(o => ({
+    obra_id: o.obra_id,
+    obra_nome: o.obra_nome,
+    obra_servico_id: o.obra_servico_id,
+    vinculado: obraServicoIdsJaVinculados.has(o.obra_servico_id)
+  }));
+
+  res.json({ servico_nome: servico.nome, obra_atual_nome: obraAtual.nome, obras });
+});
+
+// Define o conjunto de obras vinculadas a este grupo (substitui a seleção anterior do popup).
+// Cria uma cópia do grupo (com os membros atuais) em cada obra recém-marcada, e remove a cópia
+// (sem excluir o grupo original) das obras desmarcadas. O vínculo passa a ser permanente: editar
+// os membros de qualquer cópia propaga automaticamente para todas (ver idsGruposVinculados).
+router.put('/grupos/:grupoId/obras-vinculadas', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'), async (req, res) => {
+  const { obra_servico_ids } = req.body; // array de obra_servico_id marcados no popup
+  if (!Array.isArray(obra_servico_ids)) return res.status(400).json({ erro: 'obra_servico_ids deve ser uma lista' });
+
+  const grupo = await db.get('SELECT * FROM obra_servico_grupos WHERE id = ?', req.params.grupoId);
+  if (!grupo) return res.status(404).json({ erro: 'Grupo não encontrado' });
+
+  await db.transaction(async (trx) => {
+    let vinculoId = grupo.grupo_vinculo_id;
+    if (!vinculoId) {
+      vinculoId = grupo.id;
+      await trx.run('UPDATE obra_servico_grupos SET grupo_vinculo_id = ? WHERE id = ?', vinculoId, grupo.id);
+    }
+
+    const membrosAtuais = await trx.all('SELECT colaborador_id FROM obra_servico_grupo_membros WHERE grupo_id = ?', grupo.id);
+    const gruposVinculadosAtuais = await trx.all('SELECT * FROM obra_servico_grupos WHERE grupo_vinculo_id = ?', vinculoId);
+    const porObraServicoId = {};
+    gruposVinculadosAtuais.forEach(g => { porObraServicoId[g.obra_servico_id] = g; });
+
+    for (const obraServicoId of obra_servico_ids) {
+      if (porObraServicoId[obraServicoId]) continue;
+      if (obraServicoId === grupo.obra_servico_id) continue;
+      const servicoDestino = await trx.get('SELECT * FROM obra_servicos WHERE id = ?', obraServicoId);
+      if (!servicoDestino) continue;
+
+      const novoGrupo = await trx.run(
+        'INSERT INTO obra_servico_grupos (obra_servico_id, nome_grupo, grupo_vinculo_id) VALUES (?,?,?)',
+        obraServicoId, grupo.nome_grupo, vinculoId
+      );
+      for (const m of membrosAtuais) {
+        await trx.run('INSERT INTO obra_servico_grupo_membros (grupo_id, colaborador_id) VALUES (?,?)',
+          novoGrupo.lastInsertRowid, m.colaborador_id);
+      }
+    }
+
+    for (const g of gruposVinculadosAtuais) {
+      if (g.id === grupo.id) continue; // nunca remove o próprio grupo original
+      if (!obra_servico_ids.includes(g.obra_servico_id)) {
+        await trx.run('DELETE FROM obra_servico_grupos WHERE id = ?', g.id);
+      }
+    }
+  });
+
+  await registrar(req.usuario.id, 'VINCULAR_GRUPO_OBRAS', 'obra_servico_grupos', req.params.grupoId, { obra_servico_ids });
+  res.json({ ok: true });
+});
 
 router.delete('/servicos/:servicoId', permitir('ADM', 'RH'), async (req, res) => {
   const row = await db.get('SELECT COUNT(*)::int c FROM obra_servico_celulas WHERE obra_servico_id = ?', req.params.servicoId);

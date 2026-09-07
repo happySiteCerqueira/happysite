@@ -29,6 +29,10 @@ export default function ObraDetalhe() {
 
   const [importandoPrecos, setImportandoPrecos] = useState(false);
   const [novoGrupoNome, setNovoGrupoNome] = useState('');
+  const [addObrasGrupoId, setAddObrasGrupoId] = useState(null); // id do grupo com o popup "Add Obras" aberto
+  const [addObrasInfo, setAddObrasInfo] = useState(null); // { servico_nome, obra_atual_nome, obras: [...] }
+  const [addObrasSelecao, setAddObrasSelecao] = useState(new Set()); // obra_servico_id marcados no popup
+  const [salvandoAddObras, setSalvandoAddObras] = useState(false);
   const [mostrarEditarServicos, setMostrarEditarServicos] = useState(false);
   const [servicosPadrao, setServicosPadrao] = useState([]);
   const [selecaoServicos, setSelecaoServicos] = useState(new Set());
@@ -307,6 +311,38 @@ export default function ObraDetalhe() {
       await api.post(`/obras/grupos/${grupoId}/membros`, { colaborador_id: colaboradorId });
     }
     carregarGrupos();
+  }
+
+  // ---- "Add Obras": disponibiliza um grupo em outras obras (mesmo serviço, mesmo nome) ----
+  async function abrirAddObras(grupoId) {
+    const { data } = await api.get(`/obras/grupos/${grupoId}/obras-vinculadas`);
+    setAddObrasGrupoId(grupoId);
+    setAddObrasInfo(data);
+    setAddObrasSelecao(new Set(data.obras.filter(o => o.vinculado).map(o => o.obra_servico_id)));
+  }
+
+  function alternarAddObraSelecao(obraServicoId) {
+    setAddObrasSelecao(prev => {
+      const novo = new Set(prev);
+      if (novo.has(obraServicoId)) novo.delete(obraServicoId);
+      else novo.add(obraServicoId);
+      return novo;
+    });
+  }
+
+  async function salvarAddObras() {
+    setSalvandoAddObras(true);
+    try {
+      await api.put(`/obras/grupos/${addObrasGrupoId}/obras-vinculadas`, {
+        obra_servico_ids: Array.from(addObrasSelecao)
+      });
+      setAddObrasGrupoId(null);
+      setAddObrasInfo(null);
+      carregarGrupos();
+    } catch (err) {
+      alert(err.response?.data?.erro || 'Erro ao salvar obras vinculadas');
+    }
+    setSalvandoAddObras(false);
   }
 
   async function exportarPrecos() {
@@ -864,7 +900,11 @@ export default function ObraDetalhe() {
                 {grupos.map(g => (
                   <div key={g.id} className="card" style={{ marginBottom: 8, padding: 10 }}>
                     <div className="flex gap-2" style={{ alignItems: 'center', marginBottom: 6 }}>
-                      <strong style={{ flex: 1 }}>👥 {g.nome_grupo}</strong>
+                      <strong style={{ flex: 1 }}>
+                        👥 {g.nome_grupo}
+                        {g.grupo_vinculo_id && <span title="Este grupo está vinculado a outras obras" style={{ marginLeft: 6 }}>🔗</span>}
+                      </strong>
+                      <button className="btn-secondary btn-sm" onClick={() => abrirAddObras(g.id)}>➕ Add Obras</button>
                       <button className="btn-danger btn-sm" onClick={() => excluirGrupo(g.id)}>Excluir</button>
                     </div>
                     <div style={{ maxHeight: 130, overflow: 'auto' }}>
@@ -899,6 +939,42 @@ export default function ObraDetalhe() {
               })}
             </div>
             <button className="btn-primary" style={{ marginTop: 12, width: '100%' }} onClick={() => setMostrarConfigServico(false)}>Fechar</button>
+          </div>
+        </div>
+      )}
+
+      {addObrasGrupoId && addObrasInfo && (
+        <div className="modal-overlay" onClick={() => setAddObrasGrupoId(null)}>
+          <div className="modal-content" style={{ width: 420, maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <h4>Disponibilizar grupo em outras obras</h4>
+            <p style={{ fontSize: 12, color: '#6b7280' }}>
+              Marque as obras onde este grupo (serviço "<strong>{addObrasInfo.servico_nome}</strong>") também deve
+              ficar disponível. Ao marcar, o sistema cria automaticamente o grupo lá com os mesmos membros de agora.
+              Editar os membros depois (em qualquer uma das obras) atualiza todas as demais automaticamente.
+            </p>
+            <div className="flex-col gap-2" style={{ maxHeight: 300, overflow: 'auto', marginTop: 8 }}>
+              {addObrasInfo.obras.length === 0 && (
+                <div style={{ color: '#9ca3af', fontSize: 13 }}>
+                  Nenhuma outra obra ativa possui um serviço chamado "{addObrasInfo.servico_nome}".
+                </div>
+              )}
+              {addObrasInfo.obras.map(o => (
+                <label key={o.obra_servico_id} className="flex gap-2" style={{ alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={addObrasSelecao.has(o.obra_servico_id)}
+                    onChange={() => alternarAddObraSelecao(o.obra_servico_id)}
+                  />
+                  {o.obra_nome}
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2" style={{ marginTop: 16 }}>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setAddObrasGrupoId(null)}>Cancelar</button>
+              <button className="btn-primary" style={{ flex: 1 }} disabled={salvandoAddObras} onClick={salvarAddObras}>
+                {salvandoAddObras ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

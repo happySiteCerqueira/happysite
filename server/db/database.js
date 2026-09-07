@@ -195,6 +195,11 @@ async function migrate() {
       id SERIAL PRIMARY KEY,
       obra_servico_id INTEGER NOT NULL REFERENCES obra_servicos(id) ON DELETE CASCADE,
       nome_grupo TEXT NOT NULL,
+      -- Compartilhado entre todas as "cópias" deste grupo vinculadas em diferentes obras (mesmo
+      -- nome de serviço). NULL enquanto o grupo existir só nesta obra (não vinculado a nenhuma
+      -- outra). Quando vinculado, todas as linhas (incluindo a original) apontam para o MESMO
+      -- valor — usado para propagar automaticamente adição/remoção de membros entre elas.
+      grupo_vinculo_id INTEGER,
       criado_em TIMESTAMP DEFAULT NOW()
     );
 
@@ -471,6 +476,12 @@ async function migrate() {
   // sem essa confirmação, o Painel pede a decisão "Continuar experiência ou Dispensar".
   if (!(await colunaExiste('colaboradores', 'confirmado_45_dias'))) {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN confirmado_45_dias INTEGER NOT NULL DEFAULT 0');
+  }
+
+  // Migração idempotente: coluna "grupo_vinculo_id" em obra_servico_grupos (usada para propagar
+  // adição/remoção de membros entre "cópias" do mesmo grupo em diferentes obras — botão "Add Obras").
+  if (!(await colunaExiste('obra_servico_grupos', 'grupo_vinculo_id'))) {
+    await pool.query('ALTER TABLE obra_servico_grupos ADD COLUMN grupo_vinculo_id INTEGER');
   }
 
   // Migração idempotente: perfis novos (SUPERVISOR, APONTADOR) no CHECK de usuarios.perfil
