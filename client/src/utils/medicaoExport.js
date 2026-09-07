@@ -231,7 +231,7 @@ export function exportarMedicaoDetalhadoPdf(linhas, mes) {
         `Total Pagto. Antecipado: R$ ${formatarValorBR(item.valor_vale)}`,
         `Saldo: R$ ${formatarValorBR(item.valor_liquido)}`
       ]],
-      styles: { fontSize: 7.5, fontStyle: 'bold', cellPadding: 1.5, fillColor: [243, 244, 246] },
+      styles: { fontSize: 9, fontStyle: 'bold', cellPadding: 2, fillColor: [254, 249, 195] },
       tableWidth: largura
     });
     y = doc.lastAutoTable.finalY + 6;
