@@ -55,6 +55,7 @@ router.get('/gerar', async (req, res) => {
   // Agrupa por colaborador todas as células marcadas no mês (marcações em obras)
   const linhas = await db.all(`
     SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta,
+           c.funcao, c.contato_responsavel,
            o.id as obra_id, o.nome as obra_nome, os.nome as servico_nome,
            cel.celula_key, cel.quantidade, cel.valor
     FROM obra_servico_celulas cel
@@ -72,12 +73,12 @@ router.get('/gerar', async (req, res) => {
   let colaboradoresExtras = [];
   if (!obras) {
     const diariasMes = await db.all(
-      `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta
+      `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta, c.funcao, c.contato_responsavel
        FROM diarias d JOIN colaboradores c ON c.id = d.colaborador_id
        WHERE d.mes_ciclo = ? AND d.total > 0`, mes
     );
     const antecipadosMes = await db.all(
-      `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta
+      `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta, c.funcao, c.contato_responsavel
        FROM pagamentos_antecipados pa JOIN colaboradores c ON c.id = pa.colaborador_id
        WHERE pa.mes_ciclo = ? AND (pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento) > 0`, mes
     );
@@ -109,6 +110,7 @@ router.get('/gerar', async (req, res) => {
         banco: l.banco,
         agencia: l.agencia,
         conta: l.conta,
+        funcao: l.tipo === 'PJ' ? l.contato_responsavel : l.funcao,
         itens: [],
         valor_bruto: 0
       };
@@ -140,6 +142,7 @@ router.get('/gerar', async (req, res) => {
         banco: c.banco,
         agencia: c.agencia,
         conta: c.conta,
+        funcao: c.tipo === 'PJ' ? c.contato_responsavel : c.funcao,
         itens: [],
         valor_bruto: 0
       };

@@ -15,6 +15,7 @@ export default function Medicao() {
   const [obras, setObras] = useState([]);
   const [obrasSelecionadas, setObrasSelecionadas] = useState([]);
   const [todasObras, setTodasObras] = useState(true);
+  const [filtroFuncao, setFiltroFuncao] = useState('');
   const [linhas, setLinhas] = useState([]);
   const [expandido, setExpandido] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -82,6 +83,11 @@ export default function Medicao() {
     setAtualizandoTudo(false);
   }
 
+  // Lista de funções distintas presentes nas linhas atuais (para o dropdown de filtro), e o
+  // filtro em si aplicado apenas na exibição/exportação — "linhas" original continua intacta
+  // para as demais operações (confirmar, pagar, atualizar tudo).
+  const funcoesDisponiveis = [...new Set(linhas.map(item => item.funcao).filter(f => f && f.trim()))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const linhasFiltradas = filtroFuncao ? linhas.filter(item => item.funcao === filtroFuncao) : linhas;
 
   return (
     <div>
@@ -107,6 +113,13 @@ export default function Medicao() {
               </div>
             )}
           </div>
+          <div className="flex-col gap-2">
+            <label>Função</label>
+            <select value={filtroFuncao} onChange={e => setFiltroFuncao(e.target.value)}>
+              <option value="">Todas as funções</option>
+              {funcoesDisponiveis.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
           <button className="btn-primary" style={{ alignSelf: 'end' }} onClick={gerar} disabled={carregando}>
             {carregando ? 'Gerando...' : 'Gerar Planilha'}
           </button>
@@ -119,7 +132,7 @@ export default function Medicao() {
           >
             {atualizandoTudo ? '🔄 Atualizando...' : '🔄 Atualizar tudo'}
           </button>
-          <BotaoExportar linhas={linhas} mes={mes} />
+          <BotaoExportar linhas={linhasFiltradas} mes={mes} />
         </div>
       </div>
 
@@ -135,7 +148,7 @@ export default function Medicao() {
             </tr>
           </thead>
           <tbody>
-            {linhas.map(item => (
+            {linhasFiltradas.map(item => (
               <>
                 <tr key={item.colaborador_id}>
                   <td>
@@ -184,12 +197,13 @@ export default function Medicao() {
                 )}
               </>
             ))}
-            {linhas.length === 0 && <tr><td colSpan={8} style={{ color: '#9ca3af' }}>Nenhum lançamento encontrado para este período.</td></tr>}
+            {linhasFiltradas.length === 0 && <tr><td colSpan={8} style={{ color: '#9ca3af' }}>Nenhum lançamento encontrado para este período.</td></tr>}
           </tbody>
         </table>
       </div>
     </div>
   );
+}
 
 // Botão único "Exportar" com dropdown (Excel, Excel com detalhe, PDF, PDF com detalhe), para deixar
 // a barra de ações mais limpa em vez de 4 botões separados. Fecha ao clicar fora dele.
@@ -250,6 +264,4 @@ function BotaoExportar({ linhas, mes }) {
       )}
     </div>
   );
-}
-
 }
