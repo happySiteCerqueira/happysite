@@ -10,13 +10,13 @@ router.use(autenticar, permissaoModulo('diarias'));
 
 
 
-// Planilha do mês: apenas colaboradores CPF ativos com valor_diaria configurado (ou não),
-// mostrando quantidade lançada e total calculado (quantidade x valor_diaria da pessoa).
+// Planilha do mês: colaboradores (CPF) e empreiteiros (PJ) ativos, com valor_diaria configurado
+// (ou não), mostrando quantidade lançada e total calculado (quantidade x valor_diaria da pessoa).
 router.get('/planilha', async (req, res) => {
   const { mes } = req.query;
   if (!mes) return res.status(400).json({ erro: 'mes (YYYY-MM) é obrigatório' });
 
-  const pessoas = await db.all("SELECT * FROM colaboradores WHERE ativo = 1 AND tipo = 'CPF' ORDER BY nome");
+  const pessoas = await db.all("SELECT * FROM colaboradores WHERE ativo = 1 ORDER BY tipo, nome");
   const lancamentos = await db.all('SELECT * FROM diarias WHERE mes_ciclo = ?', mes);
   const porPessoa = {};
   lancamentos.forEach(l => { porPessoa[l.colaborador_id] = l; });
@@ -32,7 +32,11 @@ router.get('/planilha', async (req, res) => {
     return {
       colaborador_id: p.id,
       nome: p.nome,
-      funcao: p.funcao || '',
+      tipo: p.tipo,
+      documento: p.documento,
+      // Empreiteiros (PJ) não têm "função"; mostram o contato responsável no lugar, mesmo padrão
+      // já usado em Medição e Prestadores.
+      funcao: p.tipo === 'PJ' ? (p.contato_responsavel || '') : (p.funcao || ''),
       valor_diaria: p.valor_diaria || 0,
       quantidade: l ? l.quantidade : 0,
       total: l ? l.total : 0,
