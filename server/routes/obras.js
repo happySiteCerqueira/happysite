@@ -1057,6 +1057,79 @@ router.delete('/:id/rotulos-aptos/:celulaKey', permitir('RH', 'ADM', 'ENGENHEIRO
   res.json({ ok: true });
 });
 
+// ---- Rótulos customizados de ANDAR (coluna à esquerda do desenho: T, 1, 2, 3...) ----
+// Usado, por exemplo, quando a obra tem subsolos (2SS, 1SS) antes do térreo. O rótulo padrão de
+// cada "slot" (posição do andar contando do térreo pra cima: slot 0 = térreo, slot 1 = 1º andar,
+// slot 2 = 2º andar...) é "T" para o slot 0 e o número do slot para os demais.
+function rotuloAndarPadrao(slot) {
+  return slot === 0 ? 'T' : String(slot);
+}
+
+function totalSlotsAndar(obra) {
+  const blocos = obra.blocos_pavimentos ? JSON.parse(obra.blocos_pavimentos) : [];
+  return 1 + blocos.reduce((soma, b) => soma + (b.qtd_andares || 0), 0); // +1 pelo térreo (slot 0)
+}
+
+// Retorna um mapa { slot_index: rotulo } com os rótulos de andar já customizados nesta obra.
+router.get('/:id/rotulos-andares', async (req, res) => {
+  const linhas = await db.all('SELECT slot_index, rotulo FROM obra_andar_rotulos WHERE obra_id = ?', req.params.id);
+  const mapa = {};
+  linhas.forEach(l => { mapa[l.slot_index] = l.rotulo; });
+  res.json(mapa);
+});
+
+// Define o rótulo de UM andar (slot). Se seguir_sequencia=true, insere o novo rótulo naquele slot
+// e desloca os rótulos que já existiam dali pra cima em 1 posição (o rótulo que estava no slot
+// editado passa para o slot seguinte, e assim por diante); o rótulo do último slot "sai" da lista
+// (não há posição acima para recebê-lo). Se seguir_sequencia=false, altera apenas aquele slot.
+router.put('/:id/rotulos-andares', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE'), async (req, res) => {
+  const { slot_index, rotulo, seguir_sequencia } = req.body;
+  if (slot_index === undefined || slot_index === null || !rotulo) {
+    return res.status(400).json({ erro: 'slot_index e rotulo são obrigatórios' });
+  }
+  const slotIndex = Number(slot_index);
+  const obra = await db.get('SELECT * FROM obras WHERE id = ?', req.params.id);
+  if (!obra) return res.status(404).json({ erro: 'Obra não encontrada' });
+
+  const totalSlots = totalSlotsAndar(obra);
+  if (isNaN(slotIndex) || slotIndex < 0 || slotIndex >= totalSlots) {
+    return res.status(400).json({ erro: 'Andar (slot) fora do range desta obra' });
+  }
+
+  async function upsertSlot(slot, valor) {
+    await db.run(`INSERT INTO obra_andar_rotulos (obra_id, slot_index, rotulo, atualizado_em)
+      VALUES (?,?,?, NOW())
+      ON CONFLICT(obra_id, slot_index) DO UPDATE SET rotulo = EXCLUDED.rotulo, atualizado_em = EXCLUDED.atualizado_em`,
+      req.params.id, slot, String(valor));
+  }
+
+  if (!seguir_sequencia) {
+    await upsertSlot(slotIndex, rotulo);
+    await registrar(req.usuario.id, 'RENOMEAR_ANDAR', 'obra_andar_rotulos', req.params.id, { slot_index: slotIndex, rotulo });
+    return res.json({ ok: true });
+  }
+
+  // Captura os rótulos ATUAIS (customizados ou padrão) de todos os slots a partir do editado,
+  // antes de fazer qualquer alteração, para poder deslocá-los corretamente em cascata.
+  const existentes = await db.all('SELECT slot_index, rotulo FROM obra_andar_rotulos WHERE obra_id = ?', req.params.id);
+  const mapaAtual = {};
+  existentes.forEach(l => { mapaAtual[l.slot_index] = l.rotulo; });
+  function labelAtual(slot) {
+    return mapaAtual[slot] !== undefined ? mapaAtual[slot] : rotuloAndarPadrao(slot);
+  }
+
+  // Desloca de cima para baixo (do topo até slotIndex+1) para não perder valores no caminho:
+  // o slot "i" passa a ter o rótulo que estava no slot "i-1".
+  for (let i = totalSlots - 1; i > slotIndex; i--) {
+    await upsertSlot(i, labelAtual(i - 1));
+  }
+  await upsertSlot(slotIndex, rotulo);
+
+  await registrar(req.usuario.id, 'RENOMEAR_ANDAR', 'obra_andar_rotulos', req.params.id,
+    { slot_index: slotIndex, rotulo, seguir_sequencia: true });
+  res.json({ ok: true });
+});
+
 // Aplica a mesma quantidade de UM apartamento (mesma posição/terminação) em VÁRIOS andares
 // selecionados de uma vez, dentro do MESMO bloco. Atalho direto do desenho do prédio
 // (equivalente ao "Replicar" da tela de Quantidades, mas com múltipla seleção de andares).

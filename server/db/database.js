@@ -296,6 +296,15 @@ async function migrate() {
       UNIQUE(obra_id, celula_key)
     );
 
+    CREATE TABLE IF NOT EXISTS obra_andar_rotulos (
+      id SERIAL PRIMARY KEY,
+      obra_id INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
+      slot_index INTEGER NOT NULL,
+      rotulo TEXT NOT NULL,
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      UNIQUE(obra_id, slot_index)
+    );
+
     CREATE TABLE IF NOT EXISTS auditoria (
       id SERIAL PRIMARY KEY,
       usuario_id INTEGER REFERENCES usuarios(id),

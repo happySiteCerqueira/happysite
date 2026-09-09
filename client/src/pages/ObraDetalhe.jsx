@@ -64,6 +64,14 @@ export default function ObraDetalhe() {
   const [novoNomeApto, setNovoNomeApto] = useState('');
   const [salvandoNome, setSalvandoNome] = useState(false);
 
+  // ---- Rótulos customizados de ANDAR (coluna à esquerda do desenho: T, 1, 2, 3...) ----
+  // Usado, por exemplo, para obras com subsolo (2SS, 1SS antes do térreo). Compartilhado entre
+  // todas as abas de serviço, igual aos rótulos de apartamento.
+  const [rotulosAndares, setRotulosAndares] = useState({});
+  const [andarEditando, setAndarEditando] = useState(null); // { slot, valorAtual }
+  const [novoNomeAndar, setNovoNomeAndar] = useState('');
+  const [salvandoAndar, setSalvandoAndar] = useState(false);
+
   // ---- Definir quantidade em vários andares (atalho direto do desenho) ----
   const [mostrarQtdVariosAndares, setMostrarQtdVariosAndares] = useState(false);
   const [valorQtdVariosAndares, setValorQtdVariosAndares] = useState('');
@@ -77,8 +85,34 @@ export default function ObraDetalhe() {
       if (!servicoAtivoId && res.data.servicos?.length) setServicoAtivoId(res.data.servicos[0].id);
     });
     api.get(`/obras/${id}/rotulos-aptos`).then(res => setRotulosAptos(res.data || {}));
+    api.get(`/obras/${id}/rotulos-andares`).then(res => setRotulosAndares(res.data || {}));
   }
   useEffect(carregarObra, [id]);
+
+  // Abre o modal de renomear andar (coluna à esquerda do desenho). "valorAtual" é o rótulo
+  // exibido no momento do clique (customizado ou padrão), usado como valor inicial do campo.
+  function abrirEditarAndar(slot, valorAtual) {
+    if (!temPermissao('ENGENHEIRO', 'MESTRE', 'RH')) return;
+    setAndarEditando({ slot });
+    setNovoNomeAndar(String(valorAtual ?? ''));
+  }
+
+  async function salvarNomeAndar(seguirSequencia) {
+    if (!andarEditando || !novoNomeAndar.trim()) return;
+    setSalvandoAndar(true);
+    try {
+      await api.put(`/obras/${id}/rotulos-andares`, {
+        slot_index: andarEditando.slot,
+        rotulo: novoNomeAndar.trim(),
+        seguir_sequencia: seguirSequencia
+      });
+      setAndarEditando(null);
+      api.get(`/obras/${id}/rotulos-andares`).then(res => setRotulosAndares(res.data || {}));
+    } catch (err) {
+      alert(err.response?.data?.erro || 'Erro ao renomear andar');
+    }
+    setSalvandoAndar(false);
+  }
 
 
   function iniciarArraste(servicoId) {
@@ -770,6 +804,8 @@ export default function ObraDetalhe() {
               gruposPorId={gruposPorId}
               onClickCelula={abrirSelecaoPessoa}
               onClickCelulaHistorica={abrirCelulaHistorica}
+              rotulosAndares={rotulosAndares}
+              onClickAndar={abrirEditarAndar}
               rotulosAptos={rotulosAptos}
               quantidadesMapa={quantidadesMapa}
             />
@@ -883,6 +919,39 @@ export default function ObraDetalhe() {
           </div>
         );
       })()}
+
+      {andarEditando && (
+        <div className="modal-overlay" onClick={() => setAndarEditando(null)}>
+          <div className="modal-content" style={{ width: 340 }} onClick={e => e.stopPropagation()}>
+            <h4>Renomear andar</h4>
+            <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6 }}>
+              Isso altera o rótulo exibido na coluna à esquerda do desenho, em <strong>todas as abas de serviço</strong> desta obra.
+              Útil, por exemplo, para indicar subsolos (2SS, 1SS) antes do térreo.
+            </p>
+            <input
+              autoFocus
+              value={novoNomeAndar}
+              onChange={e => setNovoNomeAndar(e.target.value)}
+              placeholder="Ex: 2SS"
+              style={{ width: '100%', marginBottom: 12 }}
+            />
+            <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+              <strong>Somente esse</strong>: renomeia apenas este andar.<br />
+              <strong>Seguir sequência</strong>: insere este novo nível aqui e empurra os rótulos que já existiam
+              (deste ponto pra cima) uma posição acima.
+            </p>
+            <div className="flex gap-2" style={{ marginBottom: 8 }}>
+              <button className="btn-secondary" style={{ flex: 1 }} disabled={salvandoAndar || !novoNomeAndar.trim()} onClick={() => salvarNomeAndar(false)}>
+                Somente esse
+              </button>
+              <button className="btn-primary" style={{ flex: 1 }} disabled={salvandoAndar || !novoNomeAndar.trim()} onClick={() => salvarNomeAndar(true)}>
+                Seguir sequência
+              </button>
+            </div>
+            <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setAndarEditando(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
 
       {mostrarAlterarNome && celulaSelecionada && (
         <div className="modal-overlay" onClick={() => setMostrarAlterarNome(false)}>

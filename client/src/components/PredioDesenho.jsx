@@ -27,7 +27,7 @@ function nomePavimento(numAndar) {
   return `${numAndar}º Andar`;
 }
 
-export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCelula, onClickCelulaHistorica, pessoasPorId, gruposPorId, escala, rotulosAptos, quantidadesMapa }) {
+export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCelula, onClickCelulaHistorica, pessoasPorId, gruposPorId, escala, rotulosAptos, quantidadesMapa, rotulosAndares, onClickAndar }) {
 
   if (!obra) return null;
   const blocos = obra.blocos_pavimentos || [];
@@ -173,14 +173,26 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
     );
   }
 
-  // Coluna de referência do andar, fora do desenho (à esquerda)
-  function refAndar(numero) {
+  // Coluna de referência do andar, fora do desenho (à esquerda). "slot" é a posição do andar
+  // contando do térreo pra cima (0 = térreo, 1 = 1º andar, 2 = 2º andar...), usada para buscar o
+  // rótulo customizado (ex: obra com subsolo, onde o térreo passou a se chamar "2SS"). Quando
+  // slot é informado e onClickAndar existe, o rótulo fica clicável para edição.
+  function refAndar(numero, slot = null) {
+    const rotuloCustom = slot != null ? rotulosAndares?.[slot] : undefined;
+    const texto = rotuloCustom !== undefined ? rotuloCustom : (numero != null ? numero : '');
+    const clicavel = slot != null && !!onClickAndar;
     return (
-      <div style={{
-        width: 20, height: ALTURA_CEL, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 11, color: '#6b7280', fontWeight: 600, flexShrink: 0
-      }}>
-        {numero != null ? numero : ''}
+      <div
+        onClick={() => { if (clicavel) onClickAndar(slot, texto); }}
+        title={clicavel ? 'Clique para renomear este andar' : undefined}
+        style={{
+          width: 26, height: ALTURA_CEL, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, color: '#6b7280', fontWeight: 600, flexShrink: 0,
+          cursor: clicavel ? 'pointer' : 'default',
+          textDecoration: clicavel ? 'underline dotted' : 'none'
+        }}
+      >
+        {texto}
       </div>
     );
   }
@@ -253,7 +265,7 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
             const larguraTotal = qtdAptos * LARGURA_CEL + (qtdAptos - 1) * GAP;
             return (
               <div key={idx} style={{ display: 'flex', gap: GAP, alignItems: 'center' }}>
-                {refAndar(numAndar)}
+                {refAndar(numAndar, numAndar)}
                 {renderCelula(grupoKey, larguraTotal, { fontWeight: 600 }, nomePavimento(numAndar))}
               </div>
             );
@@ -265,7 +277,7 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
             const larguraFundo = qtdFundo * LARGURA_CEL + Math.max(0, qtdFundo - 1) * GAP;
             return (
               <div key={idx} style={{ display: 'flex', gap: GAP, alignItems: 'center' }}>
-                {refAndar(numAndar)}
+                {refAndar(numAndar, numAndar)}
                 {renderCelula(`${grupoKey}-frente`, larguraFrente, { fontWeight: 600 }, 'Frente')}
                 {qtdFundo > 0 && renderCelula(`${grupoKey}-fundo`, larguraFundo, { fontWeight: 600 }, 'Fundo')}
               </div>
@@ -273,7 +285,7 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
           }
           return (
             <div key={idx} style={{ display: 'flex', gap: GAP, alignItems: 'center' }}>
-              {refAndar(numAndar)}
+              {refAndar(numAndar, numAndar)}
               {renderCelula(`corredor-b${linha.blocoIdx}-a${linha.andarNoBloco}`, LARGURA_CEL, {}, 'C')}
               {renderCelula(`elevador-b${linha.blocoIdx}-a${linha.andarNoBloco}`, LARGURA_CEL, {}, 'L')}
               {renderCelula(`escada-b${linha.blocoIdx}-a${linha.andarNoBloco}`, LARGURA_CEL, {}, 'E')}
@@ -310,7 +322,7 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
             const larguraTotal = qtd * LARGURA_CEL + (qtd - 1) * GAP;
             return (
               <div key={idx} style={{ display: 'flex', gap: GAP, alignItems: 'center' }}>
-                {refAndar('T')}
+                {refAndar('T', 0)}
                 {renderCelula('terreo-grupo', larguraTotal, { fontWeight: 600 }, 'Térreo')}
               </div>
             );
@@ -322,7 +334,7 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
             const larguraFundo = qtdFundo * LARGURA_CEL + Math.max(0, qtdFundo - 1) * GAP;
             return (
               <div key={idx} style={{ display: 'flex', gap: GAP, alignItems: 'center' }}>
-                {refAndar('T')}
+                {refAndar('T', 0)}
                 {renderCelula('terreo-frente', larguraFrente, { fontWeight: 600 }, 'Frente')}
                 {qtdFundo > 0 && renderCelula('terreo-fundo', larguraFundo, { fontWeight: 600 }, 'Fundo')}
               </div>
@@ -330,7 +342,7 @@ export default function PredioDesenho({ obra, modoMedicao, marcacoes, onClickCel
           }
           return (
             <div key={idx} style={{ display: 'flex', gap: GAP, alignItems: 'center' }}>
-              {refAndar('T')}
+              {refAndar('T', 0)}
               {renderCelula('corredor-terreo', LARGURA_CEL, {}, 'C')}
               {renderCelula('elevador-terreo', LARGURA_CEL, {}, 'L')}
               {renderCelula('escada-terreo', LARGURA_CEL, {}, 'E')}
