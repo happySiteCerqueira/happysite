@@ -17,6 +17,7 @@ const TITULOS_ROTA = [
   { prefixo: '/prestadores', titulo: '📇 Prestadores' },
   { prefixo: '/epi', titulo: '🦺 EPI' },
   { prefixo: '/financeiro', titulo: '💵 Financeiro' },
+  { prefixo: '/aso', titulo: '🩺 Controle de ASO' },
 
 
   { prefixo: '/configuracoes', titulo: '⚙️ Configurações' }
@@ -85,6 +86,7 @@ export default function Layout() {
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}
           {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
+          {temPermissao('RH') && <NavLink to="/aso" style={linkStyle}>🩺 Controle de ASO</NavLink>}
 
 
 

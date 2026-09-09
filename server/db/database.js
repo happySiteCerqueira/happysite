@@ -487,6 +487,20 @@ async function migrate() {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN data_primeiro_aso DATE');
   }
 
+  // Nova tabela: histórico de renovações do ASO. O primeiro ASO fica registrado em
+  // colaboradores.data_primeiro_aso; cada renovação subsequente gera uma linha aqui, e o
+  // vencimento "atual" passa a ser sempre calculado a partir da renovação mais recente
+  // (ou, se nunca houve renovação, a partir do data_primeiro_aso).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS aso_historico (
+      id SERIAL PRIMARY KEY,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      data_aso DATE NOT NULL,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
   // Migração idempotente: status do período de experiência (usado no Painel: quadro "Colaboradores em
   // Experiência"). Todo colaborador nasce como 'EFETIVADO' por padrão (coluna DEFAULT); no momento em que
   // esta coluna é criada, fazemos um backfill único: quem foi admitido há menos de 90 dias entra como
@@ -544,7 +558,7 @@ async function migrate() {
   const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
   if (permCountRes.rows[0].c === 0) {
     const MODULOS = [
-      'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro',
+      'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso',
       // Sub-abas granulares (dentro de módulos que já foram liberados para o perfil)
       'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
       'prestadores.cadastro',
@@ -559,6 +573,7 @@ async function migrate() {
       prestadores: ['FINANCEIRO', 'RH'],
       epi: ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR'],
       financeiro: ['FINANCEIRO', 'RH'],
+      aso: ['RH'],
       // Sub-abas: mesmo padrão que hoje está fixo em Financeiro.jsx/Prestadores.jsx/Epi.jsx
       'financeiro.receita': ['FINANCEIRO'],
       'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
@@ -587,7 +602,10 @@ async function migrate() {
       'financeiro.relatorios': ['FINANCEIRO'],
       'financeiro.resumo': [],
       'prestadores.cadastro': ['RH'],
-      'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR']
+      'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR'],
+      // Módulo novo (ASO): garante que já apareça liberado para RH mesmo em bancos que já
+      // passaram pelo seed inicial antes deste módulo existir.
+      'aso': ['RH']
     };
     const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
     for (const perfil of PERFIS) {

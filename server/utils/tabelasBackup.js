@@ -10,6 +10,7 @@ const TABELAS_BACKUP = [
   'obra_servico_celulas', 'obra_servico_quantidades', 'obra_apto_rotulos',
   'pagamentos_antecipados', 'diarias', 'medicoes', 'financeiro_receitas',
   'epi_itens', 'epi_retiradas', 'epi_retirada_itens', 'epi_movimentos',
+  'aso_historico',
   'perfil_permissoes', 'auditoria'
 ];
 

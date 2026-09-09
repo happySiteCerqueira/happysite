@@ -156,14 +156,29 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
   const estoqueBaixo = dados?.estoque_baixo || [];
   const funcionariosDoMes = dados?.funcionarios_do_mes || [];
   const colaboradoresExperiencia = dados?.colaboradores_experiencia || [];
+  const colaboradoresAso = dados?.aso_proximos_30_dias || [];
   const [processandoId, setProcessandoId] = useState(null);
   const [erroExperiencia, setErroExperiencia] = useState('');
   const [verTodosExperiencia, setVerTodosExperiencia] = useState(false);
+  const [verTodosAso, setVerTodosAso] = useState(false);
+  const [renovandoAso, setRenovandoAso] = useState(null); // colaborador sendo renovado (abre o modal)
 
   // Por padrão, mostra apenas quem precisa de atenção agora (em alerta, a poucos dias do próximo
   // vencimento, ou já com decisão pendente). "Ver todos" exibe a lista completa como está hoje.
   const emDestaqueExperiencia = colaboradoresExperiencia.filter(c => c.alerta || c.decisao_pendente);
   const listaExperienciaExibida = verTodosExperiencia ? colaboradoresExperiencia : emDestaqueExperiencia;
+
+  // Mesmo padrão do quadro de Experiência: por padrão mostra só quem está na janela de alerta
+  // (até 6 dias do vencimento, incluindo já vencidos). "Ver próximos 30 dias" exibe todos dentro
+  // dessa janela mais ampla (já filtrada pelo backend).
+  const emAlertaAso = colaboradoresAso.filter(c => c.alerta);
+  const listaAsoExibida = verTodosAso ? colaboradoresAso : emAlertaAso;
+
+  async function renovarAso(colaborador, dataNovoAso) {
+    await api.post(`/aso/${colaborador.id}/renovar`, { data_aso: dataNovoAso });
+    setRenovandoAso(null);
+    await recarregar();
+  }
 
   async function decidirExperiencia(colaborador, decisao) {
     const rotulos = { CONTINUAR: 'continuar a experiência', EFETIVAR: 'efetivar', DISPENSAR: 'dispensar' };
@@ -296,6 +311,81 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
         )}
       </div>
 
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h4 style={{ marginTop: 0 }}>🩺 Controle de ASO</h4>
+        {colaboradoresAso.length === 0 && (
+          <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum ASO vencendo nos próximos 30 dias.</p>
+        )}
+        {colaboradoresAso.length > 0 && !verTodosAso && emAlertaAso.length === 0 && (
+          <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum ASO precisando de atenção imediata no momento.</p>
+        )}
+        {colaboradoresAso.length > 0 && listaAsoExibida.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Colaborador</th>
+                <th>Função</th>
+                <th>Vencimento</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {listaAsoExibida.map(c => (
+                <tr key={c.id} style={c.alerta ? { background: '#fef3c7' } : undefined}>
+                  <td style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    borderLeft: c.alerta ? '4px solid #f59e0b' : '4px solid transparent'
+                  }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 3, background: c.cor, display: 'inline-block' }}></span>
+                    {c.nome}
+                    {c.alerta && (
+                      <span
+                        title={c.dias_restantes >= 0 ? `Faltam ${c.dias_restantes} dia(s) para o vencimento` : `Vencido há ${-c.dias_restantes} dia(s)`}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          background: c.dias_restantes < 0 ? '#dc2626' : '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700,
+                          padding: '2px 8px', borderRadius: 10, marginLeft: 4
+                        }}
+                      >
+                        {c.dias_restantes < 0
+                          ? `⚠️ Vencido há ${-c.dias_restantes} dia${-c.dias_restantes === 1 ? '' : 's'}`
+                          : `⚠️ Faltam ${c.dias_restantes} dia${c.dias_restantes === 1 ? '' : 's'}`}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ color: '#6b7280' }}>{c.funcao || '-'}</td>
+                  <td>{formatarDataSimples(c.data_vencimento)}</td>
+                  <td>
+                    {c.alerta ? (
+                      <button className="btn-success btn-sm" onClick={() => setRenovandoAso(c)}>♻ Renovar</button>
+                    ) : (
+                      <span style={{ color: '#9ca3af', fontSize: 12 }}>{c.dias_restantes} dia{c.dias_restantes === 1 ? '' : 's'} p/ vencer</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {colaboradoresAso.length > 0 && (
+          <div style={{ marginTop: 10, textAlign: 'right' }}>
+            <button className="btn-secondary btn-sm" onClick={() => setVerTodosAso(v => !v)}>
+              {verTodosAso
+                ? '▲ Ver apenas em alerta'
+                : `▼ Ver próximos 30 dias (${colaboradoresAso.length})`}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {renovandoAso && (
+        <ModalRenovarAsoPainel
+          colaborador={renovandoAso}
+          onFechar={() => setRenovandoAso(null)}
+          onRenovar={renovarAso}
+        />
+      )}
+
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div className="card">
           <h4 style={{ marginTop: 0 }}>🎂 Aniversariantes do mês</h4>
@@ -370,6 +460,56 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function ModalRenovarAsoPainel({ colaborador, onFechar, onRenovar }) {
+  const hoje = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const [dataNovoAso, setDataNovoAso] = useState(hoje());
+  const [confirmado, setConfirmado] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  async function confirmar() {
+    setErro('');
+    if (!dataNovoAso) { setErro('Informe a data do novo ASO.'); return; }
+    if (!confirmado) { setErro('Confirme que o novo ASO foi realmente realizado.'); return; }
+    setSalvando(true);
+    try {
+      await onRenovar(colaborador, dataNovoAso);
+    } catch (err) {
+      setErro(err.response?.data?.erro || 'Erro ao renovar ASO');
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onFechar}>
+      <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+        <h4 style={{ marginTop: 0 }}>Renovar ASO — {colaborador.nome}</h4>
+        {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
+
+        <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12 }}>Data do novo ASO</label>
+          <input type="date" value={dataNovoAso} onChange={e => setDataNovoAso(e.target.value)} />
+        </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 16 }}>
+          <input type="checkbox" checked={confirmado} onChange={e => setConfirmado(e.target.checked)} />
+          Confirmo que o novo ASO foi realmente realizado nesta data.
+        </label>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-success" disabled={salvando} onClick={confirmar} style={{ flex: 1, fontWeight: 700 }}>
+            {salvando ? 'Salvando...' : '✔ Confirmar renovação'}
+          </button>
+          <button className="btn-secondary" onClick={onFechar} style={{ flex: 1 }}>Cancelar</button>
+        </div>
       </div>
     </div>
   );

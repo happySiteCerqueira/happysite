@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
 const { registrar } = require('../utils/auditoria');
+const { listarVencimentosAso } = require('../utils/aso');
 
 const router = express.Router();
 
@@ -211,6 +212,12 @@ router.get('/', async (req, res) => {
 
   const funcionariosDoMes = Object.values(campeoesPorServico).sort((a, b) => b.total - a.total);
 
+  // ---- 5) Controle de ASO: vencimentos dentro dos próximos 30 dias (independe do mês selecionado,
+  // sempre reflete a situação atual/hoje, igual ao quadro de Colaboradores em Experiência) ----
+  const JANELA_ASO_DIAS = 30;
+  const todosVencimentosAso = await listarVencimentosAso();
+  const asoProximos30Dias = todosVencimentosAso.filter(c => c.dias_restantes <= JANELA_ASO_DIAS);
+
   res.json({
     mes,
     obras: obrasComServicos,
@@ -218,7 +225,8 @@ router.get('/', async (req, res) => {
     aniversariantes_empresa: aniversariantesEmpresa,
     estoque_baixo: estoqueBaixo,
     funcionarios_do_mes: funcionariosDoMes,
-    colaboradores_experiencia: colaboradoresExperiencia
+    colaboradores_experiencia: colaboradoresExperiencia,
+    aso_proximos_30_dias: asoProximos30Dias
   });
 });
 

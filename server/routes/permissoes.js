@@ -6,7 +6,7 @@ const { registrar } = require('../utils/auditoria');
 const router = express.Router();
 
 const MODULOS = [
-  'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro',
+  'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso',
   // Sub-abas granulares (só têm efeito prático se o módulo pai também estiver permitido)
   'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
   'prestadores.cadastro',

@@ -16,6 +16,7 @@ import Prestadores from './pages/Prestadores';
 import Backup from './pages/Backup';
 import Epi from './pages/Epi';
 import Financeiro from './pages/Financeiro';
+import Aso from './pages/Aso';
 
 
 
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="prestadores" element={<Prestadores />} />
         <Route path="epi" element={<Epi />} />
         <Route path="financeiro" element={<Financeiro />} />
+        <Route path="aso" element={<Aso />} />
 
 
       </Route>
