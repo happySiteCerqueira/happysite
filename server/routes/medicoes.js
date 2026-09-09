@@ -80,7 +80,7 @@ router.get('/gerar', async (req, res) => {
     const antecipadosMes = await db.all(
       `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta, c.funcao, c.contato_responsavel
        FROM pagamentos_antecipados pa JOIN colaboradores c ON c.id = pa.colaborador_id
-       WHERE pa.mes_ciclo = ? AND (pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento) > 0`, mes
+       WHERE pa.mes_ciclo = ? AND (pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento + pa.vale_ex_rh) > 0`, mes
     );
     colaboradoresExtras = [...diariasMes, ...antecipadosMes];
   }
@@ -154,7 +154,7 @@ router.get('/gerar', async (req, res) => {
   // (vale, FGTS, taxa, adiantamento etc.) que são descontos do valor líquido.
   const resultado = await Promise.all(Object.values(porPessoa).map(async p => {
     const l = await db.get('SELECT * FROM pagamentos_antecipados WHERE colaborador_id = ? AND mes_ciclo = ?', p.colaborador_id, mes);
-    const totalAntecipado = l ? (l.vale + l.fgts + l.taxa + l.pagto + l.vale_extra + l.adiantamento) : 0;
+    const totalAntecipado = l ? (l.vale + l.fgts + l.taxa + l.pagto + l.vale_extra + l.adiantamento + (l.vale_ex_rh || 0)) : 0;
     const diaria = await db.get('SELECT * FROM diarias WHERE colaborador_id = ? AND mes_ciclo = ?', p.colaborador_id, mes);
     const totalDiarias = diaria ? diaria.total : 0;
 
@@ -201,7 +201,8 @@ router.get('/gerar', async (req, res) => {
       taxa: l.taxa || 0,
       pagto: l.pagto || 0,
       vale_extra: l.vale_extra || 0,
-      adiantamento: l.adiantamento || 0
+      adiantamento: l.adiantamento || 0,
+      vale_ex_rh: l.vale_ex_rh || 0
     } : null;
 
     return {

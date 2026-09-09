@@ -244,6 +244,7 @@ async function migrate() {
       pagto DOUBLE PRECISION NOT NULL DEFAULT 0,
       vale_extra DOUBLE PRECISION NOT NULL DEFAULT 0,
       adiantamento DOUBLE PRECISION NOT NULL DEFAULT 0,
+      vale_ex_rh DOUBLE PRECISION NOT NULL DEFAULT 0,
       atualizado_por INTEGER REFERENCES usuarios(id),
       atualizado_em TIMESTAMP DEFAULT NOW(),
       UNIQUE(colaborador_id, mes_ciclo)
@@ -465,6 +466,12 @@ async function migrate() {
   // Migração idempotente: coluna "valor_diaria" em colaboradores
   if (!(await colunaExiste('colaboradores', 'valor_diaria'))) {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN valor_diaria DOUBLE PRECISION NOT NULL DEFAULT 0');
+  }
+
+  // Migração idempotente: coluna "vale_ex_rh" em pagamentos_antecipados (novo tipo de desconto,
+  // exibido na tela de Pagamentos Antecipados como "Vale Ex RH")
+  if (!(await colunaExiste('pagamentos_antecipados', 'vale_ex_rh'))) {
+    await pool.query('ALTER TABLE pagamentos_antecipados ADD COLUMN vale_ex_rh DOUBLE PRECISION NOT NULL DEFAULT 0');
   }
 
   // Migração idempotente: datas de nascimento e admissão em colaboradores (usado no Painel: aniversariantes)

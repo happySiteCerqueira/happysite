@@ -8,12 +8,12 @@ const router = express.Router();
 router.use(autenticar, permitir('FINANCEIRO', 'RH', 'ADM'));
 
 // Colunas de valores por tipo de pessoa
-const COLUNAS_PF = ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra'];
+const COLUNAS_PF = ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra', 'vale_ex_rh'];
 const COLUNAS_PJ = ['adiantamento'];
 
 function calcularTotal(linha) {
   return (linha.vale || 0) + (linha.fgts || 0) + (linha.taxa || 0) +
-    (linha.pagto || 0) + (linha.vale_extra || 0) + (linha.adiantamento || 0);
+    (linha.pagto || 0) + (linha.vale_extra || 0) + (linha.adiantamento || 0) + (linha.vale_ex_rh || 0);
 }
 
 // Planilha do mês: uma linha por pessoa ativa, agrupada por PJ/CPF, com os valores
@@ -33,7 +33,7 @@ router.get('/planilha', async (req, res) => {
 
   const resultado = { PJ: [], CPF: [] };
   pessoas.forEach(p => {
-    const l = porPessoa[p.id] || { vale: 0, fgts: 0, taxa: 0, pagto: 0, vale_extra: 0, adiantamento: 0 };
+    const l = porPessoa[p.id] || { vale: 0, fgts: 0, taxa: 0, pagto: 0, vale_extra: 0, adiantamento: 0, vale_ex_rh: 0 };
     const medicao = medicaoPorPessoa[p.id];
     const bloqueado = !!(medicao && medicao.status === 'PAGO');
     resultado[p.tipo].push({
@@ -47,6 +47,7 @@ router.get('/planilha', async (req, res) => {
       pagto: l.pagto || 0,
       vale_extra: l.vale_extra || 0,
       adiantamento: l.adiantamento || 0,
+      vale_ex_rh: l.vale_ex_rh || 0,
       total: calcularTotal(l),
       bloqueado
     });

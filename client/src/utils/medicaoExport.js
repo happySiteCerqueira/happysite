@@ -10,11 +10,12 @@ function formatarValorBR(valor) {
 
 const ROTULOS_PAGAMENTO = {
   vale: 'Vale',
-  fgts: 'FGTS',
+  fgts: 'INSS',
   taxa: 'Taxa',
   pagto: 'Pagto',
   vale_extra: 'Vale Extra',
-  adiantamento: 'Adiantamento'
+  adiantamento: 'Adiantamento',
+  vale_ex_rh: 'Vale Ex RH'
 };
 
 // Gera e baixa a planilha de Medição (dados já exibidos na tela) em formato Excel (.xlsx).

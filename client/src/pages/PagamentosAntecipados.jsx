@@ -4,11 +4,12 @@ import { useApuracao } from '../context/ApuracaoContext';
 
 const ROTULOS = {
   vale: 'Vale',
-  fgts: 'FGTS',
+  fgts: 'INSS',
   taxa: 'Taxa',
   pagto: 'Pagto',
   vale_extra: 'Vale Extra',
-  adiantamento: 'Adiantamento'
+  adiantamento: 'Adiantamento',
+  vale_ex_rh: 'Vale Ex RH'
 };
 
 export default function PagamentosAntecipados() {
@@ -161,7 +162,7 @@ export default function PagamentosAntecipados() {
         <Tabela titulo="Pessoa Jurídica (Empreiteiros)" itens={filtrarItens(planilha.PJ)} colunas={planilha.colunas?.PJ || ['adiantamento']} />
       )}
       {filtroTipo !== 'PJ' && (
-        <Tabela titulo="Pessoa Física (Colaboradores)" itens={filtrarItens(planilha.CPF)} colunas={planilha.colunas?.PF || ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra']} />
+        <Tabela titulo="Pessoa Física (Colaboradores)" itens={filtrarItens(planilha.CPF)} colunas={planilha.colunas?.PF || ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra', 'vale_ex_rh']} />
       )}
       <p style={{ color: '#6b7280', fontSize: 12 }}>
         Edite os valores diretamente na tabela (clique, digite e saia do campo para salvar). O <strong>Total</strong> é calculado
