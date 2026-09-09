@@ -482,6 +482,11 @@ async function migrate() {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN data_admissao DATE');
   }
 
+  // Migração idempotente: data do primeiro ASO (Atestado de Saúde Ocupacional) em colaboradores
+  if (!(await colunaExiste('colaboradores', 'data_primeiro_aso'))) {
+    await pool.query('ALTER TABLE colaboradores ADD COLUMN data_primeiro_aso DATE');
+  }
+
   // Migração idempotente: status do período de experiência (usado no Painel: quadro "Colaboradores em
   // Experiência"). Todo colaborador nasce como 'EFETIVADO' por padrão (coluna DEFAULT); no momento em que
   // esta coluna é criada, fazemos um backfill único: quem foi admitido há menos de 90 dias entra como

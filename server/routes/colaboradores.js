@@ -170,12 +170,12 @@ router.post('/', permitir('RH', 'ADM'), async (req, res) => {
   // Novo colaborador com data de admissão informada entra automaticamente em período de experiência
   // (usado no quadro "Colaboradores em Experiência" do Painel). Sem data de admissão, considera-se já efetivado.
   const experienciaStatus = b.data_admissao ? 'EM_EXPERIENCIA' : 'EFETIVADO';
-  const colunas = ['tipo', 'nome', 'documento', 'telefone', 'email', 'endereco', 'funcao', 'contato_responsavel', 'banco', 'agencia', 'conta', 'pix', 'cor', 'valor_diaria', 'data_nascimento', 'data_admissao', 'experiencia_status'];
+  const colunas = ['tipo', 'nome', 'documento', 'telefone', 'email', 'endereco', 'funcao', 'contato_responsavel', 'banco', 'agencia', 'conta', 'pix', 'cor', 'valor_diaria', 'data_nascimento', 'data_admissao', 'data_primeiro_aso', 'experiencia_status'];
   const valores = [
     b.tipo || 'CPF', b.nome, b.documento || null, b.telefone || null, b.email || null,
     b.endereco || null, b.funcao || null, b.contato_responsavel || null,
     b.banco || null, b.agencia || null, b.conta || null, b.pix || null, cor, Number(b.valor_diaria) || 0,
-    b.data_nascimento || null, b.data_admissao || null, experienciaStatus
+    b.data_nascimento || null, b.data_admissao || null, b.data_primeiro_aso || null, experienciaStatus
   ];
   const placeholders = colunas.map(() => '?').join(',');
   const info = await db.run(
@@ -194,10 +194,10 @@ router.put('/:id', permitir('RH', 'ADM'), async (req, res) => {
   await db.run(
     `UPDATE colaboradores SET tipo=?, nome=?, documento=?, telefone=?, email=?, endereco=?,
     funcao=?, contato_responsavel=?, banco=?, agencia=?, conta=?, pix=?, cor=?, valor_diaria=?,
-    data_nascimento=?, data_admissao=? WHERE id=?`,
+    data_nascimento=?, data_admissao=?, data_primeiro_aso=? WHERE id=?`,
     b.tipo, b.nome, b.documento, b.telefone, b.email, b.endereco,
     b.funcao, b.contato_responsavel, b.banco, b.agencia, b.conta, b.pix, b.cor, Number(b.valor_diaria) || 0,
-    b.data_nascimento || null, b.data_admissao || null, id
+    b.data_nascimento || null, b.data_admissao || null, b.data_primeiro_aso || null, id
   );
   await registrar(req.usuario.id, 'EDITAR', 'colaboradores', id, req.body);
   res.json({ ok: true });

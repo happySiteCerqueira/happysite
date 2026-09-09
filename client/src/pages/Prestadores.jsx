@@ -44,7 +44,7 @@ const CAMPO_VAZIO = {
 
   tipo: 'CPF', nome: '', documento: '', telefone: '', email: '', endereco: '',
   funcao: '', contato_responsavel: '', banco: '', agencia: '', conta: '', pix: '', valor_diaria: 0,
-  data_nascimento: '', data_admissao: ''
+  data_nascimento: '', data_admissao: '', data_primeiro_aso: ''
 };
 
 export default function Prestadores() {
@@ -190,7 +190,8 @@ function ListaPrestadores() {
       pix: p.pix || '',
       valor_diaria: p.valor_diaria ?? 0,
       data_nascimento: paraInputDate(p.data_nascimento),
-      data_admissao: paraInputDate(p.data_admissao)
+      data_admissao: paraInputDate(p.data_admissao),
+      data_primeiro_aso: paraInputDate(p.data_primeiro_aso)
     });
   }
 
@@ -277,6 +278,7 @@ function ListaPrestadores() {
               <th>Função / Contato</th>
               <th>Nascimento</th>
               <th>Admissão</th>
+              <th>1º ASO</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -291,6 +293,7 @@ function ListaPrestadores() {
                 <td style={{ color: '#6b7280' }}>{p.tipo === 'PJ' ? (p.contato_responsavel || '-') : (p.funcao || '-')}</td>
                 <td style={{ color: '#6b7280' }}>{formatarData(p.data_nascimento)}</td>
                 <td style={{ color: '#6b7280' }}>{formatarData(p.data_admissao)}</td>
+                <td style={{ color: '#6b7280' }}>{formatarData(p.data_primeiro_aso)}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {podeEditar && (
@@ -347,7 +350,7 @@ function ListaPrestadores() {
               </tr>
             ))}
             {listaFiltrada.length === 0 && (
-              <tr><td colSpan={9} style={{ color: '#9ca3af', padding: 16 }}>
+              <tr><td colSpan={10} style={{ color: '#9ca3af', padding: 16 }}>
                 {lista.length > 0
                   ? 'Nenhum prestador corresponde aos filtros selecionados.'
                   : (aba === 'arquivados' ? 'Nenhum colaborador/empreiteiro arquivado.' : 'Nenhum prestador encontrado.')}
@@ -387,6 +390,7 @@ function ListaPrestadores() {
               {linhaCampo(editando.tipo === 'PJ' ? 'Data de Fundação/Aniversário' : 'Data de Nascimento',
                 editando.data_nascimento, e => setEditando({ ...editando, data_nascimento: e.target.value }), 'date')}
               {linhaCampo('Data de Admissão', editando.data_admissao, e => setEditando({ ...editando, data_admissao: e.target.value }), 'date')}
+              {linhaCampo('Data do 1º ASO', editando.data_primeiro_aso, e => setEditando({ ...editando, data_primeiro_aso: e.target.value }), 'date')}
               {linhaCampo('Valor da Diária (R$)', editando.valor_diaria, e => setEditando({ ...editando, valor_diaria: e.target.value }), 'number')}
             </div>
 
