@@ -221,14 +221,25 @@ export default function Diarias() {
                     </select>
                   )}
                   {item.obras.length === 1 && (
-                    <select
-                      value={item.obras[0].obra_id}
-                      disabled={item.bloqueado || salvandoId === item.colaborador_id}
-                      onChange={e => trocarObraUnica(item, e.target.value)}
-                      style={{ minWidth: 130 }}
-                    >
-                      {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
-                    </select>
+                    <div className="flex gap-2" style={{ alignItems: 'center' }}>
+                      <select
+                        value={item.obras[0].obra_id}
+                        disabled={item.bloqueado || salvandoId === item.colaborador_id}
+                        onChange={e => trocarObraUnica(item, e.target.value)}
+                        style={{ minWidth: 130 }}
+                      >
+                        {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        disabled={item.bloqueado || salvandoId === item.colaborador_id}
+                        onClick={() => setModalObrasItem(item)}
+                        title="Adicionar mais uma obra para este colaborador neste mês"
+                      >
+                        + obra
+                      </button>
+                    </div>
                   )}
                   {item.obras.length > 1 && (
                     <button
@@ -287,6 +298,7 @@ export default function Diarias() {
       )}
     </div>
   );
+}
 
 // Modal de detalhamento: mostra, para o colaborador selecionado, quanto de diária foi lançado em
 // cada obra naquele mês, permite editar cada quantidade, remover uma obra ou adicionar uma nova.
@@ -414,6 +426,4 @@ function LinhaEditavel({ linha, salvando, onSalvar, onRemover }) {
       </td>
     </tr>
   );
-}
-
 }
