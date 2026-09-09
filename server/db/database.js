@@ -261,6 +261,16 @@ async function migrate() {
       UNIQUE(colaborador_id, mes_ciclo)
     );
 
+    CREATE TABLE IF NOT EXISTS diaria_obras (
+      id SERIAL PRIMARY KEY,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      mes_ciclo TEXT NOT NULL,
+      obra_id INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
+      quantidade DOUBLE PRECISION NOT NULL DEFAULT 0,
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      UNIQUE(colaborador_id, mes_ciclo, obra_id)
+    );
+
     CREATE TABLE IF NOT EXISTS medicoes (
       id SERIAL PRIMARY KEY,
       colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
