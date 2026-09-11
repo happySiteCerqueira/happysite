@@ -834,12 +834,29 @@ export default function ObraDetalhe() {
             <div className="flex-col gap-2">
               {servicoAtivo?.modo_execucao === 'grupo' ? (
                 <>
-                  {grupos.map(g => (
-                    <button key={g.id} className="btn-secondary" style={{ borderLeft: `6px solid ${g.cor || '#7c3aed'}` }} onClick={() => marcarGrupo(g.id)}>
-                      👥 {g.nome_grupo} ({g.membros.length} pessoa{g.membros.length !== 1 ? 's' : ''})
-                    </button>
-                  ))}
-                  {grupos.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum grupo cadastrado ainda. Vá em "Configurar serviço".</div>}
+                  {grupos.length > 0 && (
+                    <>
+                      <strong style={{ fontSize: 11, color: '#6b7280' }}>👥 Grupos</strong>
+                      {grupos.map(g => (
+                        <button key={g.id} className="btn-secondary" style={{ borderLeft: `6px solid ${g.cor || '#7c3aed'}` }} onClick={() => marcarGrupo(g.id)}>
+                          👥 {g.nome_grupo} ({g.membros.length} pessoa{g.membros.length !== 1 ? 's' : ''})
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {pessoasLiberadas.length > 0 && (
+                    <>
+                      <strong style={{ fontSize: 11, color: '#6b7280', marginTop: grupos.length > 0 ? 8 : 0 }}>Pessoas individuais</strong>
+                      {pessoasLiberadas.map(p => (
+                        <button key={p.id} className="btn-secondary" style={{ borderLeft: `6px solid ${p.cor}` }} onClick={() => marcarPessoa(p.id)}>
+                          {p.nome}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {grupos.length === 0 && pessoasLiberadas.length === 0 && (
+                    <div style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum grupo ou pessoa liberada para este serviço ainda. Vá em "Configurar serviço".</div>
+                  )}
                 </>
               ) : (
                 <>
