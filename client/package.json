@@ -12,6 +12,7 @@
   "dependencies": {
     "axios": "^1.19.0",
     "dayjs": "^1.11.21",
+    "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "react": "^19.2.8",

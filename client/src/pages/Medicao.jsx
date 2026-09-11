@@ -219,9 +219,9 @@ function BotaoExportar({ linhas, mes }) {
     return () => document.removeEventListener('mousedown', aoClicarFora);
   }, []);
 
-  function opcaoClicada(fn) {
-    fn(linhas, mes);
+  async function opcaoClicada(fn) {
     setAberto(false);
+    await fn(linhas, mes);
   }
 
   const opcoes = [
