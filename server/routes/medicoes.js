@@ -77,10 +77,14 @@ router.get('/gerar', async (req, res) => {
        FROM diarias d JOIN colaboradores c ON c.id = d.colaborador_id
        WHERE d.mes_ciclo = ? AND d.total > 0`, mes
     );
+    // "<> 0" (não apenas "> 0"): um total negativo é um lançamento válido também — acontece
+    // quando Vale Extra ou Vale Ex RH são lançados com valor negativo (saldo a favor da pessoa,
+    // que ela vai RECEBER em vez de ter descontado). Filtrar só "> 0" fazia a pessoa nem
+    // aparecer em Medição quando esse fosse o único lançamento do mês (sem obra/diária).
     const antecipadosMes = await db.all(
       `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta, c.funcao, c.contato_responsavel
        FROM pagamentos_antecipados pa JOIN colaboradores c ON c.id = pa.colaborador_id
-       WHERE pa.mes_ciclo = ? AND (pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento + pa.vale_ex_rh) > 0`, mes
+       WHERE pa.mes_ciclo = ? AND (pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento + pa.vale_ex_rh) <> 0`, mes
     );
     colaboradoresExtras = [...diariasMes, ...antecipadosMes];
   }
