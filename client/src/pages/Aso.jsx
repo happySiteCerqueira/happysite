@@ -51,9 +51,14 @@ function AbaVencimentos() {
   const [erro, setErro] = useState('');
   const [renovando, setRenovando] = useState(null); // colaborador sendo renovado (abre o modal)
 
+  // IMPORTANTE: esta função NÃO deve ter "return" antes de api.get(...) — ela é passada
+  // diretamente para useEffect(carregar, []) logo abaixo, e o React trata qualquer valor
+  // retornado por uma função de efeito como sua "função de limpeza" (cleanup). Se retornasse
+  // a Promise da requisição, o React tentaria chamá-la como função ao desmontar o componente
+  // (ex: ao trocar para a aba "Histórico"), causando o erro "destroy is not a function".
   function carregar() {
     setCarregando(true);
-    return api.get('/aso/vencimentos').then(res => setLista(res.data)).catch(() => setErro('Erro ao carregar vencimentos de ASO')).finally(() => setCarregando(false));
+    api.get('/aso/vencimentos').then(res => setLista(res.data)).catch(() => setErro('Erro ao carregar vencimentos de ASO')).finally(() => setCarregando(false));
   }
   useEffect(carregar, []);
 

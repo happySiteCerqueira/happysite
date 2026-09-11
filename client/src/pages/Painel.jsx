@@ -76,9 +76,14 @@ export default function Painel() {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
 
+  // IMPORTANTE: sem "return" antes de api.get(...) — esta função é passada direto para
+  // useEffect(carregar, [mes]) logo abaixo, e o React trata qualquer valor retornado por uma
+  // função de efeito como sua "função de limpeza" (cleanup). Retornar a Promise fazia o React
+  // tentar chamá-la como função ao desmontar o componente (ex: ao trocar de página), causando
+  // o erro "destroy is not a function".
   function carregar() {
     setCarregando(true);
-    return api.get('/painel', { params: { mes } }).then(res => setDados(res.data)).finally(() => setCarregando(false));
+    api.get('/painel', { params: { mes } }).then(res => setDados(res.data)).finally(() => setCarregando(false));
   }
   useEffect(carregar, [mes]);
 
