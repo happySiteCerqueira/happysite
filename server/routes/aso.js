@@ -16,7 +16,10 @@ router.get('/vencimentos', async (req, res) => {
   res.json(lista);
 });
 
-// Histórico completo (1º ASO + todas as renovações) de um colaborador específico.
+// Histórico completo (1º ASO + todas as renovações) de um colaborador específico. Sempre
+// retorna a lista mesmo que o colaborador nunca tenha feito nenhum ASO ainda (histórico vazio),
+// para funcionar como o seletor de colaborador da tela de EPI (mostra todo mundo, com ou sem
+// nenhum lançamento ainda).
 router.get('/historico/:colaboradorId', async (req, res) => {
   const colaborador = await db.get('SELECT id, nome, data_primeiro_aso FROM colaboradores WHERE id = ?', req.params.colaboradorId);
   if (!colaborador) return res.status(404).json({ erro: 'Colaborador não encontrado' });
@@ -24,22 +27,24 @@ router.get('/historico/:colaboradorId', async (req, res) => {
   const renovacoes = await db.all(
     `SELECT h.id, h.data_aso, h.criado_em, u.nome as criado_por_nome
      FROM aso_historico h LEFT JOIN usuarios u ON u.id = h.criado_por
-     WHERE h.colaborador_id = ? ORDER BY h.data_aso DESC`,
+     WHERE h.colaborador_id = ? ORDER BY h.data_aso ASC`,
     req.params.colaboradorId
   );
 
-  // Monta a linha do tempo completa: 1º ASO (se houver) + cada renovação, cada uma com seu
-  // próprio vencimento calculado (1 ano corrido a partir daquela data).
-  const linhaDoTempo = [];
+  // Monta a linha do tempo em ordem CRONOLÓGICA (mais antigo primeiro): 1º ASO (se houver) +
+  // cada renovação, cada uma com seu próprio vencimento calculado (1 ano corrido a partir
+  // daquela data). Isso permite comparar cada exame com o vencimento do exame ANTERIOR, para
+  // identificar quando um ASO foi feito de forma ANTECIPADA (antes do prazo vencer).
+  const linhaCronologica = [];
   if (colaborador.data_primeiro_aso) {
-    linhaDoTempo.push({
+    linhaCronologica.push({
       tipo: 'PRIMEIRO_ASO',
       data_aso: colaborador.data_primeiro_aso,
       data_vencimento: calcularVencimentoAso(colaborador.data_primeiro_aso)
     });
   }
   renovacoes.forEach(r => {
-    linhaDoTempo.push({
+    linhaCronologica.push({
       tipo: 'RENOVACAO',
       data_aso: r.data_aso,
       data_vencimento: calcularVencimentoAso(r.data_aso),
@@ -47,9 +52,23 @@ router.get('/historico/:colaboradorId', async (req, res) => {
       criado_em: r.criado_em
     });
   });
-  linhaDoTempo.sort((a, b) => new Date(b.data_aso) - new Date(a.data_aso));
 
-  res.json({ colaborador, historico: linhaDoTempo });
+  // Marca como "antecipado" (e calcula quantos dias antes) todo exame feito antes do vencimento
+  // do exame imediatamente anterior — ex: o exame venceria em 10/01/2026 mas a pessoa já fez o
+  // novo ASO em 01/12/2025, um mês antes do previsto.
+  for (let i = 1; i < linhaCronologica.length; i++) {
+    const vencimentoAnterior = linhaCronologica[i - 1].data_vencimento;
+    const diasAntecipacao = Math.round((new Date(vencimentoAnterior) - new Date(linhaCronologica[i].data_aso)) / (1000 * 60 * 60 * 24));
+    if (diasAntecipacao > 0) {
+      linhaCronologica[i].antecipado = true;
+      linhaCronologica[i].dias_antecipacao = diasAntecipacao;
+    }
+  }
+
+  // Retorna do mais recente para o mais antigo (ordem de exibição na tela).
+  const historico = linhaCronologica.slice().reverse();
+
+  res.json({ colaborador, historico });
 });
 
 // Renova o ASO de um colaborador: registra a nova data em aso_historico. O vencimento passa a

@@ -212,11 +212,12 @@ router.get('/', async (req, res) => {
 
   const funcionariosDoMes = Object.values(campeoesPorServico).sort((a, b) => b.total - a.total);
 
-  // ---- 5) Controle de ASO: vencimentos dentro dos próximos 30 dias (independe do mês selecionado,
-  // sempre reflete a situação atual/hoje, igual ao quadro de Colaboradores em Experiência) ----
+  // ---- 5) Controle de ASO: vencimentos dentro dos próximos 30 dias, mais quem nunca fez ASO
+  // ainda (sem_aso, sempre incluído por ser o caso mais urgente) — independe do mês selecionado,
+  // sempre reflete a situação atual/hoje, igual ao quadro de Colaboradores em Experiência ----
   const JANELA_ASO_DIAS = 30;
   const todosVencimentosAso = await listarVencimentosAso();
-  const asoProximos30Dias = todosVencimentosAso.filter(c => c.dias_restantes <= JANELA_ASO_DIAS);
+  const asoProximos30Dias = todosVencimentosAso.filter(c => c.sem_aso || c.dias_restantes <= JANELA_ASO_DIAS);
 
   res.json({
     mes,

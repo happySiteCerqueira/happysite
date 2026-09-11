@@ -61,9 +61,9 @@ function AbaVencimentos() {
 
   return (
     <div className="card">
-      <h4 style={{ marginTop: 0 }}>Colaboradores com ASO cadastrado</h4>
+      <h4 style={{ marginTop: 0 }}>Todos os colaboradores ativos</h4>
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
-      {lista.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum colaborador com data de ASO cadastrada. Preencha a "Data do 1º ASO" no cadastro do colaborador (aba Prestadores).</p>}
+      {lista.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum colaborador ativo encontrado.</p>}
 
       {lista.length > 0 && (
         <table>
@@ -85,7 +85,16 @@ function AbaVencimentos() {
                 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 3, background: c.cor, display: 'inline-block' }}></span>
                   {c.nome}
-                  {c.alerta && (
+                  {c.sem_aso && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      background: '#dc2626', color: '#fff', fontSize: 11, fontWeight: 700,
+                      padding: '2px 8px', borderRadius: 10, marginLeft: 4
+                    }}>
+                      ⚠️ Nunca registrado
+                    </span>
+                  )}
+                  {!c.sem_aso && c.alerta && (
                     <span
                       title={c.dias_restantes >= 0 ? `Faltam ${c.dias_restantes} dia(s) para o vencimento` : `Vencido há ${-c.dias_restantes} dia(s)`}
                       style={{
@@ -101,13 +110,24 @@ function AbaVencimentos() {
                   )}
                 </td>
                 <td style={{ color: '#6b7280' }}>{c.funcao || '-'}</td>
-                <td>{formatarData(c.data_base)}</td>
-                <td>{formatarData(c.data_vencimento)}</td>
+                <td>{c.sem_aso ? '-' : formatarData(c.data_base)}</td>
+                <td>{c.sem_aso ? '-' : formatarData(c.data_vencimento)}</td>
                 <td>
-                  {c.alerta ? (
+                  {c.sem_aso ? (
+                    <button className="btn-success btn-sm" onClick={() => setRenovando(c)}>✚ Registrar 1º ASO</button>
+                  ) : c.alerta ? (
                     <button className="btn-success btn-sm" onClick={() => setRenovando(c)}>♻ Renovar</button>
                   ) : (
-                    <span style={{ color: '#9ca3af', fontSize: 12 }}>{c.dias_restantes} dia{c.dias_restantes === 1 ? '' : 's'} p/ vencer</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: '#9ca3af', fontSize: 12 }}>{c.dias_restantes} dia{c.dias_restantes === 1 ? '' : 's'} p/ vencer</span>
+                      <button
+                        className="btn-secondary btn-sm"
+                        title="Registrar um novo ASO antes do vencimento (ASO antecipado)"
+                        onClick={() => setRenovando(c)}
+                      >
+                        ✚ ASO antecipado
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -147,25 +167,33 @@ function ModalRenovarAso({ colaborador, onFechar, onRenovado }) {
     setSalvando(false);
   }
 
+  const titulo = colaborador.sem_aso ? 'Registrar 1º ASO' : 'Renovar ASO';
+
   return (
     <div className="modal-overlay" onClick={onFechar}>
       <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
-        <h4 style={{ marginTop: 0 }}>Renovar ASO — {colaborador.nome}</h4>
+        <h4 style={{ marginTop: 0 }}>{titulo} — {colaborador.nome}</h4>
+        {!colaborador.sem_aso && !colaborador.alerta && (
+          <p style={{ fontSize: 12, color: '#6b7280', marginTop: -8, marginBottom: 12 }}>
+            O ASO atual ainda tem {colaborador.dias_restantes} dia{colaborador.dias_restantes === 1 ? '' : 's'} de validade. Registrar
+            um novo exame agora conta como <strong>ASO antecipado</strong> e passa a ser a nova referência de vencimento.
+          </p>
+        )}
         {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
         <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12 }}>Data do novo ASO</label>
+          <label style={{ fontSize: 12 }}>Data do {colaborador.sem_aso ? 'primeiro' : 'novo'} ASO</label>
           <input type="date" value={dataNovoAso} onChange={e => setDataNovoAso(e.target.value)} />
         </div>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 16 }}>
           <input type="checkbox" checked={confirmado} onChange={e => setConfirmado(e.target.checked)} />
-          Confirmo que o novo ASO foi realmente realizado nesta data.
+          Confirmo que o {colaborador.sem_aso ? 'ASO' : 'novo ASO'} foi realmente realizado nesta data.
         </label>
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn-success" disabled={salvando} onClick={confirmar} style={{ flex: 1, fontWeight: 700 }}>
-            {salvando ? 'Salvando...' : '✔ Confirmar renovação'}
+            {salvando ? 'Salvando...' : `✔ Confirmar ${colaborador.sem_aso ? 'registro' : 'renovação'}`}
           </button>
           <button className="btn-secondary" onClick={onFechar} style={{ flex: 1 }}>Cancelar</button>
         </div>
@@ -199,11 +227,15 @@ function AbaHistorico() {
   return (
     <div className="card">
       <h4 style={{ marginTop: 0 }}>Histórico de ASO por colaborador</h4>
+      <p style={{ fontSize: 12, color: '#6b7280', marginTop: -8, marginBottom: 16 }}>
+        Selecione um colaborador para ver todas as datas em que ele já fez o exame (igual ao histórico de EPI). O vencimento
+        atual sempre é calculado a partir da <strong>última</strong> data de exame registrada.
+      </p>
       <div className="flex-col gap-2" style={{ marginBottom: 16, maxWidth: 360 }}>
         <label style={{ fontSize: 12 }}>Colaborador</label>
         <select value={colaboradorId} onChange={e => setColaboradorId(e.target.value)}>
           <option value="">Selecione um colaborador...</option>
-          {colaboradores.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          {colaboradores.map(c => <option key={c.id} value={c.id}>{c.nome}{c.sem_aso ? ' (nunca fez ASO)' : ''}</option>)}
         </select>
       </div>
 
@@ -213,7 +245,7 @@ function AbaHistorico() {
       {!carregando && dados && (
         <>
           {dados.historico.length === 0 && (
-            <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum ASO registrado ainda para este colaborador.</p>
+            <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum ASO registrado ainda para este colaborador. Vá em "Vencimentos" para registrar o 1º ASO.</p>
           )}
           {dados.historico.length > 0 && (() => {
             const hojeStr = hoje();
@@ -233,7 +265,20 @@ function AbaHistorico() {
                     const vencido = h.data_vencimento < hojeStr;
                     return (
                       <tr key={i}>
-                        <td>{h.tipo === 'PRIMEIRO_ASO' ? '1º ASO' : 'Renovação'}</td>
+                        <td>
+                          {h.tipo === 'PRIMEIRO_ASO' ? '1º ASO' : 'Renovação'}
+                          {h.antecipado && (
+                            <span
+                              title={`Feito ${h.dias_antecipacao} dia(s) antes do vencimento do exame anterior`}
+                              style={{
+                                marginLeft: 6, fontSize: 11, fontWeight: 700, color: '#1d4ed8',
+                                background: '#dbeafe', padding: '2px 8px', borderRadius: 10
+                              }}
+                            >
+                              ⏩ Antecipado ({h.dias_antecipacao}d)
+                            </span>
+                          )}
+                        </td>
                         <td>{formatarData(h.data_aso)}</td>
                         <td>{formatarData(h.data_vencimento)}</td>
                         <td>

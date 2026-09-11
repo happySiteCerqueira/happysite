@@ -338,7 +338,16 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                   }}>
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: c.cor, display: 'inline-block' }}></span>
                     {c.nome}
-                    {c.alerta && (
+                    {c.sem_aso && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: '#dc2626', color: '#fff', fontSize: 11, fontWeight: 700,
+                        padding: '2px 8px', borderRadius: 10, marginLeft: 4
+                      }}>
+                        ⚠️ Nunca registrado
+                      </span>
+                    )}
+                    {!c.sem_aso && c.alerta && (
                       <span
                         title={c.dias_restantes >= 0 ? `Faltam ${c.dias_restantes} dia(s) para o vencimento` : `Vencido há ${-c.dias_restantes} dia(s)`}
                         style={{
@@ -354,9 +363,11 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                     )}
                   </td>
                   <td style={{ color: '#6b7280' }}>{c.funcao || '-'}</td>
-                  <td>{formatarDataSimples(c.data_vencimento)}</td>
+                  <td>{c.sem_aso ? '-' : formatarDataSimples(c.data_vencimento)}</td>
                   <td>
-                    {c.alerta ? (
+                    {c.sem_aso ? (
+                      <button className="btn-success btn-sm" onClick={() => setRenovandoAso(c)}>✚ Registrar 1º ASO</button>
+                    ) : c.alerta ? (
                       <button className="btn-success btn-sm" onClick={() => setRenovandoAso(c)}>♻ Renovar</button>
                     ) : (
                       <span style={{ color: '#9ca3af', fontSize: 12 }}>{c.dias_restantes} dia{c.dias_restantes === 1 ? '' : 's'} p/ vencer</span>
@@ -488,25 +499,27 @@ function ModalRenovarAsoPainel({ colaborador, onFechar, onRenovar }) {
     }
   }
 
+  const titulo = colaborador.sem_aso ? 'Registrar 1º ASO' : 'Renovar ASO';
+
   return (
     <div className="modal-overlay" onClick={onFechar}>
       <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
-        <h4 style={{ marginTop: 0 }}>Renovar ASO — {colaborador.nome}</h4>
+        <h4 style={{ marginTop: 0 }}>{titulo} — {colaborador.nome}</h4>
         {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
         <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12 }}>Data do novo ASO</label>
+          <label style={{ fontSize: 12 }}>Data do {colaborador.sem_aso ? 'primeiro' : 'novo'} ASO</label>
           <input type="date" value={dataNovoAso} onChange={e => setDataNovoAso(e.target.value)} />
         </div>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 16 }}>
           <input type="checkbox" checked={confirmado} onChange={e => setConfirmado(e.target.checked)} />
-          Confirmo que o novo ASO foi realmente realizado nesta data.
+          Confirmo que o {colaborador.sem_aso ? 'ASO' : 'novo ASO'} foi realmente realizado nesta data.
         </label>
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn-success" disabled={salvando} onClick={confirmar} style={{ flex: 1, fontWeight: 700 }}>
-            {salvando ? 'Salvando...' : '✔ Confirmar renovação'}
+            {salvando ? 'Salvando...' : `✔ Confirmar ${colaborador.sem_aso ? 'registro' : 'renovação'}`}
           </button>
           <button className="btn-secondary" onClick={onFechar} style={{ flex: 1 }}>Cancelar</button>
         </div>

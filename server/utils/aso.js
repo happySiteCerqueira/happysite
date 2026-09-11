@@ -23,17 +23,32 @@ async function dataBaseAsoAtual(colaborador) {
   return ultimaRenovacao ? ultimaRenovacao.data_aso : colaborador.data_primeiro_aso;
 }
 
-// Lista, com vencimento e dias restantes calculados, de todos os colaboradores ativos que já
-// têm ASO cadastrado (data_primeiro_aso preenchida).
+// Lista, com vencimento e dias restantes calculados, de TODOS os colaboradores ativos —
+// inclusive quem ainda nunca teve nenhum ASO registrado (sem_aso: true, sem data/vencimento),
+// para que apareçam na tela de Vencimentos (com opção de registrar o 1º ASO) e no seletor da
+// aba Histórico (mesmo sem nenhum lançamento ainda, igual ao padrão da tela de EPI).
 async function listarVencimentosAso() {
   const colaboradores = await db.all(
-    "SELECT id, nome, cor, funcao, data_primeiro_aso FROM colaboradores WHERE ativo = 1 AND data_primeiro_aso IS NOT NULL ORDER BY nome"
+    "SELECT id, nome, cor, funcao, data_primeiro_aso FROM colaboradores WHERE ativo = 1 ORDER BY nome"
   );
 
   const hojeStr = new Date().toISOString().slice(0, 10);
 
   const lista = await Promise.all(colaboradores.map(async c => {
     const dataBase = await dataBaseAsoAtual(c);
+    if (!dataBase) {
+      return {
+        id: c.id,
+        nome: c.nome,
+        cor: c.cor,
+        funcao: c.funcao,
+        data_base: null,
+        data_vencimento: null,
+        dias_restantes: null,
+        sem_aso: true,
+        alerta: true
+      };
+    }
     const vencimento = calcularVencimentoAso(dataBase);
     const diasRestantes = Math.round((new Date(vencimento) - new Date(hojeStr)) / (1000 * 60 * 60 * 24));
     return {
@@ -44,11 +59,18 @@ async function listarVencimentosAso() {
       data_base: dataBase,
       data_vencimento: vencimento,
       dias_restantes: diasRestantes,
+      sem_aso: false,
       alerta: diasRestantes <= LIMITE_ALERTA_DIAS
     };
   }));
 
-  lista.sort((a, b) => a.dias_restantes - b.dias_restantes);
+  // Quem nunca fez ASO aparece primeiro (mais urgente que qualquer prazo já em contagem);
+  // entre os demais, ordena pelo vencimento mais próximo primeiro.
+  lista.sort((a, b) => {
+    if (a.sem_aso !== b.sem_aso) return a.sem_aso ? -1 : 1;
+    if (a.sem_aso && b.sem_aso) return a.nome.localeCompare(b.nome, 'pt-BR');
+    return a.dias_restantes - b.dias_restantes;
+  });
   return lista;
 }
 
