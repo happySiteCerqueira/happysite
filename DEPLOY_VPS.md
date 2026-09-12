@@ -211,6 +211,68 @@ git pull
 docker compose up -d --build
 ```
 
+## Backup automático no Google Drive
+
+O sistema já gera um backup automático diário (JSON com todos os dados) salvo localmente. Para
+que esse backup também seja enviado automaticamente para a pasta **SISTEMA CERQUEIRA** no Google
+Drive (https://drive.google.com/drive/folders/1PnftnPAiqXAazYcTfKjAG5-y59Pu6ioO), siga os passos
+abaixo (feitos **uma única vez**):
+
+### PASSO A — Criar a conta de serviço no Google Cloud
+
+1. Acesse **https://console.cloud.google.com** e faça login com sua conta Google (a mesma dona do
+   Drive onde está a pasta "SISTEMA CERQUEIRA").
+2. No topo, clique no seletor de projeto → **Novo Projeto**. Dê um nome (ex: `happysite-backup`)
+   e clique em **Criar**. Espere alguns segundos e selecione esse projeto recém-criado.
+3. No menu lateral (☰), vá em **APIs e Serviços → Biblioteca**. Pesquise por **Google Drive API**
+   e clique em **Ativar**.
+4. Vá em **APIs e Serviços → Credenciais**. Clique em **+ Criar Credenciais → Conta de serviço**.
+5. Dê um nome (ex: `backup-happysite`) e clique em **Criar e Continuar**, depois **Concluir**
+   (pode pular as etapas de permissões/acesso, não são necessárias).
+6. Na lista de contas de serviço, clique na que você acabou de criar. Vá na aba **Chaves** →
+   **Adicionar Chave → Criar nova chave** → formato **JSON** → **Criar**. Um arquivo `.json` será
+   baixado no seu computador — **guarde-o em local seguro, ele não pode ser baixado de novo**.
+7. Copie o e-mail dessa conta de serviço (aparece no topo da página, formato
+   `backup-happysite@nome-do-projeto.iam.gserviceaccount.com`).
+
+### PASSO B — Compartilhar a pasta do Drive com a conta de serviço
+
+1. Abra a pasta **SISTEMA CERQUEIRA** no Google Drive (o link que você já tem).
+2. Clique com o botão direito → **Compartilhar** → cole o e-mail da conta de serviço (copiado no
+   passo anterior) → defina a permissão como **Editor** → **Enviar/Compartilhar**.
+   (Isso é essencial: sem isso, o upload falha com erro de "cota de armazenamento" — contas de
+   serviço não têm cota própria, mas podem gravar em pastas de outros usuários que as autorizarem.)
+
+### PASSO C — Configurar a variável de ambiente no servidor
+
+1. Abra o arquivo `.json` baixado no Passo A com um editor de texto. Copie **todo o conteúdo**
+   (é um JSON de uma linha ou poucas linhas).
+2. No servidor (via SSH), edite o arquivo `.env` na raiz do projeto (`/opt/happysite/.env`):
+   ```bash
+   cd /opt/happysite
+   nano .env
+   ```
+3. Adicione a linha abaixo, colando o conteúdo do JSON **todo em uma única linha**, sem quebras:
+   ```
+   GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"...", ... (resto do JSON)}
+   ```
+4. Salve (Ctrl+O, Enter, Ctrl+X no nano) e reinicie a aplicação:
+   ```bash
+   docker compose up -d
+   ```
+5. Para confirmar que funcionou, veja os logs no dia seguinte (o backup automático roda 1x/dia):
+   ```bash
+   docker compose logs app | grep -i "google drive"
+   ```
+   Deve aparecer `[backup automático] Enviado para o Google Drive (API) com sucesso: ...`. Para
+   testar imediatamente sem esperar o dia seguinte, reinicie o container logo após configurar a
+   variável (`docker compose up -d`) — o backup automático sempre roda ~1 minuto após o servidor
+   subir, além de 1x a cada 24h.
+
+> **Ambiente local (sua máquina)**: se a pasta `G:\Meu Drive\SISTEMA CERQUEIRA\HappySite\backups`
+> existir (ou seja, o app do Google Drive para desktop estiver instalado e sincronizado), o backup
+> automático local já copia o arquivo direto para lá, sem precisar de nenhuma configuração extra.
+
 ## Observações importantes
 
 - Os dados do banco, os arquivos de comprovantes e os backups automáticos ficam salvos em volumes

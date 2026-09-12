@@ -2,10 +2,18 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../db/database');
 const { TABELAS_BACKUP } = require('./tabelasBackup');
+const { enviarArquivoParaGoogleDrive } = require('./googleDrive');
 
 const backupsDir = path.join(__dirname, '..', '..', 'backups');
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 const DIAS_PARA_MANTER = 7; // mantém os últimos 7 backups automáticos, apaga os mais antigos
+
+// Pasta local do Google Drive (sincronização via app "Google Drive para desktop"), usada SOMENTE
+// quando o servidor roda na própria máquina do usuário (ambiente de desenvolvimento/local) — nesse
+// caso basta copiar o arquivo direto para dentro da pasta sincronizada, que o próprio app do Drive
+// já cuida do upload. Em produção (servidor remoto na nuvem) essa pasta não existe, então o envio
+// é feito via API oficial do Google Drive (ver server/utils/googleDrive.js).
+const PASTA_DRIVE_LOCAL = 'G:\\Meu Drive\\SISTEMA CERQUEIRA\\HappySite\\backups';
 
 async function gerarBackupAutomatico() {
   if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true });
@@ -17,8 +25,32 @@ async function gerarBackupAutomatico() {
 
   const nomeArquivo = `auto-${new Date().toISOString().slice(0, 10)}.json`;
   const destino = path.join(backupsDir, nomeArquivo);
-  fs.writeFileSync(destino, JSON.stringify(dump));
+  const conteudo = JSON.stringify(dump);
+  fs.writeFileSync(destino, conteudo);
   console.log(`[backup automático] Gerado: ${nomeArquivo}`);
+
+  // 1) Ambiente local: copia direto para a pasta do Google Drive já sincronizada no computador
+  // (se existir). Não bloqueia nem falha o backup principal caso a pasta não esteja disponível
+  // (ex: rodando em produção, ou o app do Drive não estar instalado/logado neste momento).
+  try {
+    if (fs.existsSync(PASTA_DRIVE_LOCAL)) {
+      fs.writeFileSync(path.join(PASTA_DRIVE_LOCAL, nomeArquivo), conteudo);
+      console.log(`[backup automático] Copiado também para a pasta local do Google Drive: ${nomeArquivo}`);
+    }
+  } catch (e) {
+    console.error('[backup automático] Não foi possível copiar para a pasta local do Google Drive:', e.message);
+  }
+
+  // 2) Ambiente de produção (ou qualquer servidor sem a pasta do Drive montada): envia via API
+  // oficial do Google Drive, usando uma conta de serviço (configurada via variável de ambiente
+  // GOOGLE_SERVICE_ACCOUNT_JSON). Se essa variável não estiver configurada, a função simplesmente
+  // não faz nada — não interrompe o backup local, que já está garantido acima.
+  const resultadoDrive = await enviarArquivoParaGoogleDrive(destino, nomeArquivo);
+  if (resultadoDrive.enviado) {
+    console.log(`[backup automático] Enviado para o Google Drive (API) com sucesso: ${nomeArquivo}`);
+  } else if (resultadoDrive.motivo) {
+    console.log(`[backup automático] Envio ao Google Drive via API não realizado: ${resultadoDrive.motivo}`);
+  }
 
   limparBackupsAntigos();
 }

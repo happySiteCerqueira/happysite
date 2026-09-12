@@ -27,6 +27,9 @@ services:
       DATABASE_URL: postgresql://happysite:${DB_PASSWORD}@db:5432/happysite
       DB_SSL: "false"
       PORT: 3001
+      # Opcional: credenciais da conta de serviço do Google (ver .env.example e DEPLOY_VPS.md)
+      # para o backup automático diário também ser enviado à pasta "SISTEMA CERQUEIRA" no Drive.
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
     volumes:
       - app_data:/app/data
       - app_backups:/app/backups
