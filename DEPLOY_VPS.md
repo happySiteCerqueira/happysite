@@ -203,13 +203,88 @@ docker compose exec db pg_dump -U happysite happysite > backup-manual-$(date +%Y
 
 ## Atualizando o sistema depois de mudanças no código
 
-Sempre que eu (ou você) fizer alguma alteração e enviar para o GitHub, para aplicar no VPS:
+> ✅ **Automatizado via GitHub Actions.** Depois de configurados os 3 secrets abaixo (uma única
+> vez), **todo push na branch `main` atualiza o servidor sozinho** — não é mais preciso entrar por
+> SSH. Acompanhe cada deploy na aba **Actions** do repositório no GitHub.
+
+O processo manual abaixo continua válido como plano B (ex: se o Actions estiver fora do ar):
 
 ```bash
 cd /opt/happysite
 git pull
 docker compose up -d --build
 ```
+
+### Configuração do deploy automático (fazer uma única vez)
+
+O workflow fica em `.github/workflows/deploy.yml`. Ele usa uma chave SSH dedicada (não reaproveita
+a chave pessoal do Lightsail) e três secrets do GitHub.
+
+**PASSO 1 — Criar a chave SSH de deploy (no PowerShell do seu PC):**
+
+```powershell
+ssh-keygen -t ed25519 -C "deploy-happysite" -f "$env:USERPROFILE\.ssh\deploy_happysite" -N '""'
+```
+
+Isso cria dois arquivos em `C:\Users\Jorlan\.ssh\`:
+- `deploy_happysite` → chave **privada** (vai para o GitHub, nunca compartilhe)
+- `deploy_happysite.pub` → chave **pública** (vai para o servidor)
+
+**PASSO 2 — Autorizar a chave pública no servidor.** Copie o conteúdo do arquivo `.pub`:
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\deploy_happysite.pub"
+```
+
+Conecte no servidor (SSH ou console do Lightsail) e cole o conteúdo dentro das aspas:
+
+```bash
+echo "ssh-ed25519 AAAA... deploy-happysite" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+**PASSO 3 — Testar o acesso com a chave nova (do seu PC):**
+
+```powershell
+ssh -i "$env:USERPROFILE\.ssh\deploy_happysite" ubuntu@3.228.110.68
+```
+
+Deve entrar **sem pedir senha**. Digite `exit` para sair. Se pedir senha, a chave pública não foi
+colada corretamente no passo 2.
+
+**PASSO 4 — Cadastrar os 3 secrets no GitHub.** Vá em:
+`https://github.com/happySiteCerqueira/happysite/settings/secrets/actions` → **New repository secret**
+
+| Nome do secret | Valor |
+|---|---|
+| `DEPLOY_KEY` | Conteúdo **completo** da chave privada `deploy_happysite` (incluindo as linhas `-----BEGIN...` e `-----END...`) |
+| `DEPLOY_HOST` | `3.228.110.68` |
+| `DEPLOY_USER` | `ubuntu` |
+
+Para copiar a chave privada inteira para a área de transferência:
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\deploy_happysite" | Set-Clipboard
+```
+
+**PASSO 5 — Testar.** Faça qualquer push na `main` (ou vá na aba **Actions** → *Deploy HappySite*
+→ **Run workflow**, que dispara o deploy sem precisar de commit). O log mostra o commit antes e
+depois, o build e o status final dos containers.
+
+### Por que o workflow usa `git reset --hard` em vez de `git pull`
+
+Um `git pull` **falha** se existir qualquer alteração local no servidor, e o deploy passaria
+despercebido como "sucesso" sem atualizar nada. O `git reset --hard origin/main` garante que o
+servidor fique idêntico ao GitHub sempre. **Arquivos ignorados pelo `.gitignore` não são
+afetados** — ou seja, o `.env` (senha do banco, credenciais do Google Drive) e os volumes Docker
+com os dados permanecem intactos.
+
+### Se o deploy automático falhar
+
+- **Erro de SSH/timeout**: confira os secrets `DEPLOY_HOST`/`DEPLOY_USER` e refaça o PASSO 3.
+- **Build falhou**: o site **continua no ar** na versão anterior (o Docker só troca o container
+  após o build terminar com sucesso). Veja o log completo na aba Actions.
+- **Deploy passou mas o site não mudou**: dê `Ctrl+Shift+R` no navegador (cache do JS antigo).
 
 ## Backup automático no Google Drive
 

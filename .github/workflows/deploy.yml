@@ -1,0 +1,68 @@
+name: Deploy HappySite
+
+# Deploy automático no VPS (AWS Lightsail) a cada push na branch main.
+# Substitui o processo manual que era: git pull + docker compose up -d --build via SSH.
+#
+# Pré-requisitos (configurados uma única vez, ver DEPLOY_VPS.md):
+#   - Secret DEPLOY_KEY  : chave SSH PRIVADA (conteúdo completo do arquivo id_ed25519)
+#   - Secret DEPLOY_HOST : IP do servidor (ex: 3.228.110.68)
+#   - Secret DEPLOY_USER : usuário SSH (ex: ubuntu)
+#
+# O .env do servidor NUNCA é tocado por este workflow (ele está no .gitignore), então a senha do
+# banco e as credenciais do Google Drive continuam intactas a cada deploy.
+
+on:
+  push:
+    branches: [main]
+  # Permite também disparar o deploy manualmente pela aba "Actions" do GitHub, sem precisar
+  # fazer um commit novo (útil para reprocessar um deploy que falhou por instabilidade).
+  workflow_dispatch:
+
+# Impede dois deploys simultâneos (ex: dois pushes seguidos) de brigarem pelo mesmo servidor,
+# o que poderia corromper o build no meio. O deploy em andamento termina antes do próximo começar.
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          # O build do Docker (React + backend) leva de 3 a 6 minutos nesta instância.
+          # 20 minutos dá margem folgada sem deixar o job preso indefinidamente.
+          command_timeout: 20m
+          script: |
+            set -e
+            cd /opt/happysite
+
+            echo "==> Commit atual no servidor (antes):"
+            git rev-parse --short HEAD
+
+            # Busca o código novo e força a árvore local a ficar EXATAMENTE igual ao GitHub.
+            # Usamos reset --hard em vez de "git pull" porque o pull falha (e o deploy passa
+            # despercebido) sempre que houver qualquer alteração local no servidor. Arquivos
+            # ignorados pelo .gitignore — como o .env com a senha do banco — NÃO são afetados.
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "==> Commit atual no servidor (depois):"
+            git rev-parse --short HEAD
+
+            # Libera espaço/memória de imagens antigas ANTES do build. A instância tem 2 GB de RAM
+            # e o DEPLOY_VPS.md registra que build + containers já travaram o servidor por falta
+            # de memória. Só remove camadas não utilizadas — os volumes de dados ficam intactos.
+            sudo docker image prune -f
+
+            echo "==> Rebuild e restart dos containers..."
+            sudo docker compose up -d --build
+
+            # Confirma que a aplicação subiu de fato (e não ficou reiniciando em loop).
+            sleep 15
+            echo "==> Status final dos containers:"
+            sudo docker compose ps
