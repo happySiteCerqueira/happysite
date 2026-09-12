@@ -18,6 +18,7 @@ const TITULOS_ROTA = [
   { prefixo: '/epi', titulo: '🦺 EPI' },
   { prefixo: '/financeiro', titulo: '💵 Financeiro' },
   { prefixo: '/aso', titulo: '🩺 Controle de ASO' },
+  { prefixo: '/agenda', titulo: '🗓️ Agenda' },
 
 
   { prefixo: '/configuracoes', titulo: '⚙️ Configurações' }
@@ -87,6 +88,7 @@ export default function Layout() {
           {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
           {temPermissao('RH') && <NavLink to="/aso" style={linkStyle}>🩺 Controle de ASO</NavLink>}
+          {temPermissao('RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR') && <NavLink to="/agenda" style={linkStyle}>🗓️ Agenda</NavLink>}
 
 
 

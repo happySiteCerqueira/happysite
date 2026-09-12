@@ -11,6 +11,7 @@ const TABELAS_BACKUP = [
   'pagamentos_antecipados', 'diarias', 'medicoes', 'financeiro_receitas',
   'epi_itens', 'epi_retiradas', 'epi_retirada_itens', 'epi_movimentos',
   'aso_historico',
+  'agenda_eventos',
   'perfil_permissoes', 'auditoria'
 ];
 

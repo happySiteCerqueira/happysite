@@ -501,6 +501,26 @@ async function migrate() {
     );
   `);
 
+  // Nova tabela: Agenda (compromissos/eventos do módulo Agenda). Cada linha é um compromisso com
+  // data obrigatória, hora opcional (evento de "dia inteiro" quando nula), descrição livre e
+  // vínculo opcional com uma obra (ON DELETE SET NULL: apagar a obra não apaga o compromisso,
+  // apenas o desvincula).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS agenda_eventos (
+      id SERIAL PRIMARY KEY,
+      titulo TEXT NOT NULL,
+      data DATE NOT NULL,
+      hora TEXT,
+      descricao TEXT,
+      obra_id INTEGER REFERENCES obras(id) ON DELETE SET NULL,
+      cor TEXT NOT NULL DEFAULT '#2563eb',
+      concluido INTEGER NOT NULL DEFAULT 0,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
   // Migração idempotente: status do período de experiência (usado no Painel: quadro "Colaboradores em
   // Experiência"). Todo colaborador nasce como 'EFETIVADO' por padrão (coluna DEFAULT); no momento em que
   // esta coluna é criada, fazemos um backfill único: quem foi admitido há menos de 90 dias entra como
@@ -558,7 +578,7 @@ async function migrate() {
   const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
   if (permCountRes.rows[0].c === 0) {
     const MODULOS = [
-      'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso',
+      'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda',
       // Sub-abas granulares (dentro de módulos que já foram liberados para o perfil)
       'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
       'prestadores.cadastro',
@@ -574,6 +594,7 @@ async function migrate() {
       epi: ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR'],
       financeiro: ['FINANCEIRO', 'RH'],
       aso: ['RH'],
+      agenda: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'],
       // Sub-abas: mesmo padrão que hoje está fixo em Financeiro.jsx/Prestadores.jsx/Epi.jsx
       'financeiro.receita': ['FINANCEIRO'],
       'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
@@ -605,7 +626,10 @@ async function migrate() {
       'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR'],
       // Módulo novo (ASO): garante que já apareça liberado para RH mesmo em bancos que já
       // passaram pelo seed inicial antes deste módulo existir.
-      'aso': ['RH']
+      'aso': ['RH'],
+      // Módulo novo (Agenda): mesma ideia — nasce liberado para todos os perfis operacionais,
+      // já que é uma agenda de compromissos compartilhada da empresa.
+      'agenda': ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR']
     };
     const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
     for (const perfil of PERFIS) {
