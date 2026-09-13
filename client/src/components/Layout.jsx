@@ -102,15 +102,20 @@ export default function Layout() {
         </div>
       </aside>
       <main className="layout-conteudo">
+        {/* Barra da Data de Apuração: propositalmente bem fina, para não roubar espaço útil da
+            tela. A explicação completa de onde ela vale ficou no "title" (tooltip ao passar o
+            mouse) em vez de ocupar uma linha inteira de texto como antes. */}
         <div
           style={{
-            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-            background: mes !== mesVigente ? '#fef3c7' : '#f1f5f9',
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap',
+            background: mes !== mesVigente ? '#fef3c7' : '#f8fafc',
             border: `1px solid ${mes !== mesVigente ? '#f59e0b' : '#e2e8f0'}`,
-            borderRadius: 8, padding: '8px 14px', marginBottom: 16
+            borderRadius: 6, padding: '2px 8px', marginBottom: 8,
+            fontSize: 12, lineHeight: 1.2, overflowX: 'auto'
           }}
+          title="Mês de apuração usado em Medição, Diárias, Pagamentos Antecipados, Prestadores e Obras. Volta ao mês vigente ao sair e entrar novamente."
         >
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>📅 Data de Apuração:</span>
+          <span style={{ fontWeight: 700, color: '#6b7280', whiteSpace: 'nowrap' }}>📅 Apuração</span>
           {editandoMes ? (
             <input
               type="month"
@@ -118,26 +123,36 @@ export default function Layout() {
               value={mes}
               onChange={e => { if (e.target.value) setMes(e.target.value); }}
               onBlur={() => setEditandoMes(false)}
-              style={{ fontSize: 13 }}
+              style={{ fontSize: 12, padding: '1px 4px', height: 22 }}
             />
           ) : (
             <button
               type="button"
-              className="btn-secondary btn-sm"
               onClick={() => setEditandoMes(true)}
-              title="Clique para alterar o mês de apuração usado em Medição, Diárias, Pagamentos Antecipados, Prestadores e Obras"
+              title="Clique para alterar o mês de apuração"
+              style={{
+                fontSize: 12, fontWeight: 700, padding: '1px 8px', height: 22,
+                background: '#fff', border: '1px solid #cbd5e1', borderRadius: 4,
+                cursor: 'pointer', color: '#111827', whiteSpace: 'nowrap'
+              }}
             >
               {rotuloMesApuracao(mes)} ✏️
             </button>
           )}
           {mes !== mesVigente && (
-            <button type="button" className="btn-secondary btn-sm" onClick={() => setMes(mesVigente)}>
-              ↺ Voltar para o mês vigente ({rotuloMesApuracao(mesVigente)})
+            <button
+              type="button"
+              onClick={() => setMes(mesVigente)}
+              title={`Voltar para o mês vigente (${rotuloMesApuracao(mesVigente)})`}
+              style={{
+                fontSize: 12, padding: '1px 8px', height: 22,
+                background: '#fff', border: '1px solid #cbd5e1', borderRadius: 4,
+                cursor: 'pointer', color: '#b45309', whiteSpace: 'nowrap'
+              }}
+            >
+              ↺ {rotuloMesApuracao(mesVigente)}
             </button>
           )}
-          <span style={{ fontSize: 11, color: '#6b7280' }}>
-            Vale para Medição, Diárias, Pagamentos Antecipados, Prestadores e Obras. Reinicia para o mês vigente ao sair/entrar novamente no sistema.
-          </span>
         </div>
         <Outlet />
       </main>
