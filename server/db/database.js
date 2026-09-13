@@ -521,6 +521,25 @@ async function migrate() {
     );
   `);
 
+  // Destinatários de um compromisso da Agenda. Um compromisso pode ser direcionado a pessoas
+  // específicas (agenda_evento_usuarios) e/ou a categorias inteiras de perfil, ex: todo o RH
+  // (agenda_evento_perfis). Quem criou sempre enxerga o próprio compromisso, mesmo sem se marcar.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS agenda_evento_usuarios (
+      id SERIAL PRIMARY KEY,
+      evento_id INTEGER NOT NULL REFERENCES agenda_eventos(id) ON DELETE CASCADE,
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      UNIQUE(evento_id, usuario_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS agenda_evento_perfis (
+      id SERIAL PRIMARY KEY,
+      evento_id INTEGER NOT NULL REFERENCES agenda_eventos(id) ON DELETE CASCADE,
+      perfil TEXT NOT NULL,
+      UNIQUE(evento_id, perfil)
+    );
+  `);
+
   // Migração idempotente: status do período de experiência (usado no Painel: quadro "Colaboradores em
   // Experiência"). Todo colaborador nasce como 'EFETIVADO' por padrão (coluna DEFAULT); no momento em que
   // esta coluna é criada, fazemos um backfill único: quem foi admitido há menos de 90 dias entra como

@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../api/api';
 import { useApuracao } from '../context/ApuracaoContext';
+import { useAuth } from '../context/AuthContext';
+
+// Opções do filtro de visão do topo da tela.
+// - 'meus'     : compromissos que o próprio usuário criou
+// - 'marcados' : criados por outra pessoa, em que ele foi marcado (pelo nome ou pela categoria)
+// - 'todos'    : só aparece para o ADM — tudo que existe no sistema, marcado ou não
+const VISOES = [
+  { valor: 'meus', rotulo: '📝 Meus agendamentos', ajuda: 'Compromissos que você criou' },
+  { valor: 'marcados', rotulo: '📬 Agendamentos marcados', ajuda: 'Criados por outros setores em que você foi marcado' },
+  { valor: 'todos', rotulo: '🌐 Todos os agendamentos', ajuda: 'Todos do sistema, mesmo sem você estar marcado', somenteAdm: true }
+];
 
 const NOMES_MES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -67,13 +78,18 @@ export default function Agenda() {
   // Usa a Data de Apuração global como mês inicial (mesma convenção das demais telas mensais),
   // mas mantém estado próprio para permitir navegar pelos meses sem alterar a apuração global.
   const { mes: mesApuracao } = useApuracao();
+  const { usuario } = useAuth();
+  const ehAdm = usuario?.perfil === 'ADM';
   const [mes, setMes] = useState(mesApuracao);
   const [eventos, setEventos] = useState([]);
   const [obras, setObras] = useState([]);
+  const [destinatarios, setDestinatarios] = useState({ usuarios: [], perfis: [] });
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [diaSelecionado, setDiaSelecionado] = useState(hojeChave());
   const [editando, setEditando] = useState(null); // evento completo (editar) ou { data } (novo)
+  // ADM começa vendo tudo; os demais começam pelos compromissos em que foram marcados.
+  const [visao, setVisao] = useState(ehAdm ? 'todos' : 'marcados');
 
   // IMPORTANTE: função sem "return" antes do api.get — ela é passada direto para useEffect, e
   // qualquer valor retornado seria tratado pelo React como função de limpeza (mesmo cuidado
@@ -81,15 +97,18 @@ export default function Agenda() {
   function carregar() {
     setCarregando(true);
     setErro('');
-    api.get('/agenda', { params: { mes } })
+    api.get('/agenda', { params: { mes, visao } })
       .then(res => setEventos(res.data))
       .catch(() => setErro('Erro ao carregar os compromissos da agenda'))
       .finally(() => setCarregando(false));
   }
-  useEffect(carregar, [mes]);
+  useEffect(carregar, [mes, visao]);
 
   useEffect(() => {
     api.get('/obras').then(res => setObras(res.data)).catch(() => setObras([]));
+    api.get('/agenda/destinatarios')
+      .then(res => setDestinatarios(res.data))
+      .catch(() => setDestinatarios({ usuarios: [], perfis: [] }));
   }, []);
 
   // Agrupa os compromissos por dia ('YYYY-MM-DD') para não refiltrar a lista inteira em cada célula
@@ -121,6 +140,21 @@ export default function Agenda() {
     }
   }
 
+  // Só o autor (ou o ADM) pode editar/excluir. Quem foi apenas marcado vê em modo leitura,
+  // mas ainda consegue marcar como concluído.
+  function podeGerenciar(evento) {
+    return ehAdm || evento.criado_por === usuario?.id;
+  }
+
+  // Monta o texto da coluna "Para": nomes marcados + categorias (perfis) marcadas.
+  function rotuloDestinatarios(evento) {
+    const nomes = (evento.destinatarios_usuarios || []).map(d => d.nome);
+    const perfis = (evento.destinatarios_perfis || []);
+    const partes = [...perfis.map(p => `[${p}]`), ...nomes];
+    if (partes.length === 0) return <span style={{ color: '#9ca3af' }}>Somente você</span>;
+    return partes.join(', ');
+  }
+
   async function excluir(evento) {
     if (!window.confirm(`Excluir o compromisso "${evento.titulo}"?`)) return;
     try {
@@ -140,6 +174,35 @@ export default function Agenda() {
       </p>
 
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
+
+      {/* Filtro de visão: define QUAIS compromissos aparecem no calendário e na lista do dia. */}
+      <div className="card" style={{ marginBottom: 16, paddingTop: 12, paddingBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+          <strong style={{ fontSize: 13, color: '#374151' }}>Exibir:</strong>
+          {VISOES.filter(v => !v.somenteAdm || ehAdm).map(v => (
+            <label
+              key={v.valor}
+              title={v.ajuda}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer',
+                fontWeight: visao === v.valor ? 700 : 400,
+                color: visao === v.valor ? '#2563eb' : '#374151'
+              }}
+            >
+              <input
+                type="radio"
+                name="visao-agenda"
+                checked={visao === v.valor}
+                onChange={() => setVisao(v.valor)}
+              />
+              {v.rotulo}
+            </label>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>
+          {VISOES.find(v => v.valor === visao)?.ajuda}
+        </div>
+      </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -227,8 +290,9 @@ export default function Agenda() {
                 <th style={{ width: 40 }}>OK</th>
                 <th style={{ width: 80 }}>Hora</th>
                 <th>Compromisso</th>
+                <th>Para (quem vê)</th>
+                <th>Criado por</th>
                 <th>Obra</th>
-                <th>Descrição</th>
                 <th style={{ width: 160 }}>Ações</th>
               </tr>
             </thead>
@@ -246,14 +310,24 @@ export default function Agenda() {
                   <td>{e.hora || 'Dia todo'}</td>
                   <td style={{ borderLeft: `4px solid ${e.cor || '#2563eb'}`, paddingLeft: 8 }}>
                     <strong style={{ textDecoration: e.concluido ? 'line-through' : 'none' }}>{e.titulo}</strong>
+                    {e.descricao && (
+                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{e.descricao}</div>
+                    )}
+                  </td>
+                  <td style={{ fontSize: 12 }}>{rotuloDestinatarios(e)}</td>
+                  <td style={{ fontSize: 12, color: '#6b7280' }}>
+                    {e.criado_por === usuario?.id ? 'Você' : (e.criado_por_nome || '-')}
                   </td>
                   <td>{e.obra_nome || '-'}</td>
-                  <td style={{ fontSize: 12, color: '#6b7280' }}>{e.descricao || '-'}</td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn-secondary btn-sm" onClick={() => setEditando(e)}>✏️ Editar</button>
-                      <button className="btn-danger btn-sm" onClick={() => excluir(e)}>🗑️</button>
-                    </div>
+                    {podeGerenciar(e) ? (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn-secondary btn-sm" onClick={() => setEditando(e)}>✏️ Editar</button>
+                        <button className="btn-danger btn-sm" onClick={() => excluir(e)}>🗑️</button>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>Somente leitura</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -266,6 +340,7 @@ export default function Agenda() {
         <ModalCompromisso
           evento={editando}
           obras={obras}
+          destinatarios={destinatarios}
           onFechar={() => setEditando(null)}
           onSalvo={() => { setEditando(null); carregar(); }}
         />
@@ -275,8 +350,15 @@ export default function Agenda() {
 }
 
 // Modal único usado tanto para criar (objeto recebido sem id) quanto para editar um compromisso.
-function ModalCompromisso({ evento, obras, onFechar, onSalvo }) {
+function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
   const ehEdicao = !!evento.id;
+  // Destinatários já marcados (na edição) ou vazios (na criação).
+  const [usuariosMarcados, setUsuariosMarcados] = useState(
+    () => (evento.destinatarios_usuarios || []).map(d => d.id)
+  );
+  const [perfisMarcados, setPerfisMarcados] = useState(
+    () => evento.destinatarios_perfis || []
+  );
   const [titulo, setTitulo] = useState(evento.titulo || '');
   const [data, setData] = useState(evento.id ? chaveData(evento.data) : (evento.data || hojeChave()));
   const [hora, setHora] = useState(evento.hora || '');
@@ -299,7 +381,9 @@ function ModalCompromisso({ evento, obras, onFechar, onSalvo }) {
       descricao: descricao.trim() || null,
       obra_id: obraId || null,
       cor,
-      concluido: evento.concluido ? 1 : 0
+      concluido: evento.concluido ? 1 : 0,
+      destinatarios_usuarios: usuariosMarcados,
+      destinatarios_perfis: perfisMarcados
     };
     try {
       if (ehEdicao) {
@@ -333,6 +417,46 @@ function ModalCompromisso({ evento, obras, onFechar, onSalvo }) {
           <div className="flex-col gap-2" style={{ flex: 1 }}>
             <label style={{ fontSize: 12 }}>Hora (opcional)</label>
             <input type="time" value={hora} onChange={e => setHora(e.target.value)} />
+          </div>
+        </div>
+
+        {/* Quem vai ver o compromisso: por categoria (perfil inteiro) e/ou por nome. */}
+        <div style={{ marginBottom: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}>
+          <label style={{ fontSize: 12, fontWeight: 700 }}>Quem vai ver este compromisso</label>
+          <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
+            Você sempre vê o que criou. Marque abaixo quem mais deve enxergar.
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Por categoria</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+            {(destinatarios.perfis || []).map(p => (
+              <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={perfisMarcados.includes(p)}
+                  onChange={() => setPerfisMarcados(prev =>
+                    prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]
+                  )}
+                />
+                {p}
+              </label>
+            ))}
+          </div>
+
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Por pessoa</div>
+          <div style={{ maxHeight: 130, overflowY: 'auto', border: '1px solid #f1f5f9', borderRadius: 6, padding: 6 }}>
+            {(destinatarios.usuarios || []).map(u => (
+              <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', padding: '2px 0' }}>
+                <input
+                  type="checkbox"
+                  checked={usuariosMarcados.includes(u.id)}
+                  onChange={() => setUsuariosMarcados(prev =>
+                    prev.includes(u.id) ? prev.filter(x => x !== u.id) : [...prev, u.id]
+                  )}
+                />
+                {u.nome} <span style={{ color: '#9ca3af', fontSize: 11 }}>({u.perfil})</span>
+              </label>
+            ))}
           </div>
         </div>
 
