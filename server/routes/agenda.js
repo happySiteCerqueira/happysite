@@ -32,18 +32,43 @@ function horaValida(valor) {
   return !valor || /^\d{2}:\d{2}$/.test(valor);
 }
 
+// Formas de definir o horário do compromisso.
+const PERIODOS_VALIDOS = ['HORA', 'DIA_INTEIRO', 'MANHA', 'TARDE', 'NOITE'];
+
 // Normaliza os campos vindos do corpo da requisição, devolvendo { erro } quando algo é inválido.
 function normalizarEvento(body) {
   const titulo = (body.titulo || '').trim();
   if (!titulo) return { erro: 'Informe o título do compromisso.' };
   if (!dataValida(body.data)) return { erro: 'Informe uma data válida para o compromisso.' };
-  if (!horaValida(body.hora)) return { erro: 'Hora inválida. Use o formato HH:MM.' };
+
+  const periodo = PERIODOS_VALIDOS.includes(body.periodo) ? body.periodo : 'HORA';
+
+  // A hora só é guardada quando o período é 'HORA'; nos demais casos (dia inteiro, manhã,
+  // tarde, noite) o horário exato não se aplica e a coluna fica nula.
+  let hora = null;
+  if (periodo === 'HORA') {
+    if (!horaValida(body.hora)) return { erro: 'Hora inválida. Use o formato HH:MM.' };
+    hora = body.hora || null;
+  }
+
+  // Data final (compromisso de vários dias). Vazia = compromisso de um dia só.
+  let dataFim = null;
+  if (body.data_fim) {
+    if (!dataValida(body.data_fim)) return { erro: 'Data final inválida.' };
+    if (body.data_fim < body.data) {
+      return { erro: 'A data final não pode ser anterior à data inicial.' };
+    }
+    // Guarda apenas quando for realmente diferente da inicial (evita intervalo "de 1 dia").
+    if (body.data_fim > body.data) dataFim = body.data_fim;
+  }
 
   return {
     dados: {
       titulo,
       data: body.data,
-      hora: body.hora ? body.hora : null,
+      data_fim: dataFim,
+      hora,
+      periodo,
       descricao: (body.descricao || '').trim() || null,
       obra_id: body.obra_id ? Number(body.obra_id) : null,
       cor: body.cor || '#2563eb',
@@ -157,9 +182,10 @@ router.get('/', async (req, res) => {
      FROM agenda_eventos e
      LEFT JOIN obras o ON o.id = e.obra_id
      LEFT JOIN usuarios u ON u.id = e.criado_por
-     WHERE TO_CHAR(e.data, 'YYYY-MM') = ? AND ${filtro}
+     WHERE (e.data, COALESCE(e.data_fim, e.data)) OVERLAPS (?::date, (?::date + INTERVAL '1 month'))
+       AND ${filtro}
      ORDER BY e.data ASC, e.hora ASC NULLS FIRST, e.id ASC`,
-    mes, ...params
+    `${mes}-01`, `${mes}-01`, ...params
   );
 
   res.json(await anexarDestinatarios(eventos));
@@ -184,10 +210,10 @@ router.post('/', async (req, res) => {
   if (erro) return res.status(400).json({ erro });
 
   const criado = await db.get(
-    `INSERT INTO agenda_eventos (titulo, data, hora, descricao, obra_id, cor, concluido, criado_por)
-     VALUES (?,?,?,?,?,?,?,?) RETURNING *`,
-    dados.titulo, dados.data, dados.hora, dados.descricao, dados.obra_id, dados.cor,
-    dados.concluido, req.usuario.id
+    `INSERT INTO agenda_eventos (titulo, data, data_fim, hora, periodo, descricao, obra_id, cor, concluido, criado_por)
+     VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING *`,
+    dados.titulo, dados.data, dados.data_fim, dados.hora, dados.periodo, dados.descricao,
+    dados.obra_id, dados.cor, dados.concluido, req.usuario.id
   );
 
   await salvarDestinatarios(criado.id, req.body.destinatarios_usuarios, req.body.destinatarios_perfis);
@@ -214,10 +240,11 @@ router.put('/:id', async (req, res) => {
 
   await db.run(
     `UPDATE agenda_eventos
-     SET titulo = ?, data = ?, hora = ?, descricao = ?, obra_id = ?, cor = ?, concluido = ?, atualizado_em = NOW()
+     SET titulo = ?, data = ?, data_fim = ?, hora = ?, periodo = ?, descricao = ?, obra_id = ?,
+         cor = ?, concluido = ?, atualizado_em = NOW()
      WHERE id = ?`,
-    dados.titulo, dados.data, dados.hora, dados.descricao, dados.obra_id, dados.cor,
-    dados.concluido, req.params.id
+    dados.titulo, dados.data, dados.data_fim, dados.hora, dados.periodo, dados.descricao,
+    dados.obra_id, dados.cor, dados.concluido, req.params.id
   );
 
   await salvarDestinatarios(req.params.id, req.body.destinatarios_usuarios, req.body.destinatarios_perfis);

@@ -24,6 +24,23 @@ const NOMES_MES = [
 ];
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+// Formas de definir o horário. 'HORA' mostra o campo de hora exata; as demais dispensam horário.
+const PERIODOS = [
+  { valor: 'HORA', rotulo: '🕐 Horário', curto: null },
+  { valor: 'DIA_INTEIRO', rotulo: '☀️ Dia inteiro', curto: 'Dia todo' },
+  { valor: 'MANHA', rotulo: '🌅 Manhã', curto: 'Manhã' },
+  { valor: 'TARDE', rotulo: '🌇 Tarde', curto: 'Tarde' },
+  { valor: 'NOITE', rotulo: '🌙 Noite', curto: 'Noite' }
+];
+
+// Texto curto exibido na célula do calendário e na coluna "Hora" da lista.
+function rotuloHorario(evento) {
+  if (evento.periodo && evento.periodo !== 'HORA') {
+    return PERIODOS.find(p => p.valor === evento.periodo)?.curto || '';
+  }
+  return evento.hora || 'Dia todo';
+}
+
 // Cores disponíveis para categorizar visualmente os compromissos no calendário.
 const CORES = [
   { valor: '#2563eb', nome: 'Azul' },
@@ -107,7 +124,9 @@ export default function Agenda() {
   function carregar() {
     setCarregando(true);
     setErro('');
-    api.get('/agenda', { params: { mes, visoes: visoes.join(',') } })
+    // Só o ADM tem o bloco "Exibir"; para os demais não enviamos o parâmetro, e o backend
+    // devolve o padrão (o que a pessoa criou + aquilo em que foi marcada).
+    api.get('/agenda', { params: ehAdm ? { mes, visoes: visoes.join(',') } : { mes } })
       .then(res => setEventos(res.data))
       .catch(() => setErro('Erro ao carregar os compromissos da agenda'))
       .finally(() => setCarregando(false));
@@ -123,13 +142,25 @@ export default function Agenda() {
       .catch(() => setDestinatarios({ usuarios: [], perfis: [] }));
   }, []);
 
-  // Agrupa os compromissos por dia ('YYYY-MM-DD') para não refiltrar a lista inteira em cada célula
+  // Agrupa os compromissos por dia ('YYYY-MM-DD'). Compromissos com data_fim (ex: férias de uma
+  // semana) são EXPANDIDOS: aparecem repetidos em cada dia do intervalo, para que o calendário
+  // mostre a faixa completa em vez de só o primeiro dia.
   const eventosPorDia = useMemo(() => {
     const mapa = {};
     eventos.forEach(e => {
-      const chave = chaveData(e.data);
-      if (!mapa[chave]) mapa[chave] = [];
-      mapa[chave].push(e);
+      const inicio = chaveData(e.data);
+      const fim = e.data_fim ? chaveData(e.data_fim) : inicio;
+
+      const [ai, mi, di] = inicio.split('-').map(Number);
+      const cursor = new Date(ai, mi - 1, di);
+      // Trava de segurança: no máximo 400 dias, evita loop infinito por dado inconsistente.
+      for (let i = 0; i < 400; i++) {
+        const chave = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+        if (!mapa[chave]) mapa[chave] = [];
+        mapa[chave].push(e);
+        if (chave >= fim) break;
+        cursor.setDate(cursor.getDate() + 1);
+      }
     });
     return mapa;
   }, [eventos]);
@@ -187,11 +218,14 @@ export default function Agenda() {
 
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
-      {/* Filtros acumulativos: cada caixa marcada SOMA um grupo de compromissos à tela. */}
+      {/* Filtros acumulativos: cada caixa marcada SOMA um grupo de compromissos à tela.
+          Bloco exclusivo do ADM — os demais perfis sempre veem o que criaram + o que foram
+          marcados (o backend aplica esse padrão quando nenhum filtro é enviado). */}
+      {ehAdm && (
       <div className="card" style={{ marginBottom: 16, paddingTop: 12, paddingBottom: 12 }}>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
           <strong style={{ fontSize: 13, color: '#374151' }}>Exibir:</strong>
-          {VISOES.filter(v => !v.somenteAdm || ehAdm).map(v => {
+          {VISOES.map(v => {
             const marcado = visoes.includes(v.valor);
             return (
               <label
@@ -215,6 +249,7 @@ export default function Agenda() {
             : `Mostrando: ${VISOES.filter(v => visoes.includes(v.valor)).map(v => v.ajuda.toLowerCase()).join(' + ')}.`}
         </div>
       </div>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -270,7 +305,7 @@ export default function Agenda() {
                         opacity: e.concluido ? 0.6 : 1
                       }}
                     >
-                      {e.hora ? `${e.hora} ` : ''}{e.titulo}
+                      {e.periodo === 'HORA' && e.hora ? `${e.hora} ` : ''}{e.titulo}
                     </div>
                   ))}
                   {doDia.length > 3 && (
@@ -319,7 +354,14 @@ export default function Agenda() {
                       title="Marcar como concluído"
                     />
                   </td>
-                  <td>{e.hora || 'Dia todo'}</td>
+                  <td style={{ fontSize: 12 }}>
+                    {rotuloHorario(e)}
+                    {e.data_fim && (
+                      <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 700 }}>
+                        {formatarDataBr(chaveData(e.data))} → {formatarDataBr(chaveData(e.data_fim))}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ borderLeft: `4px solid ${e.cor || '#2563eb'}`, paddingLeft: 8 }}>
                     <strong style={{ textDecoration: e.concluido ? 'line-through' : 'none' }}>{e.titulo}</strong>
                     {e.descricao && (
@@ -373,6 +415,10 @@ function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
   );
   const [titulo, setTitulo] = useState(evento.titulo || '');
   const [data, setData] = useState(evento.id ? chaveData(evento.data) : (evento.data || hojeChave()));
+  // Intervalo: quando ligado, mostra o campo "até" (ex: férias de uma semana).
+  const [usaIntervalo, setUsaIntervalo] = useState(!!evento.data_fim);
+  const [dataFim, setDataFim] = useState(evento.data_fim ? chaveData(evento.data_fim) : '');
+  const [periodo, setPeriodo] = useState(evento.periodo || 'HORA');
   const [hora, setHora] = useState(evento.hora || '');
   const [descricao, setDescricao] = useState(evento.descricao || '');
   const [obraId, setObraId] = useState(evento.obra_id || '');
@@ -384,12 +430,19 @@ function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
     setErro('');
     if (!titulo.trim()) { setErro('Informe o título do compromisso.'); return; }
     if (!data) { setErro('Informe a data do compromisso.'); return; }
+    if (usaIntervalo && !dataFim) { setErro('Informe a data final do intervalo.'); return; }
+    if (usaIntervalo && dataFim < data) {
+      setErro('A data final não pode ser anterior à data inicial.'); return;
+    }
+    if (periodo === 'HORA' && !hora) { setErro('Informe o horário ou escolha outra opção (dia inteiro, manhã, tarde ou noite).'); return; }
 
     setSalvando(true);
     const corpo = {
       titulo: titulo.trim(),
       data,
-      hora: hora || null,
+      data_fim: usaIntervalo ? dataFim : null,
+      periodo,
+      hora: periodo === 'HORA' ? (hora || null) : null,
       descricao: descricao.trim() || null,
       obra_id: obraId || null,
       cor,
@@ -421,15 +474,59 @@ function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
           <input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Reunião com o cliente" />
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-          <div className="flex-col gap-2" style={{ flex: 1 }}>
-            <label style={{ fontSize: 12 }}>Data</label>
-            <input type="date" value={data} onChange={e => setData(e.target.value)} />
+        {/* Datas: um dia só, ou intervalo (ex: férias, reunião de vários dias) */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 6, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={usaIntervalo}
+              onChange={e => {
+                setUsaIntervalo(e.target.checked);
+                // Ao ligar o intervalo, sugere a própria data inicial como final.
+                if (e.target.checked && !dataFim) setDataFim(data);
+              }}
+            />
+            <strong>Período de vários dias</strong> (ex: férias, viagem, reunião de 3 dias)
+          </label>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div className="flex-col gap-2" style={{ flex: 1 }}>
+              <label style={{ fontSize: 12 }}>{usaIntervalo ? 'Data inicial' : 'Data'}</label>
+              <input type="date" value={data} onChange={e => setData(e.target.value)} />
+            </div>
+            {usaIntervalo && (
+              <div className="flex-col gap-2" style={{ flex: 1 }}>
+                <label style={{ fontSize: 12 }}>Data final</label>
+                <input type="date" value={dataFim} min={data} onChange={e => setDataFim(e.target.value)} />
+              </div>
+            )}
           </div>
-          <div className="flex-col gap-2" style={{ flex: 1 }}>
-            <label style={{ fontSize: 12 }}>Hora (opcional)</label>
-            <input type="time" value={hora} onChange={e => setHora(e.target.value)} />
+        </div>
+
+        {/* Horário: hora exata, dia inteiro ou período aproximado */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, fontWeight: 700 }}>Horário</label>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', margin: '6px 0' }}>
+            {PERIODOS.map(p => (
+              <label key={p.valor} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="periodo-compromisso"
+                  checked={periodo === p.valor}
+                  onChange={() => setPeriodo(p.valor)}
+                />
+                {p.rotulo}
+              </label>
+            ))}
           </div>
+          {periodo === 'HORA' && (
+            <input type="time" value={hora} onChange={e => setHora(e.target.value)} style={{ width: 140 }} />
+          )}
+          {usaIntervalo && periodo !== 'DIA_INTEIRO' && (
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+              Vale para todos os dias do período selecionado.
+            </div>
+          )}
         </div>
 
         {/* Quem vai ver o compromisso: por categoria (perfil inteiro) e/ou por nome. */}

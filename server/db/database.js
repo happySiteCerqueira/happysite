@@ -521,6 +521,23 @@ async function migrate() {
     );
   `);
 
+  // Migração idempotente: compromissos que duram VÁRIOS dias (ex: férias de uma semana, reunião
+  // que se repete no mesmo horário por vários dias). data_fim nulo = compromisso de um dia só.
+  if (!(await colunaExiste('agenda_eventos', 'data_fim'))) {
+    await pool.query('ALTER TABLE agenda_eventos ADD COLUMN data_fim DATE');
+  }
+
+  // Migração idempotente: como o horário é definido.
+  //   'HORA'        -> usa a coluna "hora" (ex: 14:30)
+  //   'DIA_INTEIRO' -> o dia todo, sem horário específico
+  //   'MANHA' / 'TARDE' / 'NOITE' -> período aproximado, sem hora exata
+  // Registros antigos (criados antes desta coluna) recebem 'HORA' quando tinham hora preenchida
+  // e 'DIA_INTEIRO' quando a hora estava vazia, preservando exatamente o comportamento anterior.
+  if (!(await colunaExiste('agenda_eventos', 'periodo'))) {
+    await pool.query("ALTER TABLE agenda_eventos ADD COLUMN periodo TEXT NOT NULL DEFAULT 'HORA'");
+    await pool.query("UPDATE agenda_eventos SET periodo = 'DIA_INTEIRO' WHERE hora IS NULL");
+  }
+
   // Destinatários de um compromisso da Agenda. Um compromisso pode ser direcionado a pessoas
   // específicas (agenda_evento_usuarios) e/ou a categorias inteiras de perfil, ex: todo o RH
   // (agenda_evento_perfis). Quem criou sempre enxerga o próprio compromisso, mesmo sem se marcar.
