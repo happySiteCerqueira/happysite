@@ -12,12 +12,49 @@ import ErrorBoundary from './components/ErrorBoundary.jsx'
 // terminar de instalar (deploy novo no servidor). Isso evita a "tela branca" que acontecia quando o
 // Service Worker antigo insistia em servir um bundle JS com hash que já não existia mais no servidor,
 // exigindo que o usuário desse F5 manualmente para o site voltar a funcionar.
+// Intervalo de verificação de novas versões. No app instalado (PWA no celular) a página quase
+// nunca é "aberta do zero" — ela apenas volta do segundo plano —, então sem essa verificação
+// periódica o usuário ficava preso na versão antiga até desinstalar e instalar de novo.
+const INTERVALO_CHECAGEM_MS = 60 * 1000; // 1 minuto
+
 registerSW({
   immediate: true,
   onNeedRefresh() {
+    // Versão nova já baixada: recarrega para o usuário passar a usá-la imediatamente.
     window.location.reload();
+  },
+  onRegisteredSW(url, registro) {
+    if (!registro) return;
+
+    // 1) Verificação periódica enquanto o app está aberto.
+    setInterval(() => {
+      // Só faz sentido checar se há internet; sem rede o update() falha silenciosamente.
+      if (navigator.onLine !== false) registro.update();
+    }, INTERVALO_CHECAGEM_MS);
+
+    // 2) Verificação ao trazer o app de volta para a frente (caso mais comum no celular:
+    // o usuário deixa o app aberto em segundo plano por dias e volta nele).
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && navigator.onLine !== false) {
+        registro.update();
+      }
+    });
+
+    // 3) Verificação ao reconectar (voltou da área sem sinal).
+    window.addEventListener('online', () => registro.update());
   }
 });
+
+// Se o Service Worker que controla a página for TROCADO (versão nova assumiu), recarrega uma
+// única vez para a tela passar a usar os arquivos novos. A trava evita loop de recarga.
+let jaRecarregouPorTrocaDeSW = false;
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (jaRecarregouPorTrocaDeSW) return;
+    jaRecarregouPorTrocaDeSW = true;
+    window.location.reload();
+  });
+}
 
 // Rede de segurança extra: se o navegador tentar carregar um arquivo JS antigo (hash de um build
 // anterior, ex: depois de um deploy) e ele não existir mais, isso dispara um erro de carregamento

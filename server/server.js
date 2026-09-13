@@ -67,7 +67,20 @@ app.use('/api/push', require('./routes/push'));
 // Serve o frontend React já buildado (produção)
 const clientBuildPath = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientBuildPath)) {
-  app.use(express.static(clientBuildPath));
+  // Arquivos com hash no nome (index-AbC123.js) podem ser cacheados "para sempre", pois o nome
+  // muda a cada build. Já o index.html, o Service Worker e o manifest NÃO podem: se ficarem em
+  // cache HTTP, o navegador nem chega a perguntar ao servidor se existe versão nova — foi o que
+  // fazia o app instalado no celular continuar preso numa versão antiga, só voltando ao normal
+  // se o usuário desinstalasse e instalasse de novo.
+  const SEM_CACHE = ['index.html', 'sw-push.js', 'sw.js', 'manifest.webmanifest', 'registerSW.js'];
+  app.use(express.static(clientBuildPath, {
+    setHeaders: (res, caminho) => {
+      const arquivo = path.basename(caminho);
+      if (SEM_CACHE.includes(arquivo)) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      }
+    }
+  }));
   // Fallback do SPA: só serve o index.html para rotas de navegação (sem extensão de arquivo,
   // ex: /epi, /obras/5). Requisições a arquivos estáticos que não existem mais (ex: um bundle
   // JS/CSS antigo com hash de um deploy anterior, /manifest.webmanifest, /sw.js, etc.) recebem
@@ -82,6 +95,9 @@ if (fs.existsSync(clientBuildPath)) {
     const ultimoSegmento = req.path.split('/').pop() || '';
     const pareceArquivoEstatico = ultimoSegmento.includes('.');
     if (pareceArquivoEstatico) return next(); // deixa cair no 404 padrão do Express
+    // Mesmo motivo do bloco acima: o HTML da aplicação nunca pode ficar em cache, senão o
+    // navegador continua carregando a lista de arquivos JS/CSS de um build antigo.
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(clientBuildPath, 'index.html'));
   });
 }

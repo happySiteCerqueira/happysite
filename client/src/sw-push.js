@@ -6,15 +6,30 @@
 //
 // As notificações funcionam mesmo com o app fechado: é o Service Worker (que roda em segundo
 // plano no navegador) quem recebe a mensagem do servidor, não a página aberta.
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching';
+import { NavigationRoute, registerRoute } from 'workbox-routing';
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
-// Equivalente ao skipWaiting/clientsClaim que estavam na configuração anterior: a versão nova
-// assume o controle imediatamente, evitando a "tela branca" após um deploy.
+// Navegações (abrir o app, trocar de tela) são atendidas pelo index.html do precache — é o
+// comportamento padrão de um SPA. SEM isto, o app instalado no celular fica presa numa versão
+// antiga e só volta a atualizar se for desinstalado e instalado de novo.
+// As rotas /api e /comprovantes são excluídas para irem SEMPRE à rede (dados sempre frescos).
+registerRoute(new NavigationRoute(
+  createHandlerBoundToURL('index.html'),
+  { denylist: [/^\/api/, /^\/comprovantes/] }
+));
+
+// A versão nova assume o controle imediatamente, sem esperar todas as abas fecharem.
 self.skipWaiting();
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+
+// Permite que a página peça explicitamente "ative a versão nova agora" (usado pelo main.jsx
+// quando detecta uma atualização enquanto o app está aberto).
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 
 self.addEventListener('push', event => {
   let dados = {};
