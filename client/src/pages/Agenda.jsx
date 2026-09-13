@@ -124,6 +124,8 @@ export default function Agenda() {
   const ehAdm = usuario?.perfil === 'ADM';
   const [mes, setMes] = useState(mesApuracao);
   const [eventos, setEventos] = useState([]);
+  // Próximos compromissos (a partir de hoje), independente do mês aberto no calendário.
+  const [proximos, setProximos] = useState([]);
   const [obras, setObras] = useState([]);
   const [destinatarios, setDestinatarios] = useState({ usuarios: [], perfis: [] });
   const [carregando, setCarregando] = useState(true);
@@ -170,6 +172,14 @@ export default function Agenda() {
       .then(res => setEventos(res.data))
       .catch(() => setErro('Erro ao carregar os compromissos da agenda'))
       .finally(() => setCarregando(false));
+
+    // Lista dos próximos compromissos: não depende do mês, mas é recarregada junto para
+    // refletir na hora qualquer inclusão/edição/exclusão feita na tela.
+    api.get('/agenda/proximos', {
+      params: ehAdm ? { limite: 20, visoes: visoes.join(',') } : { limite: 20 }
+    })
+      .then(res => setProximos(res.data))
+      .catch(() => setProximos([]));
   }
   // visoes.join() na dependência: o array muda de referência a cada clique, mas só queremos
   // recarregar quando o CONTEÚDO da seleção mudar de fato.
@@ -459,6 +469,86 @@ export default function Agenda() {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Próximos compromissos: independe do mês aberto no calendário. Serve como "o que vem
+          pela frente", incluindo compromissos de meses seguintes. */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <h4 style={{ marginTop: 0, marginBottom: 4 }}>⏭️ Próximos compromissos</h4>
+        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 12 }}>
+          Os {proximos.length > 0 ? proximos.length : 20} próximos a partir de hoje, de qualquer mês
+          (não concluídos).
+        </div>
+
+        {proximos.length === 0 && (
+          <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum compromisso futuro cadastrado.</p>
+        )}
+
+        {proximos.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>OK</th>
+                <th style={{ width: 130 }}>Data</th>
+                <th style={{ width: 80 }}>Horário</th>
+                <th>Compromisso</th>
+                <th>Para (quem vê)</th>
+                <th>Obra</th>
+                <th style={{ width: 100 }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {proximos.map(e => {
+                const chaveInicio = chaveData(e.data);
+                const ehHoje = chaveInicio === hojeChave();
+                return (
+                  <tr key={e.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={!!e.concluido}
+                        onChange={() => alternarConcluido(e)}
+                        title="Marcar como concluído"
+                      />
+                    </td>
+                    <td style={{ fontSize: 12 }}>
+                      <strong style={{ color: ehHoje ? '#2563eb' : '#374151' }}>
+                        {ehHoje ? 'Hoje' : formatarDataBr(chaveInicio)}
+                      </strong>
+                      {e.data_fim && (
+                        <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 700 }}>
+                          até {formatarDataBr(chaveData(e.data_fim))}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 12 }}>{rotuloHorario(e)}</td>
+                    <td style={{ borderLeft: `4px solid ${e.cor || '#2563eb'}`, paddingLeft: 8 }}>
+                      <strong>{e.titulo}</strong>
+                      {e.descricao && (
+                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{e.descricao}</div>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 12 }}>{rotuloDestinatarios(e)}</td>
+                    <td style={{ fontSize: 12 }}>{e.obra_nome || '-'}</td>
+                    <td>
+                      <button
+                        className="btn-secondary btn-sm"
+                        title="Abrir esse dia no calendário"
+                        onClick={() => {
+                          setMes(chaveInicio.slice(0, 7));
+                          setDiaSelecionado(chaveInicio);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        📅 Ver no dia
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

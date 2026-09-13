@@ -140,6 +140,39 @@ async function anexarDestinatarios(eventos) {
   }));
 }
 
+// Condição de "fui marcado": diretamente pelo meu id OU pela categoria do meu perfil.
+// Usa 2 parâmetros, nesta ordem: usuarioId, perfil.
+const CONDICAO_MARCADO = `(
+  EXISTS (SELECT 1 FROM agenda_evento_usuarios eu WHERE eu.evento_id = e.id AND eu.usuario_id = ?)
+  OR EXISTS (SELECT 1 FROM agenda_evento_perfis ep WHERE ep.evento_id = e.id AND ep.perfil = ?)
+)`;
+
+// Monta o trecho WHERE que define QUAIS compromissos a pessoa pode ver, conforme os grupos
+// selecionados. Compartilhado entre a listagem do mês e a lista de "próximos compromissos",
+// garantindo que as duas telas respeitem exatamente a mesma regra de privacidade.
+// Retorna { filtro: null } quando nenhum grupo foi selecionado.
+function montarFiltroVisibilidade(selecionadas, usuarioId, perfil, ehAdm) {
+  const grupos = [];
+  const params = [];
+
+  if (selecionadas.includes('meus')) {
+    grupos.push('e.criado_por = ?');
+    params.push(usuarioId);
+  }
+  if (selecionadas.includes('marcados')) {
+    grupos.push(`(e.criado_por <> ? AND ${CONDICAO_MARCADO})`);
+    params.push(usuarioId, usuarioId, perfil);
+  }
+  // 'internos' é restrito ao ADM: os demais nunca enxergam compromissos alheios.
+  if (selecionadas.includes('internos') && ehAdm) {
+    grupos.push(`(e.criado_por <> ? AND NOT ${CONDICAO_MARCADO})`);
+    params.push(usuarioId, usuarioId, perfil);
+  }
+
+  if (grupos.length === 0) return { filtro: null, params: [] };
+  return { filtro: `(${grupos.join(' OR ')})`, params };
+}
+
 // Lista os compromissos de um mês (YYYY-MM) aplicando a regra de visibilidade.
 //
 // O parâmetro "visoes" é uma lista separada por vírgula (checkboxes acumulativos, não excludentes).
@@ -167,33 +200,10 @@ router.get('/', async (req, res) => {
     ? ['meus', 'marcados']
     : String(visoes).split(',').map(v => v.trim()).filter(Boolean);
 
-  // Condição de "fui marcado": diretamente pelo meu id OU pela categoria do meu perfil.
-  const CONDICAO_MARCADO = `(
-    EXISTS (SELECT 1 FROM agenda_evento_usuarios eu WHERE eu.evento_id = e.id AND eu.usuario_id = ?)
-    OR EXISTS (SELECT 1 FROM agenda_evento_perfis ep WHERE ep.evento_id = e.id AND ep.perfil = ?)
-  )`;
-
-  const grupos = [];
-  const params = [];
-
-  if (selecionadas.includes('meus')) {
-    grupos.push('e.criado_por = ?');
-    params.push(usuarioId);
-  }
-  if (selecionadas.includes('marcados')) {
-    grupos.push(`(e.criado_por <> ? AND ${CONDICAO_MARCADO})`);
-    params.push(usuarioId, usuarioId, perfil);
-  }
-  // 'internos' é restrito ao ADM: os demais nunca enxergam compromissos alheios.
-  if (selecionadas.includes('internos') && ehAdm) {
-    grupos.push(`(e.criado_por <> ? AND NOT ${CONDICAO_MARCADO})`);
-    params.push(usuarioId, usuarioId, perfil);
-  }
+  const { filtro, params } = montarFiltroVisibilidade(selecionadas, usuarioId, perfil, ehAdm);
 
   // Nenhum filtro marcado: retorna vazio em vez de mostrar tudo (respeita a escolha do usuário).
-  if (grupos.length === 0) return res.json([]);
-
-  const filtro = `(${grupos.join(' OR ')})`;
+  if (!filtro) return res.json([]);
 
   const eventos = await db.all(
     `SELECT e.*, o.nome as obra_nome, u.nome as criado_por_nome
@@ -209,18 +219,35 @@ router.get('/', async (req, res) => {
   res.json(await anexarDestinatarios(eventos));
 });
 
-// Próximos compromissos a partir de hoje (usado para o resumo lateral da tela da Agenda).
+// Próximos compromissos a partir de hoje, independente do mês exibido no calendário.
+// Usa exatamente a mesma regra de visibilidade da listagem mensal (o usuário só vê o que
+// criou / foi marcado; o ADM soma os internos se tiver marcado esse filtro).
+//
+// Compromissos de vários dias continuam aparecendo enquanto o período não terminou (por isso
+// a comparação usa COALESCE(data_fim, data) — ex: férias que começaram ontem e vão até sexta).
 router.get('/proximos', async (req, res) => {
-  const limite = Number(req.query.limite) || 10;
+  const limite = Math.min(Number(req.query.limite) || 20, 50);
+  const ehAdm = req.usuario.perfil === 'ADM';
+
+  const selecionadas = (req.query.visoes === undefined || req.query.visoes === null)
+    ? ['meus', 'marcados']
+    : String(req.query.visoes).split(',').map(v => v.trim()).filter(Boolean);
+
+  const { filtro, params } = montarFiltroVisibilidade(selecionadas, req.usuario.id, req.usuario.perfil, ehAdm);
+  if (!filtro) return res.json([]);
+
   const eventos = await db.all(
-    `SELECT e.*, o.nome as obra_nome
+    `SELECT e.*, o.nome as obra_nome, u.nome as criado_por_nome
      FROM agenda_eventos e
      LEFT JOIN obras o ON o.id = e.obra_id
-     WHERE e.data >= CURRENT_DATE AND e.concluido = 0
+     LEFT JOIN usuarios u ON u.id = e.criado_por
+     WHERE COALESCE(e.data_fim, e.data) >= CURRENT_DATE AND e.concluido = 0 AND ${filtro}
      ORDER BY e.data ASC, e.hora ASC NULLS FIRST, e.id ASC
-     LIMIT ${Number(limite)}`
+     LIMIT ${limite}`,
+    ...params
   );
-  res.json(eventos);
+
+  res.json(await anexarDestinatarios(eventos));
 });
 
 router.post('/', async (req, res) => {
