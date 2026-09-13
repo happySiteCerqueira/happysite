@@ -3,14 +3,19 @@ import api from '../api/api';
 import { useApuracao } from '../context/ApuracaoContext';
 import { useAuth } from '../context/AuthContext';
 
-// Opções do filtro de visão do topo da tela.
-// - 'meus'     : compromissos que o próprio usuário criou
-// - 'marcados' : criados por outra pessoa, em que ele foi marcado (pelo nome ou pela categoria)
-// - 'todos'    : só aparece para o ADM — tudo que existe no sistema, marcado ou não
+// Filtros de exibição do topo da tela. São checkboxes ACUMULATIVOS (não excludentes): cada um
+// liga um grupo independente de compromissos, e a tela mostra a soma dos grupos marcados.
+// Marcar os três equivale a "ver tudo".
+//
+// - 'meus'     : os que o próprio usuário criou
+// - 'marcados' : criados por OUTRA pessoa em que ele foi marcado (pelo nome ou pela categoria)
+// - 'internos' : só aparece para o ADM. Mostra apenas os compromissos em que ele NÃO está
+//                envolvido (não criou e não foi marcado) — daí o nome "internos", e não "todos",
+//                que daria a falsa impressão de incluir também os próprios compromissos.
 const VISOES = [
   { valor: 'meus', rotulo: '📝 Meus agendamentos', ajuda: 'Compromissos que você criou' },
-  { valor: 'marcados', rotulo: '📬 Agendamentos marcados', ajuda: 'Criados por outros setores em que você foi marcado' },
-  { valor: 'todos', rotulo: '🌐 Todos os agendamentos', ajuda: 'Todos do sistema, mesmo sem você estar marcado', somenteAdm: true }
+  { valor: 'marcados', rotulo: '📬 Agendamentos marcados', ajuda: 'Criados por outros em que você foi marcado' },
+  { valor: 'internos', rotulo: '🏢 Agendamentos internos', ajuda: 'Dos setores, em que você NÃO está marcado', somenteAdm: true }
 ];
 
 const NOMES_MES = [
@@ -88,8 +93,13 @@ export default function Agenda() {
   const [erro, setErro] = useState('');
   const [diaSelecionado, setDiaSelecionado] = useState(hojeChave());
   const [editando, setEditando] = useState(null); // evento completo (editar) ou { data } (novo)
-  // ADM começa vendo tudo; os demais começam pelos compromissos em que foram marcados.
-  const [visao, setVisao] = useState(ehAdm ? 'todos' : 'marcados');
+  // Filtros marcados (acumulativos). Todo mundo começa vendo o que criou + o que foi marcado;
+  // o ADM decide se quer somar também os agendamentos internos dos setores.
+  const [visoes, setVisoes] = useState(['meus', 'marcados']);
+
+  function alternarVisao(valor) {
+    setVisoes(prev => prev.includes(valor) ? prev.filter(v => v !== valor) : [...prev, valor]);
+  }
 
   // IMPORTANTE: função sem "return" antes do api.get — ela é passada direto para useEffect, e
   // qualquer valor retornado seria tratado pelo React como função de limpeza (mesmo cuidado
@@ -97,12 +107,14 @@ export default function Agenda() {
   function carregar() {
     setCarregando(true);
     setErro('');
-    api.get('/agenda', { params: { mes, visao } })
+    api.get('/agenda', { params: { mes, visoes: visoes.join(',') } })
       .then(res => setEventos(res.data))
       .catch(() => setErro('Erro ao carregar os compromissos da agenda'))
       .finally(() => setCarregando(false));
   }
-  useEffect(carregar, [mes, visao]);
+  // visoes.join() na dependência: o array muda de referência a cada clique, mas só queremos
+  // recarregar quando o CONTEÚDO da seleção mudar de fato.
+  useEffect(carregar, [mes, visoes.join(',')]);
 
   useEffect(() => {
     api.get('/obras').then(res => setObras(res.data)).catch(() => setObras([]));
@@ -175,32 +187,32 @@ export default function Agenda() {
 
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
-      {/* Filtro de visão: define QUAIS compromissos aparecem no calendário e na lista do dia. */}
+      {/* Filtros acumulativos: cada caixa marcada SOMA um grupo de compromissos à tela. */}
       <div className="card" style={{ marginBottom: 16, paddingTop: 12, paddingBottom: 12 }}>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
           <strong style={{ fontSize: 13, color: '#374151' }}>Exibir:</strong>
-          {VISOES.filter(v => !v.somenteAdm || ehAdm).map(v => (
-            <label
-              key={v.valor}
-              title={v.ajuda}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer',
-                fontWeight: visao === v.valor ? 700 : 400,
-                color: visao === v.valor ? '#2563eb' : '#374151'
-              }}
-            >
-              <input
-                type="radio"
-                name="visao-agenda"
-                checked={visao === v.valor}
-                onChange={() => setVisao(v.valor)}
-              />
-              {v.rotulo}
-            </label>
-          ))}
+          {VISOES.filter(v => !v.somenteAdm || ehAdm).map(v => {
+            const marcado = visoes.includes(v.valor);
+            return (
+              <label
+                key={v.valor}
+                title={v.ajuda}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer',
+                  fontWeight: marcado ? 700 : 400,
+                  color: marcado ? '#2563eb' : '#374151'
+                }}
+              >
+                <input type="checkbox" checked={marcado} onChange={() => alternarVisao(v.valor)} />
+                {v.rotulo}
+              </label>
+            );
+          })}
         </div>
         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>
-          {VISOES.find(v => v.valor === visao)?.ajuda}
+          {visoes.length === 0
+            ? '⚠️ Nenhum filtro marcado — marque ao menos uma opção para ver compromissos.'
+            : `Mostrando: ${VISOES.filter(v => visoes.includes(v.valor)).map(v => v.ajuda.toLowerCase()).join(' + ')}.`}
         </div>
       </div>
 

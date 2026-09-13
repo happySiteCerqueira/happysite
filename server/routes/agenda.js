@@ -99,13 +99,18 @@ async function anexarDestinatarios(eventos) {
 
 // Lista os compromissos de um mês (YYYY-MM) aplicando a regra de visibilidade.
 //
-// visao (query param):
-//   'meus'      -> apenas os que o próprio usuário criou
-//   'marcados'  -> apenas aqueles em que ele foi marcado (por nome ou pela categoria do perfil dele)
-//   'todos'     -> exclusivo do ADM: todos os compromissos do sistema, marcado ou não
-//   (padrão)    -> meus + marcados (é o que qualquer usuário enxerga normalmente)
+// O parâmetro "visoes" é uma lista separada por vírgula (checkboxes acumulativos, não excludentes).
+// Cada item liga um grupo INDEPENDENTE de compromissos, e o resultado é a união (OR) dos grupos:
+//
+//   'meus'     -> os que o próprio usuário criou
+//   'marcados' -> criados por OUTRA pessoa em que ele foi marcado (pelo nome ou pela categoria)
+//   'internos' -> aqueles em que ele NÃO está envolvido: não criou e não foi marcado.
+//                 (exclusivo do ADM — é a visão de "o que os setores estão agendando sem mim")
+//
+// Assim, marcar 'meus' + 'marcados' mostra tudo que envolve a pessoa; marcar os três mostra tudo.
+// Nenhum grupo marcado = lista vazia (o usuário desmarcou tudo de propósito).
 router.get('/', async (req, res) => {
-  const { mes, visao } = req.query;
+  const { mes, visoes } = req.query;
   if (!mes || !/^\d{4}-\d{2}$/.test(mes)) {
     return res.status(400).json({ erro: 'mes (YYYY-MM) é obrigatório' });
   }
@@ -114,34 +119,38 @@ router.get('/', async (req, res) => {
   const usuarioId = req.usuario.id;
   const perfil = req.usuario.perfil;
 
+  // Default (nenhum parâmetro enviado): tudo que envolve a pessoa.
+  const selecionadas = (visoes === undefined || visoes === null)
+    ? ['meus', 'marcados']
+    : String(visoes).split(',').map(v => v.trim()).filter(Boolean);
+
   // Condição de "fui marcado": diretamente pelo meu id OU pela categoria do meu perfil.
   const CONDICAO_MARCADO = `(
     EXISTS (SELECT 1 FROM agenda_evento_usuarios eu WHERE eu.evento_id = e.id AND eu.usuario_id = ?)
     OR EXISTS (SELECT 1 FROM agenda_evento_perfis ep WHERE ep.evento_id = e.id AND ep.perfil = ?)
   )`;
 
-  let filtro;
-  let params;
-  if (visao === 'todos') {
-    // Só o ADM pode ver tudo; para os demais, 'todos' cai no comportamento padrão (seguro).
-    if (ehAdm) {
-      filtro = '1=1';
-      params = [];
-    } else {
-      filtro = `(e.criado_por = ? OR ${CONDICAO_MARCADO})`;
-      params = [usuarioId, usuarioId, perfil];
-    }
-  } else if (visao === 'meus') {
-    filtro = 'e.criado_por = ?';
-    params = [usuarioId];
-  } else if (visao === 'marcados') {
-    // Compromissos criados por OUTRA pessoa em que eu fui marcado (não os que eu mesmo criei).
-    filtro = `(e.criado_por <> ? AND ${CONDICAO_MARCADO})`;
-    params = [usuarioId, usuarioId, perfil];
-  } else {
-    filtro = `(e.criado_por = ? OR ${CONDICAO_MARCADO})`;
-    params = [usuarioId, usuarioId, perfil];
+  const grupos = [];
+  const params = [];
+
+  if (selecionadas.includes('meus')) {
+    grupos.push('e.criado_por = ?');
+    params.push(usuarioId);
   }
+  if (selecionadas.includes('marcados')) {
+    grupos.push(`(e.criado_por <> ? AND ${CONDICAO_MARCADO})`);
+    params.push(usuarioId, usuarioId, perfil);
+  }
+  // 'internos' é restrito ao ADM: os demais nunca enxergam compromissos alheios.
+  if (selecionadas.includes('internos') && ehAdm) {
+    grupos.push(`(e.criado_por <> ? AND NOT ${CONDICAO_MARCADO})`);
+    params.push(usuarioId, usuarioId, perfil);
+  }
+
+  // Nenhum filtro marcado: retorna vazio em vez de mostrar tudo (respeita a escolha do usuário).
+  if (grupos.length === 0) return res.json([]);
+
+  const filtro = `(${grupos.join(' OR ')})`;
 
   const eventos = await db.all(
     `SELECT e.*, o.nome as obra_nome, u.nome as criado_por_nome
