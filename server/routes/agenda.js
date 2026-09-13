@@ -99,6 +99,20 @@ async function salvarDestinatarios(eventoId, usuarios, perfis) {
   }
 }
 
+// Regrava os lembretes ("avise X minutos antes") de um compromisso.
+async function salvarLembretes(eventoId, lembretes) {
+  await db.run('DELETE FROM agenda_lembretes WHERE evento_id = ?', eventoId);
+  for (const min of (lembretes || [])) {
+    const minutos = Number(min);
+    // Limite de 30 dias: evita valores absurdos por digitação errada.
+    if (!Number.isFinite(minutos) || minutos <= 0 || minutos > 43200) continue;
+    await db.run(
+      'INSERT INTO agenda_lembretes (evento_id, minutos_antes) VALUES (?,?) ON CONFLICT DO NOTHING',
+      eventoId, minutos
+    );
+  }
+}
+
 // Anexa a cada evento a lista de destinatários (ids de usuários e perfis), para o front exibir
 // "Para: Fulano, RH" na listagem e pré-marcar os checkboxes ao abrir a edição.
 async function anexarDestinatarios(eventos) {
@@ -114,11 +128,15 @@ async function anexarDestinatarios(eventos) {
   const marcadosPerfis = await db.all(
     `SELECT evento_id, perfil FROM agenda_evento_perfis WHERE evento_id IN (${listaIds})`
   );
+  const lembretes = await db.all(
+    `SELECT evento_id, minutos_antes FROM agenda_lembretes WHERE evento_id IN (${listaIds}) ORDER BY minutos_antes DESC`
+  );
 
   return eventos.map(e => ({
     ...e,
     destinatarios_usuarios: marcadosUsuarios.filter(m => m.evento_id === e.id).map(m => ({ id: m.usuario_id, nome: m.nome })),
-    destinatarios_perfis: marcadosPerfis.filter(m => m.evento_id === e.id).map(m => m.perfil)
+    destinatarios_perfis: marcadosPerfis.filter(m => m.evento_id === e.id).map(m => m.perfil),
+    lembretes: lembretes.filter(l => l.evento_id === e.id).map(l => l.minutos_antes)
   }));
 }
 
@@ -217,6 +235,7 @@ router.post('/', async (req, res) => {
   );
 
   await salvarDestinatarios(criado.id, req.body.destinatarios_usuarios, req.body.destinatarios_perfis);
+  await salvarLembretes(criado.id, req.body.lembretes);
 
   await registrar(req.usuario.id, 'CRIAR', 'agenda_eventos', criado.id, dados);
   res.json(criado);
@@ -248,6 +267,11 @@ router.put('/:id', async (req, res) => {
   );
 
   await salvarDestinatarios(req.params.id, req.body.destinatarios_usuarios, req.body.destinatarios_perfis);
+  await salvarLembretes(req.params.id, req.body.lembretes);
+
+  // Lembretes já disparados deste compromisso são liberados novamente, pois a data/hora pode
+  // ter mudado na edição (senão um lembrete reagendado nunca voltaria a ser enviado).
+  await db.run("DELETE FROM notificacoes_enviadas WHERE chave LIKE ?", `agenda:${req.params.id}:%`);
 
   await registrar(req.usuario.id, 'EDITAR', 'agenda_eventos', Number(req.params.id), dados);
   res.json({ ok: true });

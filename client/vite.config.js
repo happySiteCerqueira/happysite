@@ -13,6 +13,12 @@ export default defineConfig({
       // a "tela branca" que acontecia após um deploy: o Service Worker antigo insistia em servir um
       // bundle JS com hash que já não existia mais no servidor.
       registerType: 'autoUpdate',
+      // Service Worker próprio (src/sw-push.js): mantém o precache/atualização automática e
+      // acrescenta o tratamento das notificações push (evento 'push' e 'notificationclick'),
+      // que o Service Worker gerado automaticamente não conhece.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw-push.js',
       includeAssets: ['logo.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'HappySite - Administração de Obras',
@@ -29,20 +35,11 @@ export default defineConfig({
           { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
-      workbox: {
-        // Nunca cacheia chamadas de API: sempre busca dados frescos do servidor
-        navigateFallbackDenylist: [/^\/api/],
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\/.*/,
-            handler: 'NetworkOnly'
-          }
-        ],
-        // Assim que um novo Service Worker termina de instalar, ele assume o controle imediatamente
-        // (em vez de esperar todas as abas antigas fecharem) e remove caches de versões anteriores.
-        skipWaiting: true,
-        clientsClaim: true,
-        cleanupOutdatedCaches: true
+      // No modo injectManifest, o skipWaiting/clientsClaim/cleanupOutdatedCaches passam a ser
+      // feitos dentro do próprio src/sw-push.js. Aqui ficam apenas as opções de build do SW.
+      injectManifest: {
+        // Chamadas de API nunca entram no precache (dados sempre vêm frescos do servidor).
+        globIgnores: ['**/api/**']
       }
     })
   ],

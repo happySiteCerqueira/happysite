@@ -30,6 +30,11 @@ services:
       # Opcional: credenciais da conta de serviço do Google (ver .env.example e DEPLOY_VPS.md)
       # para o backup automático diário também ser enviado à pasta "SISTEMA CERQUEIRA" no Drive.
       GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+      # Opcional: chaves VAPID das notificações push (ver .env.example e DEPLOY_VPS.md).
+      # Sem elas, os lembretes ficam desligados e o resto do sistema segue normal.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@cerqueiraengenharia.com.br}
     volumes:
       - app_data:/app/data
       - app_backups:/app/backups

@@ -348,6 +348,63 @@ abaixo (feitos **uma única vez**):
 > existir (ou seja, o app do Google Drive para desktop estiver instalado e sincronizado), o backup
 > automático local já copia o arquivo direto para lá, sem precisar de nenhuma configuração extra.
 
+## Notificações push (lembretes)
+
+O sistema envia notificações para celular/computador mesmo com o app fechado, usando **Web Push**
+(gratuito, sem serviços externos). São dois tipos:
+
+- **Lembretes da Agenda**: configurados pelo próprio usuário ao cadastrar o compromisso (pode
+  adicionar vários, ex: "1 dia antes" e "2 horas antes"). Avisa quem criou e quem foi marcado.
+- **ASO e Experiência (45 e 90 dias)**: automáticos, sem configuração. Sempre às **08:00**, com um
+  lembrete 24h antes e outro no dia do vencimento. Se a data cair em sábado/domingo, o aviso
+  **recua para a sexta-feira** (ex: vence domingo → lembrete quinta, aviso sexta; vence segunda →
+  lembrete sexta, aviso segunda). Vão para os perfis **RH** e **ADM**.
+
+### Ativar (fazer uma única vez)
+
+1. Gere o par de chaves VAPID no servidor:
+   ```bash
+   cd /opt/happysite
+   docker compose exec app npx web-push generate-vapid-keys
+   ```
+2. Copie as duas chaves exibidas e adicione ao `.env`:
+   ```bash
+   nano .env
+   ```
+   ```
+   VAPID_PUBLIC_KEY=BN...
+   VAPID_PRIVATE_KEY=k3...
+   VAPID_SUBJECT=mailto:contato@cerqueiraengenharia.com.br
+   ```
+3. Reinicie a aplicação:
+   ```bash
+   docker compose up -d
+   ```
+   No log deve aparecer `[push] Notificações habilitadas.` e `[lembretes] Agendador iniciado`.
+
+> Sem essas chaves o recurso fica apenas **desligado** — o resto do sistema funciona normalmente
+> e o botão de ativar não aparece para os usuários.
+
+### Como cada pessoa ativa no aparelho dela
+
+Na tela **Agenda**, clicar em **"Ativar notificações"** e permitir quando o navegador perguntar.
+É preciso fazer isso **uma vez em cada aparelho** (celular, notebook). O botão **"Enviar teste"**
+confirma na hora se está chegando.
+
+### Instalar como aplicativo
+
+O sistema já é um PWA — pode ser instalado nos três sistemas, com ícone próprio e tela cheia:
+
+| Sistema | Como instalar |
+|---|---|
+| **Android** | Chrome → menu ⋮ → *Instalar aplicativo* |
+| **iPhone/iPad** | Safari → Compartilhar → *Adicionar à Tela de Início* |
+| **Windows** | Chrome/Edge → ícone de instalar na barra de endereço |
+
+> ⚠️ **iPhone/iPad**: as notificações exigem **iOS 16.4 ou superior** E que o site tenha sido
+> instalado na tela de início. Abrindo apenas pelo Safari, o iOS **não** entrega notificações —
+> é limitação da Apple. No Android e no Windows funciona direto pelo navegador.
+
 ## Observações importantes
 
 - Os dados do banco, os arquivos de comprovantes e os backups automáticos ficam salvos em volumes

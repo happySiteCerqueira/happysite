@@ -2,6 +2,26 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../api/api';
 import { useApuracao } from '../context/ApuracaoContext';
 import { useAuth } from '../context/AuthContext';
+import { ativarNotificacoes, desativarNotificacoes, enviarTeste, permissaoAtual, suportaNotificacoes, ehIosSemInstalar } from '../utils/notificacoes';
+
+// Opções prontas de lembrete (em minutos antes do compromisso), além da entrada manual.
+const LEMBRETES_SUGERIDOS = [
+  { minutos: 10, rotulo: '10 min antes' },
+  { minutos: 30, rotulo: '30 min antes' },
+  { minutos: 60, rotulo: '1 hora antes' },
+  { minutos: 120, rotulo: '2 horas antes' },
+  { minutos: 1440, rotulo: '1 dia antes' },
+  { minutos: 2880, rotulo: '2 dias antes' },
+  { minutos: 10080, rotulo: '1 semana antes' }
+];
+
+// Texto amigável para um lembrete já adicionado.
+function rotuloLembrete(minutos) {
+  if (minutos % 10080 === 0) { const s = minutos / 10080; return `${s} semana${s > 1 ? 's' : ''} antes`; }
+  if (minutos % 1440 === 0) { const d = minutos / 1440; return `${d} dia${d > 1 ? 's' : ''} antes`; }
+  if (minutos % 60 === 0) { const h = minutos / 60; return `${h} hora${h > 1 ? 's' : ''} antes`; }
+  return `${minutos} min antes`;
+}
 
 // Filtros de exibição do topo da tela. São checkboxes ACUMULATIVOS (não excludentes): cada um
 // liga um grupo independente de compromissos, e a tela mostra a soma dos grupos marcados.
@@ -113,6 +133,26 @@ export default function Agenda() {
   // Filtros marcados (acumulativos). Todo mundo começa vendo o que criou + o que foi marcado;
   // o ADM decide se quer somar também os agendamentos internos dos setores.
   const [visoes, setVisoes] = useState(['meus', 'marcados']);
+  // Estado das notificações push neste aparelho ('granted' | 'denied' | 'default' | 'unsupported')
+  const [permissaoPush, setPermissaoPush] = useState(() => permissaoAtual());
+  const [msgPush, setMsgPush] = useState('');
+
+  async function ligarNotificacoes() {
+    setMsgPush('');
+    const r = await ativarNotificacoes();
+    if (r.ok) {
+      setPermissaoPush('granted');
+      setMsgPush('✅ Notificações ativadas neste aparelho.');
+    } else {
+      setMsgPush(`⚠️ ${r.motivo}`);
+    }
+  }
+
+  async function desligarNotificacoes() {
+    await desativarNotificacoes();
+    setPermissaoPush(permissaoAtual());
+    setMsgPush('🔕 Notificações desativadas neste aparelho.');
+  }
 
   function alternarVisao(valor) {
     setVisoes(prev => prev.includes(valor) ? prev.filter(v => v !== valor) : [...prev, valor]);
@@ -217,6 +257,40 @@ export default function Agenda() {
       </p>
 
       {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
+
+      {/* Notificações push deste aparelho. Cada dispositivo (celular, notebook) precisa ser
+          autorizado uma vez. No iPhone só funciona com o app instalado na tela de início. */}
+      {suportaNotificacoes() || ehIosSemInstalar() ? (
+        <div className="card" style={{ marginBottom: 16, paddingTop: 10, paddingBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <strong style={{ fontSize: 13 }}>🔔 Lembretes neste aparelho:</strong>
+            {permissaoPush === 'granted' ? (
+              <>
+                <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 700 }}>Ativados</span>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => enviarTeste().then(() => setMsgPush('📨 Teste enviado — deve chegar em instantes.'))}
+                >
+                  Enviar teste
+                </button>
+                <button className="btn-secondary btn-sm" onClick={desligarNotificacoes}>Desativar</button>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 13, color: '#b45309' }}>Desativados</span>
+                <button className="btn-primary btn-sm" onClick={ligarNotificacoes}>Ativar notificações</button>
+              </>
+            )}
+          </div>
+          {ehIosSemInstalar() && (
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>
+              📱 <strong>iPhone/iPad:</strong> para receber lembretes, toque em <strong>Compartilhar</strong> →
+              <strong> Adicionar à Tela de Início</strong> e abra o HappySite por esse ícone.
+            </div>
+          )}
+          {msgPush && <div style={{ fontSize: 12, marginTop: 6 }}>{msgPush}</div>}
+        </div>
+      ) : null}
 
       {/* Filtros acumulativos: cada caixa marcada SOMA um grupo de compromissos à tela.
           Bloco exclusivo do ADM — os demais perfis sempre veem o que criaram + o que foram
@@ -419,6 +493,20 @@ function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
   const [usaIntervalo, setUsaIntervalo] = useState(!!evento.data_fim);
   const [dataFim, setDataFim] = useState(evento.data_fim ? chaveData(evento.data_fim) : '');
   const [periodo, setPeriodo] = useState(evento.periodo || 'HORA');
+  // Lembretes deste compromisso (minutos antes). O usuário pode adicionar quantos quiser.
+  const [lembretes, setLembretes] = useState(() => evento.lembretes || []);
+  const [novoLembreteValor, setNovoLembreteValor] = useState('1');
+  const [novoLembreteUnidade, setNovoLembreteUnidade] = useState('1440'); // dias por padrão
+
+  function adicionarLembrete(minutos) {
+    const m = Number(minutos);
+    if (!Number.isFinite(m) || m <= 0) return;
+    setLembretes(prev => prev.includes(m) ? prev : [...prev, m].sort((a, b) => b - a));
+  }
+
+  function removerLembrete(minutos) {
+    setLembretes(prev => prev.filter(m => m !== minutos));
+  }
   const [hora, setHora] = useState(evento.hora || '');
   const [descricao, setDescricao] = useState(evento.descricao || '');
   const [obraId, setObraId] = useState(evento.obra_id || '');
@@ -448,7 +536,8 @@ function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
       cor,
       concluido: evento.concluido ? 1 : 0,
       destinatarios_usuarios: usuariosMarcados,
-      destinatarios_perfis: perfisMarcados
+      destinatarios_perfis: perfisMarcados,
+      lembretes
     };
     try {
       if (ehEdicao) {
@@ -527,6 +616,84 @@ function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
               Vale para todos os dias do período selecionado.
             </div>
           )}
+        </div>
+
+        {/* Lembretes: quantos o usuário quiser, cada um com sua antecedência.
+            Ex: um de 1 dia antes e outro de 2 horas antes do mesmo compromisso. */}
+        <div style={{ marginBottom: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}>
+          <label style={{ fontSize: 12, fontWeight: 700 }}>🔔 Lembretes</label>
+          <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
+            Avisa por notificação quem criou e quem foi marcado. Adicione quantos quiser.
+          </div>
+
+          {lembretes.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {lembretes.map(m => (
+                <span
+                  key={m}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12,
+                    background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe',
+                    borderRadius: 20, padding: '3px 10px'
+                  }}
+                >
+                  {rotuloLembrete(m)}
+                  <button
+                    type="button"
+                    onClick={() => removerLembrete(m)}
+                    title="Remover lembrete"
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#991b1b', fontWeight: 700, padding: 0 }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Entrada manual: valor + unidade */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="number"
+              min={1}
+              value={novoLembreteValor}
+              onChange={e => setNovoLembreteValor(e.target.value)}
+              style={{ width: 70 }}
+            />
+            <select value={novoLembreteUnidade} onChange={e => setNovoLembreteUnidade(e.target.value)} style={{ width: 110 }}>
+              <option value="1">minutos</option>
+              <option value="60">horas</option>
+              <option value="1440">dias</option>
+            </select>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>antes</span>
+            <button
+              type="button"
+              className="btn-secondary btn-sm"
+              onClick={() => {
+                adicionarLembrete(Number(novoLembreteValor) * Number(novoLembreteUnidade));
+                setNovoLembreteValor('1');
+              }}
+            >
+              ➕ Adicionar lembrete
+            </button>
+          </div>
+
+          {/* Atalhos mais usados */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+            {LEMBRETES_SUGERIDOS.filter(s => !lembretes.includes(s.minutos)).map(s => (
+              <button
+                key={s.minutos}
+                type="button"
+                onClick={() => adicionarLembrete(s.minutos)}
+                style={{
+                  fontSize: 11, background: '#f1f5f9', border: '1px dashed #cbd5e1',
+                  borderRadius: 20, padding: '2px 10px', cursor: 'pointer', color: '#475569'
+                }}
+              >
+                + {s.rotulo}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Quem vai ver o compromisso: por categoria (perfil inteiro) e/ou por nome. */}

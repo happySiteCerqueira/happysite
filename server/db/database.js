@@ -538,6 +538,42 @@ async function migrate() {
     await pool.query("UPDATE agenda_eventos SET periodo = 'DIA_INTEIRO' WHERE hora IS NULL");
   }
 
+  // Assinaturas de notificação push (Web Push / VAPID). Cada linha é um DISPOSITIVO onde o
+  // usuário autorizou receber notificações — a mesma pessoa pode ter várias (celular, notebook).
+  // O "endpoint" é a URL única que o navegador fornece e para onde o servidor envia o aviso.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_assinaturas (
+      id SERIAL PRIMARY KEY,
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      criado_em TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  // Lembretes configuráveis de um compromisso da Agenda: "avise X minutos antes".
+  // Quantos o usuário quiser por compromisso (ex: 24h antes E 2h antes).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS agenda_lembretes (
+      id SERIAL PRIMARY KEY,
+      evento_id INTEGER NOT NULL REFERENCES agenda_eventos(id) ON DELETE CASCADE,
+      minutos_antes INTEGER NOT NULL,
+      UNIQUE(evento_id, minutos_antes)
+    );
+  `);
+
+  // Registro do que JÁ foi notificado, para nunca enviar a mesma notificação duas vezes.
+  // chave = identificador único do envio, ex: 'agenda:12:1440' (evento 12, lembrete de 1440 min)
+  // ou 'aso:7:2026-09-20:lembrete' (colaborador 7, vencimento em 20/09, aviso prévio).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notificacoes_enviadas (
+      id SERIAL PRIMARY KEY,
+      chave TEXT NOT NULL UNIQUE,
+      enviado_em TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
   // Destinatários de um compromisso da Agenda. Um compromisso pode ser direcionado a pessoas
   // específicas (agenda_evento_usuarios) e/ou a categorias inteiras de perfil, ex: todo o RH
   // (agenda_evento_perfis). Quem criou sempre enxerga o próprio compromisso, mesmo sem se marcar.

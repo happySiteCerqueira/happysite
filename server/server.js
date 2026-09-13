@@ -5,6 +5,7 @@ const fs = require('fs');
 const db = require('./db/database'); // garante criação/migração do banco
 const { verificarRotasRegistradas } = require('./utils/verificarRotas');
 const { iniciarBackupAutomatico } = require('./utils/backupAutomatico');
+const { iniciarAgendadorLembretes } = require('./utils/lembretes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -58,6 +59,7 @@ app.use('/api/financeiro', require('./routes/financeiro'));
 app.use('/api/permissoes', require('./routes/permissoes'));
 app.use('/api/aso', require('./routes/aso'));
 app.use('/api/agenda', require('./routes/agenda'));
+app.use('/api/push', require('./routes/push'));
 
 
 
@@ -95,6 +97,10 @@ db.pronto
       // Backup automático diário de segurança (não substitui o backup manual, apenas adiciona
       // uma rede de proteção extra caso algo dê errado sem ninguém perceber a tempo).
       iniciarBackupAutomatico();
+
+      // Notificações push: lembretes da Agenda (configurados pelo usuário) e avisos automáticos
+      // de ASO/Experiência às 08:00. Só roda se as chaves VAPID estiverem no .env.
+      iniciarAgendadorLembretes();
     });
   })
   .catch(e => {
