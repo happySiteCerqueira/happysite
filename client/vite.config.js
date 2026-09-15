@@ -21,8 +21,10 @@ export default defineConfig({
       filename: 'sw-push.js',
       includeAssets: ['logo.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'HappySite - Administração de Obras',
-        short_name: 'HappySite',
+        // "name" é o nome exibido na tela de instalação do Android ("Instalar Cerqueira Eng.?")
+        // e "short_name" é o que fica embaixo do ícone na tela inicial (precisa ser curto).
+        name: 'Cerqueira Eng.',
+        short_name: 'Cerqueira Eng.',
         description: 'Sistema de administração de obras, colaboradores e medições',
         start_url: '/',
         display: 'standalone',

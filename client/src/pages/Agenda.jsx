@@ -295,7 +295,7 @@ export default function Agenda() {
           {ehIosSemInstalar() && (
             <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>
               📱 <strong>iPhone/iPad:</strong> para receber lembretes, toque em <strong>Compartilhar</strong> →
-              <strong> Adicionar à Tela de Início</strong> e abra o HappySite por esse ícone.
+              <strong> Adicionar à Tela de Início</strong> e abra o app por esse ícone.
             </div>
           )}
           {msgPush && <div style={{ fontSize: 12, marginTop: 6 }}>{msgPush}</div>}

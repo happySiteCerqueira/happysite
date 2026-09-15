@@ -48,7 +48,7 @@ router.get('/status', async (req, res) => {
 router.post('/testar', async (req, res) => {
   const enviados = await enviarParaUsuario(req.usuario.id, {
     titulo: '🔔 Notificação de teste',
-    corpo: 'Tudo certo! Os lembretes do HappySite vão chegar assim.',
+    corpo: 'Tudo certo! Os lembretes da Cerqueira Eng. vão chegar assim.',
     url: '/agenda'
   });
   res.json({ ok: true, enviados });

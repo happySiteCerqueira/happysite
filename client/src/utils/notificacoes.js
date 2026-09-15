@@ -39,7 +39,7 @@ export async function ativarNotificacoes() {
     if (ehIosSemInstalar()) {
       return {
         ok: false,
-        motivo: 'No iPhone/iPad é preciso instalar o app primeiro: toque em Compartilhar e depois em "Adicionar à Tela de Início". Abra o HappySite por esse ícone e ative novamente.'
+        motivo: 'No iPhone/iPad é preciso instalar o app primeiro: toque em Compartilhar e depois em "Adicionar à Tela de Início". Abra o app por esse ícone e ative novamente.'
       };
     }
     return { ok: false, motivo: 'Este navegador não suporta notificações.' };

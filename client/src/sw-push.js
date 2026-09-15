@@ -36,10 +36,10 @@ self.addEventListener('push', event => {
   try {
     dados = event.data ? event.data.json() : {};
   } catch (e) {
-    dados = { titulo: 'HappySite', corpo: event.data ? event.data.text() : '' };
+    dados = { titulo: 'Cerqueira Eng.', corpo: event.data ? event.data.text() : '' };
   }
 
-  const titulo = dados.titulo || 'HappySite';
+  const titulo = dados.titulo || 'Cerqueira Eng.';
   const opcoes = {
     body: dados.corpo || '',
     icon: '/pwa-192.png',

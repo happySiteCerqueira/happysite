@@ -32,7 +32,7 @@ export default function Login() {
           <img src="/logo.png" alt="Logo" style={{ maxWidth: 220, maxHeight: 100, objectFit: 'contain' }} />
         </div>
         <div style={{ textAlign: 'center', color: '#6b7280', marginBottom: 20, fontSize: 13 }}>
-          HappySite - Administração de Obras
+          Cerqueira Eng. - Administração de Obras
         </div>
         {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 8, borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{erro}</div>}
         <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
