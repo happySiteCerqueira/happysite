@@ -110,11 +110,13 @@ router.get('/', async (req, res) => {
   // Contagem inclusiva: o próprio dia da admissão já conta como "dia 1" do período. Por isso o
   // vencimento da 1ª experiência (45 dias) cai em admissão + 44 dias corridos, e o da 2ª (90 dias)
   // em admissão + 89 dias corridos (um dia antes do que daria uma soma direta de 45/90).
+  // Somente colaboradores CLT (tipo 'CPF'): período de experiência é instituto da relação de
+  // emprego, não se aplica a empreiteiros (PJ) — mesma lógica usada no ASO.
   const emExperiencia = await db.all(`
     SELECT id, nome, cor, funcao, data_admissao, confirmado_45_dias,
            (CURRENT_DATE - data_admissao)::int + 1 as dias_corridos
     FROM colaboradores
-    WHERE ativo = 1 AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL
+    WHERE ativo = 1 AND tipo = 'CPF' AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL
     ORDER BY data_admissao
   `);
   const LIMITE_ALERTA_DIAS = 6; // colaboradores a até 6 dias do próximo vencimento (45 ou 90) sobem para o topo e ficam em alerta (amarelo)

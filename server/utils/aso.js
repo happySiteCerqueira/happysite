@@ -23,13 +23,17 @@ async function dataBaseAsoAtual(colaborador) {
   return ultimaRenovacao ? ultimaRenovacao.data_aso : colaborador.data_primeiro_aso;
 }
 
-// Lista, com vencimento e dias restantes calculados, de TODOS os colaboradores ativos —
+// Lista, com vencimento e dias restantes calculados, dos colaboradores CLT (tipo 'CPF') ativos —
 // inclusive quem ainda nunca teve nenhum ASO registrado (sem_aso: true, sem data/vencimento),
 // para que apareçam na tela de Vencimentos (com opção de registrar o 1º ASO) e no seletor da
 // aba Histórico (mesmo sem nenhum lançamento ainda, igual ao padrão da tela de EPI).
+//
+// IMPORTANTE: empreiteiros (tipo 'PJ') são EXCLUÍDOS. ASO (Atestado de Saúde Ocupacional) é uma
+// exigência da relação de emprego CLT; empresas contratadas não fazem exame ocupacional pela
+// contratante, então não faz sentido cobrar/alertar vencimento de ASO para elas.
 async function listarVencimentosAso() {
   const colaboradores = await db.all(
-    "SELECT id, nome, cor, funcao, data_primeiro_aso FROM colaboradores WHERE ativo = 1 ORDER BY nome"
+    "SELECT id, nome, cor, funcao, data_primeiro_aso FROM colaboradores WHERE ativo = 1 AND tipo = 'CPF' ORDER BY nome"
   );
 
   const hojeStr = new Date().toISOString().slice(0, 10);

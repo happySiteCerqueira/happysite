@@ -390,7 +390,9 @@ function ListaPrestadores() {
               {linhaCampo(editando.tipo === 'PJ' ? 'Data de Fundação/Aniversário' : 'Data de Nascimento',
                 editando.data_nascimento, e => setEditando({ ...editando, data_nascimento: e.target.value }), 'date')}
               {linhaCampo('Data de Admissão', editando.data_admissao, e => setEditando({ ...editando, data_admissao: e.target.value }), 'date')}
-              {linhaCampo('Data do 1º ASO', editando.data_primeiro_aso, e => setEditando({ ...editando, data_primeiro_aso: e.target.value }), 'date')}
+              {/* ASO não se aplica a empreiteiros (PJ) — ver comentário em server/utils/aso.js */}
+              {editando.tipo !== 'PJ' &&
+                linhaCampo('Data do 1º ASO', editando.data_primeiro_aso, e => setEditando({ ...editando, data_primeiro_aso: e.target.value }), 'date')}
               {linhaCampo('Valor da Diária (R$)', editando.valor_diaria, e => setEditando({ ...editando, valor_diaria: e.target.value }), 'number')}
             </div>
 

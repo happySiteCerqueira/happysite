@@ -185,10 +185,11 @@ function marcoExperiencia(dataAdmissao, dias) {
 }
 
 async function processarAvisosExperiencia(agora, hojeChave) {
+  // Apenas CLT (tipo 'CPF'): empreiteiros (PJ) não têm período de experiência.
   const colaboradores = await db.all(
     `SELECT id, nome, data_admissao, confirmado_45_dias
      FROM colaboradores
-     WHERE ativo = 1 AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL`
+     WHERE ativo = 1 AND tipo = 'CPF' AND experiencia_status = 'EM_EXPERIENCIA' AND data_admissao IS NOT NULL`
   );
 
   for (const c of colaboradores) {

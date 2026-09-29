@@ -80,6 +80,12 @@ router.post('/:colaboradorId/renovar', async (req, res) => {
   const colaborador = await db.get('SELECT * FROM colaboradores WHERE id = ?', req.params.colaboradorId);
   if (!colaborador) return res.status(404).json({ erro: 'Colaborador não encontrado' });
 
+  // Empreiteiros (PJ) não têm ASO — é exigência da relação CLT. Bloqueia por segurança, caso
+  // a rota seja chamada diretamente (a tela já não lista PJ).
+  if (colaborador.tipo === 'PJ') {
+    return res.status(400).json({ erro: 'Empreiteiros (PJ) não possuem ASO.' });
+  }
+
   // Se o colaborador nunca teve um primeiro ASO registrado, esta primeira "renovação" na prática
   // vira o próprio primeiro ASO do cadastro (evita exigir edição manual do cadastro antes).
   if (!colaborador.data_primeiro_aso) {

@@ -275,7 +275,10 @@ export default function Cadastro() {
                 {campo(novoColab.tipo === 'PJ' ? 'Data de Fundação/Aniversário (opcional)' : 'Data de Nascimento (opcional)',
                   novoColab.data_nascimento, e => setNovoColab({ ...novoColab, data_nascimento: e.target.value }), 'date')}
                 {campo('Data de Admissão (opcional)', novoColab.data_admissao, e => setNovoColab({ ...novoColab, data_admissao: e.target.value }), 'date')}
-                {campo('Data do 1º ASO (opcional)', novoColab.data_primeiro_aso, e => setNovoColab({ ...novoColab, data_primeiro_aso: e.target.value }), 'date')}
+                {/* ASO só existe para colaborador CLT (CPF). Empreiteiros (PJ) não fazem exame
+                    ocupacional pela contratante, então o campo nem aparece para eles. */}
+                {novoColab.tipo !== 'PJ' &&
+                  campo('Data do 1º ASO (opcional)', novoColab.data_primeiro_aso, e => setNovoColab({ ...novoColab, data_primeiro_aso: e.target.value }), 'date')}
                 <div className="flex-col gap-2">
                   <label style={{ fontSize: 12 }}>Valor da Diária (R$) — opcional</label>
                   <input type="number" step="0.01" value={novoColab.valor_diaria}
