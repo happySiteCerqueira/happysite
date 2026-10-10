@@ -275,12 +275,29 @@ export default function ObraDetalhe() {
     if (!ids || ids.length === 0) return;
     const quantidade = await salvarQuantidadeModalSeAlterada();
 
-    const temAjuste = ajustes && Object.keys(ajustes).length > 0;
-    const payloadPessoas = temAjuste
-      ? ids.map(id => (ajustes[id] !== undefined && ajustes[id] !== '')
-        ? { colaborador_id: id, valor: Number(ajustes[id]) }
-        : { colaborador_id: id })
-      : ids;
+    // Monta a lista enviando, para cada pessoa, o valor final já calculado na tela (respeitando
+    // os ajustes de qtd/unitário/total) e a quantidade atribuída a ela. Quem não teve nenhum
+    // ajuste vai sem esses campos e o backend aplica a divisão igual.
+    const qtdBase = quantidade !== undefined
+      ? Number(quantidade)
+      : (quantidadesMapa[celulaSelecionada] ?? 1);
+    const unitBase = Number(servicoAtivo?.valor_unitario) || 0;
+    const qtdPorPessoa = ids.length > 0 ? (Number(qtdBase) || 0) / ids.length : 0;
+
+    const payloadPessoas = ids.map(id => {
+      const a = (ajustes && ajustes[id]) || {};
+      const temQtd = a.qtd !== undefined && a.qtd !== '';
+      const temUnit = a.unit !== undefined && a.unit !== '';
+      const temTotal = a.total !== undefined && a.total !== '';
+
+      if (!temQtd && !temUnit && !temTotal) return { colaborador_id: id };
+
+      const q = temQtd ? Number(a.qtd) : qtdPorPessoa;
+      const u = temUnit ? Number(a.unit) : unitBase;
+      const valorFinal = temTotal ? Number(a.total) : q * u;
+
+      return { colaborador_id: id, valor: valorFinal, quantidade: q };
+    });
 
     try {
       await api.post(`/obras/servicos/${servicoAtivoId}/celulas`, {
@@ -1459,68 +1476,118 @@ export default function ObraDetalhe() {
   );
 }
 
-// Seleção de VÁRIAS pessoas para um mesmo serviço/célula, com o valor total dividido entre elas.
+// Seleção de VÁRIAS pessoas para um mesmo serviço/célula, dividindo o trabalho entre elas.
 //
-// Regra: a quantidade e o valor pertencem ao SERVIÇO, nunca à pessoa. Ex: 8 apartamentos x R$ 20
-// = R$ 160; marcando 4 pessoas, cada uma fica com R$ 40. O rateio é automático, mas o usuário
-// pode ajustar manualmente quanto alguém recebe (ex: entrou só na metade do serviço) — nesse
-// caso, o restante continua sendo dividido igualmente entre os que não foram ajustados.
+// Por padrão a quantidade do serviço é dividida igualmente e todos recebem o mesmo valor
+// unitário (ex: 8 apartamentos x R$ 20 = R$ 160; com 4 pessoas, cada uma fica com 2 aptos e
+// R$ 40). Mas CADA PESSOA pode ter os três campos ajustados à mão:
+//   - Qtd        : quando alguém fez mais do que os outros (ex: 3 aptos em vez de 2)
+//   - Unitário   : quando o preço combinado com aquela pessoa é diferente
+//   - Total      : quando o acerto é direto em reais, sem passar por qtd x unitário
+//
+// Os campos se auto-completam: digitando qtd e unitário, o total é calculado; digitando o
+// total direto, ele prevalece sobre o cálculo.
+//
+// "ajustes" guarda { [colaboradorId]: { qtd, unit, total } } — todos opcionais.
 function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjustes, valorUnitario, quantidade, onConfirmar }) {
-  const valorTotal = (Number(quantidade) || 0) * (Number(valorUnitario) || 0);
+  const qtdServico = Number(quantidade) || 0;
+  const unitServico = Number(valorUnitario) || 0;
+  const valorTotal = qtdServico * unitServico;
 
-  // Separa quem teve valor digitado à mão de quem segue a divisão automática.
-  const idsAjustados = selecionados.filter(id => ajustes[id] !== undefined && ajustes[id] !== '');
-  const idsAutomaticos = selecionados.filter(id => !(ajustes[id] !== undefined && ajustes[id] !== ''));
-  const somaAjustada = idsAjustados.reduce((acc, id) => acc + (Number(ajustes[id]) || 0), 0);
-  const restante = valorTotal - somaAjustada;
-  const valorAutomatico = idsAutomaticos.length > 0 ? restante / idsAutomaticos.length : 0;
+  // Divisão automática: a quantidade do serviço rateada entre todos os marcados.
+  const qtdAutomatica = selecionados.length > 0 ? qtdServico / selecionados.length : 0;
+
+  function campo(id, nome) {
+    const a = ajustes[id];
+    return a && a[nome] !== undefined && a[nome] !== '' ? a[nome] : '';
+  }
+
+  function setCampo(id, nome, valor) {
+    setAjustes(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [nome]: valor } }));
+  }
+
+  // Valor final de uma pessoa: total manual tem prioridade; senão, qtd x unitário (cada um
+  // podendo ser o ajustado ou o padrão do serviço/divisão automática).
+  function calcularTotalPessoa(id) {
+    const totalManual = campo(id, 'total');
+    if (totalManual !== '') return Number(totalManual) || 0;
+    const q = campo(id, 'qtd') !== '' ? Number(campo(id, 'qtd')) : qtdAutomatica;
+    const u = campo(id, 'unit') !== '' ? Number(campo(id, 'unit')) : unitServico;
+    return (q || 0) * (u || 0);
+  }
 
   function alternar(id) {
     setSelecionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    // Ao desmarcar alguém, descarta também um eventual ajuste manual dele.
+    // Ao desmarcar alguém, descarta também os ajustes manuais dele.
     if (selecionados.includes(id)) {
       setAjustes(prev => { const novo = { ...prev }; delete novo[id]; return novo; });
     }
   }
 
-  function valorExibido(id) {
-    if (ajustes[id] !== undefined && ajustes[id] !== '') return Number(ajustes[id]);
-    return valorAutomatico;
-  }
-
-  const sobrouDiferenca = Math.abs((somaAjustada + valorAutomatico * idsAutomaticos.length) - valorTotal) > 0.01;
+  const somaDistribuida = selecionados.reduce((acc, id) => acc + calcularTotalPessoa(id), 0);
+  const sobrouDiferenca = Math.abs(somaDistribuida - valorTotal) > 0.01;
 
   return (
     <div>
       <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
-        O valor total do serviço é dividido entre as pessoas marcadas. Você pode ajustar algum
-        valor manualmente se necessário.
+        Marque quem executou. Por padrão a quantidade e o valor são divididos igualmente — ajuste
+        <strong> Qtd</strong>, <strong>Unit.</strong> ou <strong>Total</strong> de quem fez mais ou
+        tem preço diferente. Campos em branco seguem a divisão automática.
       </div>
 
-      <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: 6, marginBottom: 8 }}>
+      <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: 6, marginBottom: 8 }}>
+        {/* Cabeçalho das colunas de ajuste */}
+        {selecionados.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, fontSize: 10, color: '#9ca3af', fontWeight: 700, paddingLeft: 30, marginBottom: 2 }}>
+            <span style={{ flex: 1 }}></span>
+            <span style={{ width: 54, textAlign: 'center' }}>Qtd</span>
+            <span style={{ width: 60, textAlign: 'center' }}>Unit.</span>
+            <span style={{ width: 66, textAlign: 'center' }}>Total</span>
+          </div>
+        )}
+
         {pessoas.map(p => {
           const marcado = selecionados.includes(p.id);
           return (
             <div
               key={p.id}
               style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '4px 2px',
+                display: 'flex', alignItems: 'center', gap: 4, padding: '3px 2px',
                 borderLeft: `5px solid ${p.cor || '#cbd5e1'}`, paddingLeft: 8, marginBottom: 2,
                 background: marcado ? '#eff6ff' : 'transparent', borderRadius: 4
               }}
             >
               <input type="checkbox" checked={marcado} onChange={() => alternar(p.id)} />
-              <span style={{ flex: 1, fontSize: 13 }}>{p.nome}</span>
+              <span style={{ flex: 1, fontSize: 12, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {p.nome}
+              </span>
               {marcado && (
-                <input
-                  type="number"
-                  step="0.01"
-                  value={ajustes[p.id] ?? ''}
-                  placeholder={valorExibido(p.id).toFixed(2)}
-                  onChange={e => setAjustes(prev => ({ ...prev, [p.id]: e.target.value }))}
-                  title="Deixe em branco para dividir automaticamente"
-                  style={{ width: 80, fontSize: 12, padding: '2px 4px' }}
-                />
+                <>
+                  <input
+                    type="number" step="0.01"
+                    value={campo(p.id, 'qtd')}
+                    placeholder={qtdAutomatica.toFixed(2).replace(/\.00$/, '')}
+                    onChange={e => setCampo(p.id, 'qtd', e.target.value)}
+                    title="Quantidade feita por esta pessoa"
+                    style={{ width: 54, fontSize: 11, padding: '2px 3px' }}
+                  />
+                  <input
+                    type="number" step="0.01"
+                    value={campo(p.id, 'unit')}
+                    placeholder={unitServico.toFixed(2)}
+                    onChange={e => setCampo(p.id, 'unit', e.target.value)}
+                    title="Valor unitário para esta pessoa"
+                    style={{ width: 60, fontSize: 11, padding: '2px 3px' }}
+                  />
+                  <input
+                    type="number" step="0.01"
+                    value={campo(p.id, 'total')}
+                    placeholder={calcularTotalPessoa(p.id).toFixed(2)}
+                    onChange={e => setCampo(p.id, 'total', e.target.value)}
+                    title="Valor total desta pessoa (sobrepõe qtd x unitário)"
+                    style={{ width: 66, fontSize: 11, padding: '2px 3px', fontWeight: 700 }}
+                  />
+                </>
               )}
             </div>
           );
@@ -1528,15 +1595,18 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
       </div>
 
       <div style={{ fontSize: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 8, marginBottom: 8 }}>
-        <div>Total do serviço: <strong>R$ {valorTotal.toFixed(2)}</strong></div>
+        <div>
+          Total do serviço: <strong>R$ {valorTotal.toFixed(2)}</strong>
+          <span style={{ color: '#9ca3af' }}> ({qtdServico} × R$ {unitServico.toFixed(2)})</span>
+        </div>
         <div style={{ color: '#6b7280' }}>
           {selecionados.length === 0
             ? 'Nenhuma pessoa marcada ainda.'
-            : `${selecionados.length} pessoa${selecionados.length > 1 ? 's' : ''} · R$ ${valorAutomatico.toFixed(2)} para cada (divisão automática)`}
+            : `${selecionados.length} pessoa${selecionados.length > 1 ? 's' : ''} · distribuído: R$ ${somaDistribuida.toFixed(2)}`}
         </div>
         {sobrouDiferenca && selecionados.length > 0 && (
           <div style={{ color: '#b45309', marginTop: 4 }}>
-            ⚠️ A soma dos valores ajustados não fecha com o total do serviço.
+            ⚠️ Diferença de R$ {(somaDistribuida - valorTotal).toFixed(2)} em relação ao total do serviço.
           </div>
         )}
       </div>

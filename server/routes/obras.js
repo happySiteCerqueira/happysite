@@ -667,8 +667,13 @@ router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'AD
     // Normaliza os dois formatos aceitos em { id, valorManual }
     const lista = colaboradores
       .map(c => (typeof c === 'object' && c !== null)
-        ? { id: Number(c.colaborador_id), valorManual: c.valor === undefined || c.valor === null ? null : Number(c.valor) }
-        : { id: Number(c), valorManual: null })
+        ? {
+          id: Number(c.colaborador_id),
+          valorManual: c.valor === undefined || c.valor === null ? null : Number(c.valor),
+          // Quantidade atribuída a esta pessoa (quando ela fez mais/menos que as outras).
+          qtdManual: c.quantidade === undefined || c.quantidade === null ? null : Number(c.quantidade)
+        }
+        : { id: Number(c), valorManual: null, qtdManual: null })
       .filter(c => Number.isFinite(c.id) && c.id > 0);
 
     if (lista.length === 0) return res.status(400).json({ erro: 'Nenhum colaborador válido informado' });
@@ -686,14 +691,21 @@ router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'AD
     await db.run('DELETE FROM obra_servico_celulas WHERE obra_servico_id=? AND celula_key=? AND mes_ciclo=?',
       req.params.servicoId, celula_key, mes_ciclo);
 
+    // Quantidade padrão por pessoa quando não houve ajuste: a do serviço dividida igualmente,
+    // para que a soma das partes continue batendo com o total medido na célula.
+    const qtdPorPessoaPadrao = lista.length > 0 ? qtd / lista.length : qtd;
+
     for (const c of lista) {
       const valorPessoa = (c.valorManual !== null && Number.isFinite(c.valorManual))
         ? c.valorManual
         : valorPorPessoaRestante;
+      const qtdPessoa = (c.qtdManual !== null && Number.isFinite(c.qtdManual))
+        ? c.qtdManual
+        : qtdPorPessoaPadrao;
       await db.run(`INSERT INTO obra_servico_celulas
         (obra_servico_id, celula_key, colaborador_id, grupo_id, mes_ciclo, quantidade, valor, criado_por)
         VALUES (?,?,?,NULL,?,?,?,?)`,
-        req.params.servicoId, celula_key, c.id, mes_ciclo, qtd, valorPessoa, req.usuario.id);
+        req.params.servicoId, celula_key, c.id, mes_ciclo, qtdPessoa, valorPessoa, req.usuario.id);
     }
 
     await registrar(req.usuario.id, 'MARCAR_CELULA_EQUIPE', 'obra_servico_celulas', req.params.servicoId,
