@@ -626,7 +626,7 @@ router.post('/servicos/:servicoId/recalcular-valores', permitir('ENGENHEIRO', 'M
 });
 
 router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'ADM', 'RH'), async (req, res) => {
-  const { celula_key, colaborador_id, grupo_id, mes_ciclo, quantidade } = req.body;
+  const { celula_key, colaborador_id, grupo_id, mes_ciclo, quantidade, colaboradores } = req.body;
   if (!celula_key || !mes_ciclo) return res.status(400).json({ erro: 'celula_key e mes_ciclo são obrigatórios' });
 
   const servico = await db.get('SELECT * FROM obra_servicos WHERE id = ?', req.params.servicoId);
@@ -647,6 +647,54 @@ router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'AD
       req.params.servicoId, celula_key, mes_ciclo);
     await registrar(req.usuario.id, 'DESMARCAR_CELULA', 'obra_servico_celulas', req.params.servicoId, { celula_key, mes_ciclo });
     return res.json({ ok: true, removido: true });
+  }
+
+  // ---- Modo VÁRIAS PESSOAS (equipe avulsa, sem grupo fixo cadastrado) ----
+  // Para serviços executados por uma turma que muda a cada medição (ex: limpeza de um pavimento
+  // feita hoje por 4 pessoas, amanhã por 2). A quantidade e o valor são SEMPRE do serviço como um
+  // todo — nunca por pessoa: o total (quantidade x valor unitário) é dividido entre os marcados.
+  //
+  // Ex: 8 apartamentos x R$ 20 = R$ 160; com 4 pessoas marcadas, cada uma recebe R$ 40.
+  //
+  // "colaboradores" pode vir como uma lista simples de ids [3, 7, 9] (divide igualmente) ou como
+  // uma lista de objetos [{ colaborador_id, valor }] quando o usuário ajustou manualmente quanto
+  // cada um recebe (ex: alguém entrou só na metade do serviço).
+  if (Array.isArray(colaboradores) && colaboradores.length > 0) {
+    // Normaliza os dois formatos aceitos em { id, valorManual }
+    const lista = colaboradores
+      .map(c => (typeof c === 'object' && c !== null)
+        ? { id: Number(c.colaborador_id), valorManual: c.valor === undefined || c.valor === null ? null : Number(c.valor) }
+        : { id: Number(c), valorManual: null })
+      .filter(c => Number.isFinite(c.id) && c.id > 0);
+
+    if (lista.length === 0) return res.status(400).json({ erro: 'Nenhum colaborador válido informado' });
+
+    const valorTotal = qtd * (servico.valor_unitario || 0);
+
+    // Divisão igual como padrão. Quando há valores manuais, eles são respeitados e o restante
+    // do total é dividido entre quem NÃO teve valor definido manualmente.
+    const comValorManual = lista.filter(c => c.valorManual !== null && Number.isFinite(c.valorManual));
+    const semValorManual = lista.filter(c => !(c.valorManual !== null && Number.isFinite(c.valorManual)));
+    const somaManual = comValorManual.reduce((acc, c) => acc + c.valorManual, 0);
+    const restante = valorTotal - somaManual;
+    const valorPorPessoaRestante = semValorManual.length > 0 ? restante / semValorManual.length : 0;
+
+    await db.run('DELETE FROM obra_servico_celulas WHERE obra_servico_id=? AND celula_key=? AND mes_ciclo=?',
+      req.params.servicoId, celula_key, mes_ciclo);
+
+    for (const c of lista) {
+      const valorPessoa = (c.valorManual !== null && Number.isFinite(c.valorManual))
+        ? c.valorManual
+        : valorPorPessoaRestante;
+      await db.run(`INSERT INTO obra_servico_celulas
+        (obra_servico_id, celula_key, colaborador_id, grupo_id, mes_ciclo, quantidade, valor, criado_por)
+        VALUES (?,?,?,NULL,?,?,?,?)`,
+        req.params.servicoId, celula_key, c.id, mes_ciclo, qtd, valorPessoa, req.usuario.id);
+    }
+
+    await registrar(req.usuario.id, 'MARCAR_CELULA_EQUIPE', 'obra_servico_celulas', req.params.servicoId,
+      { celula_key, mes_ciclo, pessoas: lista.length, valorTotal });
+    return res.json({ ok: true, valor: valorTotal, dividido_entre: lista.length });
   }
 
   // ---- Modo GRUPO: divide o valor igualmente entre os membros e grava 1 linha por membro ----

@@ -19,6 +19,11 @@ export default function ObraDetalhe() {
   // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
   const { mes, setMes } = useApuracao();
   const [celulaSelecionada, setCelulaSelecionada] = useState(null);
+  // Marcação de equipe avulsa: quando ligado, o modal permite escolher VÁRIAS pessoas e o valor
+  // total da célula é dividido entre elas (serviço feito por uma turma que muda a cada medição).
+  const [modoEquipe, setModoEquipe] = useState(false);
+  const [equipeSelecionada, setEquipeSelecionada] = useState([]); // ids marcados
+  const [ajustesValor, setAjustesValor] = useState({}); // { colaboradorId: valor } quando editado à mão
   const [quantidadeModalCelula, setQuantidadeModalCelula] = useState('');
   // Modal somente leitura: mostra quem executou uma célula já marcada em um mês anterior
   // (histórica), sem permitir editar/remarcar.
@@ -213,6 +218,10 @@ export default function ObraDetalhe() {
     setCelulaSelecionada(celulaKey);
     const qtdAtual = quantidadesMapa[celulaKey];
     setQuantidadeModalCelula(qtdAtual != null ? String(qtdAtual) : '');
+    // Sempre começa no modo normal (1 pessoa/grupo); a seleção múltipla é opcional.
+    setModoEquipe(false);
+    setEquipeSelecionada([]);
+    setAjustesValor({});
   }
 
   // Abre o modal somente leitura mostrando quem executou uma célula já marcada em um mês
@@ -251,6 +260,34 @@ export default function ObraDetalhe() {
       // ou 1 se nenhuma tiver sido definida ainda.
     });
     setCelulaSelecionada(null);
+    carregarCelulas();
+  }
+
+  // Marca VÁRIAS pessoas avulsas (equipe que muda a cada medição, sem grupo fixo cadastrado).
+  // A quantidade/valor é sempre do serviço como um todo: o backend divide o total entre os
+  // selecionados. "ajustes" é opcional — { colaboradorId: valor } quando o usuário editou
+  // manualmente quanto alguém recebe; os demais ficam com a divisão igual do restante.
+  async function marcarEquipe(ids, ajustes) {
+    if (!ids || ids.length === 0) return;
+    const quantidade = await salvarQuantidadeModalSeAlterada();
+
+    const temAjuste = ajustes && Object.keys(ajustes).length > 0;
+    const payloadPessoas = temAjuste
+      ? ids.map(id => (ajustes[id] !== undefined && ajustes[id] !== '')
+        ? { colaborador_id: id, valor: Number(ajustes[id]) }
+        : { colaborador_id: id })
+      : ids;
+
+    await api.post(`/obras/servicos/${servicoAtivoId}/celulas`, {
+      celula_key: celulaSelecionada,
+      colaboradores: payloadPessoas,
+      mes_ciclo: mes,
+      ...(quantidade !== undefined ? { quantidade } : {})
+    });
+    setCelulaSelecionada(null);
+    setEquipeSelecionada([]);
+    setAjustesValor({});
+    setModoEquipe(false);
     carregarCelulas();
   }
 
@@ -831,6 +868,31 @@ export default function ObraDetalhe() {
               </div>
             )}
 
+            {/* Alterna entre marcar UMA pessoa/grupo (padrão) e marcar VÁRIAS pessoas avulsas,
+                dividindo o valor total da célula entre elas. Útil para serviços tocados por uma
+                turma que muda a cada medição, sem precisar cadastrar um grupo fixo. */}
+            {pessoasLiberadas.length > 0 && (
+              <button
+                className={modoEquipe ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+                style={{ width: '100%', marginBottom: 10 }}
+                onClick={() => { setModoEquipe(!modoEquipe); setEquipeSelecionada([]); setAjustesValor({}); }}
+              >
+                {modoEquipe ? '← Marcar uma pessoa só' : '👥 Marcar várias pessoas (dividir valor)'}
+              </button>
+            )}
+
+            {modoEquipe ? (
+              <ListaEquipe
+                pessoas={pessoasLiberadas}
+                selecionados={equipeSelecionada}
+                setSelecionados={setEquipeSelecionada}
+                ajustes={ajustesValor}
+                setAjustes={setAjustesValor}
+                valorUnitario={servicoAtivo?.valor_unitario || 0}
+                quantidade={quantidadeModalCelula !== '' ? Number(quantidadeModalCelula) : (quantidadesMapa[celulaSelecionada] ?? 1)}
+                onConfirmar={() => marcarEquipe(equipeSelecionada, ajustesValor)}
+              />
+            ) : (
             <div className="flex-col gap-2">
               {servicoAtivo?.modo_execucao === 'grupo' ? (
                 <>
@@ -869,6 +931,7 @@ export default function ObraDetalhe() {
                 </>
               )}
             </div>
+            )}
             <button className="btn-danger" style={{ marginTop: 12, width: '100%' }} onClick={desmarcar}>Remover marcação</button>
 
             {infoReplicacao(celulaSelecionada) && temPermissao('RH', 'ADM', 'ENGENHEIRO', 'MESTRE') && (
@@ -1380,3 +1443,98 @@ export default function ObraDetalhe() {
     </div>
   );
 }
+
+// Seleção de VÁRIAS pessoas para um mesmo serviço/célula, com o valor total dividido entre elas.
+//
+// Regra: a quantidade e o valor pertencem ao SERVIÇO, nunca à pessoa. Ex: 8 apartamentos x R$ 20
+// = R$ 160; marcando 4 pessoas, cada uma fica com R$ 40. O rateio é automático, mas o usuário
+// pode ajustar manualmente quanto alguém recebe (ex: entrou só na metade do serviço) — nesse
+// caso, o restante continua sendo dividido igualmente entre os que não foram ajustados.
+function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjustes, valorUnitario, quantidade, onConfirmar }) {
+  const valorTotal = (Number(quantidade) || 0) * (Number(valorUnitario) || 0);
+
+  // Separa quem teve valor digitado à mão de quem segue a divisão automática.
+  const idsAjustados = selecionados.filter(id => ajustes[id] !== undefined && ajustes[id] !== '');
+  const idsAutomaticos = selecionados.filter(id => !(ajustes[id] !== undefined && ajustes[id] !== ''));
+  const somaAjustada = idsAjustados.reduce((acc, id) => acc + (Number(ajustes[id]) || 0), 0);
+  const restante = valorTotal - somaAjustada;
+  const valorAutomatico = idsAutomaticos.length > 0 ? restante / idsAutomaticos.length : 0;
+
+  function alternar(id) {
+    setSelecionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    // Ao desmarcar alguém, descarta também um eventual ajuste manual dele.
+    if (selecionados.includes(id)) {
+      setAjustes(prev => { const novo = { ...prev }; delete novo[id]; return novo; });
+    }
+  }
+
+  function valorExibido(id) {
+    if (ajustes[id] !== undefined && ajustes[id] !== '') return Number(ajustes[id]);
+    return valorAutomatico;
+  }
+
+  const sobrouDiferenca = Math.abs((somaAjustada + valorAutomatico * idsAutomaticos.length) - valorTotal) > 0.01;
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
+        O valor total do serviço é dividido entre as pessoas marcadas. Você pode ajustar algum
+        valor manualmente se necessário.
+      </div>
+
+      <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: 6, marginBottom: 8 }}>
+        {pessoas.map(p => {
+          const marcado = selecionados.includes(p.id);
+          return (
+            <div
+              key={p.id}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '4px 2px',
+                borderLeft: `5px solid ${p.cor || '#cbd5e1'}`, paddingLeft: 8, marginBottom: 2,
+                background: marcado ? '#eff6ff' : 'transparent', borderRadius: 4
+              }}
+            >
+              <input type="checkbox" checked={marcado} onChange={() => alternar(p.id)} />
+              <span style={{ flex: 1, fontSize: 13 }}>{p.nome}</span>
+              {marcado && (
+                <input
+                  type="number"
+                  step="0.01"
+                  value={ajustes[p.id] ?? ''}
+                  placeholder={valorExibido(p.id).toFixed(2)}
+                  onChange={e => setAjustes(prev => ({ ...prev, [p.id]: e.target.value }))}
+                  title="Deixe em branco para dividir automaticamente"
+                  style={{ width: 80, fontSize: 12, padding: '2px 4px' }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 8, marginBottom: 8 }}>
+        <div>Total do serviço: <strong>R$ {valorTotal.toFixed(2)}</strong></div>
+        <div style={{ color: '#6b7280' }}>
+          {selecionados.length === 0
+            ? 'Nenhuma pessoa marcada ainda.'
+            : `${selecionados.length} pessoa${selecionados.length > 1 ? 's' : ''} · R$ ${valorAutomatico.toFixed(2)} para cada (divisão automática)`}
+        </div>
+        {sobrouDiferenca && selecionados.length > 0 && (
+          <div style={{ color: '#b45309', marginTop: 4 }}>
+            ⚠️ A soma dos valores ajustados não fecha com o total do serviço.
+          </div>
+        )}
+      </div>
+
+      <button
+        className="btn-success"
+        style={{ width: '100%' }}
+        disabled={selecionados.length === 0}
+        onClick={onConfirmar}
+      >
+        ✔ Confirmar {selecionados.length > 0 ? `(${selecionados.length})` : ''}
+      </button>
+    </div>
+  );
+}
+
