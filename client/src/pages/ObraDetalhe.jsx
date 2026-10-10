@@ -166,15 +166,19 @@ export default function ObraDetalhe() {
     api.get(`/obras/servicos/${servicoAtivoId}/grupos`).then(res => setGrupos(res.data));
   }
 
+  // Retorna a Promise do api.get para que quem chama possa aguardar o recarregamento terminar
+  // (ex: marcarEquipe, que só fecha o modal depois que a tela já refletiu a marcação nova).
+  // ATENÇÃO: esta função NÃO é usada diretamente em useEffect — se algum dia for, precisa ser
+  // envolvida em () => carregarCelulas(), pois o React trata o retorno como função de limpeza.
   function carregarCelulas() {
-    if (!servicoAtivoId) return;
+    if (!servicoAtivoId) return Promise.resolve();
     // Busca as marcações de TODOS os meses deste serviço (sem filtrar por "mes"), para que uma
     // célula já executada em um mês anterior não "suma" (fique cinza, como se nunca tivesse sido
     // marcada) ao trocar a Data de Apuração para o mês seguinte. Se a célula tiver marcação no mês
     // atualmente selecionado, ela continua com o comportamento normal (clicável, cor da pessoa/
     // grupo). Se só tiver marcação em outro mês, é exibida em verde clarinho e fica bloqueada
     // (não é possível marcar de novo), mostrando o mês/ano em que foi executada.
-    api.get(`/obras/servicos/${servicoAtivoId}/celulas`).then(res => {
+    return api.get(`/obras/servicos/${servicoAtivoId}/celulas`).then(res => {
       const porCelula = {};
       res.data.forEach(c => {
         if (!porCelula[c.celula_key]) porCelula[c.celula_key] = [];
@@ -278,17 +282,28 @@ export default function ObraDetalhe() {
         : { colaborador_id: id })
       : ids;
 
-    await api.post(`/obras/servicos/${servicoAtivoId}/celulas`, {
-      celula_key: celulaSelecionada,
-      colaboradores: payloadPessoas,
-      mes_ciclo: mes,
-      ...(quantidade !== undefined ? { quantidade } : {})
-    });
+    try {
+      await api.post(`/obras/servicos/${servicoAtivoId}/celulas`, {
+        celula_key: celulaSelecionada,
+        colaboradores: payloadPessoas,
+        mes_ciclo: mes,
+        ...(quantidade !== undefined ? { quantidade } : {})
+      });
+    } catch (err) {
+      // Antes o erro passava despercebido e a marcação simplesmente "sumia" da tela sem
+      // explicação. Agora o usuário é avisado e o modal continua aberto para tentar de novo.
+      alert(err.response?.data?.erro || 'Erro ao salvar a divisão entre as pessoas.');
+      return;
+    }
+
+    // Recarrega ANTES de limpar os estados do modal: carregarCelulas() depende de
+    // servicoAtivoId/mes e precisa rodar com a tela ainda consistente.
+    await carregarCelulas();
+
     setCelulaSelecionada(null);
     setEquipeSelecionada([]);
     setAjustesValor({});
     setModoEquipe(false);
-    carregarCelulas();
   }
 
   async function marcarGrupo(grupoId) {
