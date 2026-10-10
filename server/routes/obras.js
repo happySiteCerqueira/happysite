@@ -641,8 +641,12 @@ router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'AD
     qtd = qtdCadastrada ? qtdCadastrada.quantidade : 1;
   }
 
-  // Remoção de marcação (limpa todas as linhas daquela célula/mês, seja individual ou grupo)
-  if ((colaborador_id === null || colaborador_id === undefined) && (grupo_id === null || grupo_id === undefined)) {
+  // Remoção de marcação (limpa todas as linhas daquela célula/mês, seja individual ou grupo).
+  // ATENÇÃO: só é remoção quando NÃO veio também a lista "colaboradores" (modo equipe avulsa) —
+  // nesse modo, colaborador_id e grupo_id ficam vazios de propósito, e sem esta checagem a
+  // requisição caía aqui, apagava a célula e respondia "ok" sem nunca gravar a divisão.
+  const temListaEquipe = Array.isArray(colaboradores) && colaboradores.length > 0;
+  if (!temListaEquipe && (colaborador_id === null || colaborador_id === undefined) && (grupo_id === null || grupo_id === undefined)) {
     await db.run('DELETE FROM obra_servico_celulas WHERE obra_servico_id=? AND celula_key=? AND mes_ciclo=?',
       req.params.servicoId, celula_key, mes_ciclo);
     await registrar(req.usuario.id, 'DESMARCAR_CELULA', 'obra_servico_celulas', req.params.servicoId, { celula_key, mes_ciclo });
@@ -659,7 +663,7 @@ router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'AD
   // "colaboradores" pode vir como uma lista simples de ids [3, 7, 9] (divide igualmente) ou como
   // uma lista de objetos [{ colaborador_id, valor }] quando o usuário ajustou manualmente quanto
   // cada um recebe (ex: alguém entrou só na metade do serviço).
-  if (Array.isArray(colaboradores) && colaboradores.length > 0) {
+  if (temListaEquipe) {
     // Normaliza os dois formatos aceitos em { id, valorManual }
     const lista = colaboradores
       .map(c => (typeof c === 'object' && c !== null)
