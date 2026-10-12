@@ -192,7 +192,10 @@ export default function ObraDetalhe() {
 
         if (linhasDoMesAtual.length > 0) {
           const base = linhasDoMesAtual[0];
-          map[key] = { ...base, membrosGrupo: [] };
+          // "linhas" guarda TODAS as pessoas marcadas nesta célula/mês (com quantidade e valor de
+          // cada uma). É o que permite reabrir a célula e ver como foi medido — inclusive no modo
+          // "várias pessoas", em que grupo_id é NULL e por isso não entra em membrosGrupo.
+          map[key] = { ...base, membrosGrupo: [], linhas: linhasDoMesAtual };
           linhasDoMesAtual.forEach(l => { if (l.grupo_id) map[key].membrosGrupo.push(l.colaborador_id); });
           return;
         }
@@ -886,6 +889,48 @@ export default function ObraDetalhe() {
         <div className="modal-overlay" onClick={() => setCelulaSelecionada(null)}>
           <div className="modal-content" style={{ width: 320 }} onClick={e => e.stopPropagation()}>
             <h4>Quem executou: {rotulosAptos[celulaSelecionada] || celulaSelecionada}</h4>
+
+            {/* Se a célula JÁ foi medida neste mês, mostra primeiro COMO foi medida (quem,
+                quanto cada um fez e quanto recebeu). Antes a tela ia direto para a escolha de
+                pessoas, dando a impressão de que a medição havia se perdido. */}
+            {(() => {
+              const marc = marcacoes[celulaSelecionada];
+              const linhasMarcadas = marc && !marc.historica ? (marc.linhas || []) : [];
+              if (linhasMarcadas.length === 0) return null;
+
+              const totalCelula = linhasMarcadas.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
+              return (
+                <div style={{
+                  background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6,
+                  padding: 8, marginBottom: 10, fontSize: 12
+                }}>
+                  <div style={{ fontWeight: 700, color: '#166534', marginBottom: 4 }}>
+                    ✔ Já medido neste mês
+                  </div>
+                  {linhasMarcadas.map(l => {
+                    const pessoa = pessoasPorId[l.colaborador_id];
+                    return (
+                      <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 6, padding: '1px 0' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {pessoa ? pessoa.nome : `#${l.colaborador_id}`}
+                          <span style={{ color: '#6b7280' }}> · {Number(l.quantidade) || 0} {servicoAtivo?.unidade || 'un'}</span>
+                        </span>
+                        <strong>R$ {(Number(l.valor) || 0).toFixed(2)}</strong>
+                      </div>
+                    );
+                  })}
+                  {linhasMarcadas.length > 1 && (
+                    <div style={{ borderTop: '1px solid #bbf7d0', marginTop: 4, paddingTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#6b7280' }}>Total</span>
+                      <strong>R$ {totalCelula.toFixed(2)}</strong>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 6 }}>
+                    Para alterar, escolha abaixo novamente — a marcação atual será substituída.
+                  </div>
+                </div>
+              );
+            })()}
 
             {temPermissao('RH', 'ADM', 'ENGENHEIRO', 'MESTRE') && (
               <div className="flex-col gap-2" style={{ marginBottom: 10 }}>
