@@ -19,7 +19,6 @@ export default function Medicao() {
   const [linhas, setLinhas] = useState([]);
   const [expandido, setExpandido] = useState(null);
   const [carregando, setCarregando] = useState(false);
-  const [atualizandoTudo, setAtualizandoTudo] = useState(false);
 
   useEffect(() => {
     api.get('/obras').then(res => setObras(res.data));
@@ -65,27 +64,15 @@ export default function Medicao() {
     gerar();
   }
 
-  // Varredura geral: recalcula em TODOS os meses os valores de serviços de obra (usando a
-  // quantidade atual e o valor unitário/preço específico atuais) e de diárias (usando o valor de
-  // diária atual do cadastro do colaborador), corrigindo lançamentos desatualizados quando um
-  // valor foi alterado depois de já existir marcação/diária lançada. Meses já pagos não são
-  // alterados. Pagamentos antecipados já são sempre lidos em tempo real, não precisam recálculo.
-  async function atualizarTudo() {
-    if (!confirm('Isso vai varrer TODOS os meses e recalcular os valores de serviços e diárias com base nos preços/quantidades atuais (meses já pagos não são alterados). Deseja continuar?')) return;
-    setAtualizandoTudo(true);
-    try {
-      const { data } = await api.post('/medicoes/atualizar-tudo', {});
-      alert(`Atualização concluída! Serviços recalculados: ${data.servicosAtualizados} • Diárias recalculadas: ${data.diariasAtualizadas}`);
-      gerar();
-    } catch (err) {
-      alert(err.response?.data?.erro || 'Erro ao atualizar');
-    }
-    setAtualizandoTudo(false);
-  }
+  // OBS: o botão "Atualizar tudo" foi removido. O recálculo agora é AUTOMÁTICO: sempre que
+  // alguém altera o valor unitário de um serviço, um preço específico de colaborador, a
+  // quantidade de uma célula ou o valor da diária, o servidor já revaloriza os lançamentos
+  // existentes daquele serviço/pessoa (ver server/utils/recalculoAutomatico.js). Meses com
+  // medição já PAGA continuam preservados.
 
   // Lista de funções distintas presentes nas linhas atuais (para o dropdown de filtro), e o
   // filtro em si aplicado apenas na exibição/exportação — "linhas" original continua intacta
-  // para as demais operações (confirmar, pagar, atualizar tudo).
+  // para as demais operações (confirmar, pagar).
   const funcoesDisponiveis = [...new Set(linhas.map(item => item.funcao).filter(f => f && f.trim()))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const linhasFiltradas = filtroFuncao ? linhas.filter(item => item.funcao === filtroFuncao) : linhas;
 
@@ -122,15 +109,6 @@ export default function Medicao() {
           </div>
           <button className="btn-primary" style={{ alignSelf: 'end' }} onClick={gerar} disabled={carregando}>
             {carregando ? 'Gerando...' : 'Gerar Planilha'}
-          </button>
-          <button
-            className="btn-secondary"
-            style={{ alignSelf: 'end' }}
-            onClick={atualizarTudo}
-            disabled={atualizandoTudo}
-            title="Varre todos os meses e recalcula valores de serviços e diárias com base nos preços/quantidades atuais"
-          >
-            {atualizandoTudo ? '🔄 Atualizando...' : '🔄 Atualizar tudo'}
           </button>
           <BotaoExportar linhas={linhasFiltradas} mes={mes} />
         </div>

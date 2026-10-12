@@ -30,7 +30,6 @@ export default function ObraDetalhe() {
   const [celulaHistoricaSelecionada, setCelulaHistoricaSelecionada] = useState(null);
 
   const [mostrarConfigServico, setMostrarConfigServico] = useState(false);
-  const [recalculando, setRecalculando] = useState(false);
 
   const [importandoPrecos, setImportandoPrecos] = useState(false);
   const [novoGrupoNome, setNovoGrupoNome] = useState('');
@@ -364,21 +363,9 @@ export default function ObraDetalhe() {
     carregarObra();
   }
 
-  // Recalcula (retroativamente) o valor de TODAS as marcações já lançadas neste serviço,
-  // usando o valor unitário ATUAL. Útil quando o valor foi alterado depois de já existirem
-  // marcações lançadas com o valor antigo (ex: serviço estava com R$ 0,00 no momento da marcação).
-  async function recalcularValores() {
-    if (!confirm(`Recalcular os valores de TODAS as marcações já lançadas em "${servicoAtivo.nome}" (todos os meses), usando o valor unitário atual (R$ ${servicoAtivo.valor_unitario})?`)) return;
-    setRecalculando(true);
-    try {
-      const res = await api.post(`/obras/servicos/${servicoAtivoId}/recalcular-valores`, {});
-      alert(`${res.data.atualizados} marcação(ões) recalculada(s) com sucesso.`);
-      carregarCelulas();
-    } catch (err) {
-      alert(err.response?.data?.erro || 'Erro ao recalcular valores');
-    }
-    setRecalculando(false);
-  }
+  // OBS: o botão "Recalcular valores já lançados" foi removido — o recálculo passou a ser
+  // automático no servidor sempre que o valor unitário, o preço específico de um colaborador
+  // ou a quantidade de uma célula muda (ver server/utils/recalculoAutomatico.js).
 
 
   async function removerServico(servicoId, nome) {
@@ -1206,15 +1193,10 @@ export default function ObraDetalhe() {
               <input type="number" step="0.01" defaultValue={servicoAtivo.valor_unitario}
                 onBlur={e => salvarConfigServico('valor_unitario', Number(e.target.value))} />
 
-              <button
-                className="btn-secondary btn-sm"
-                style={{ marginTop: 8 }}
-                disabled={recalculando}
-                onClick={recalcularValores}
-                title="Recalcula os valores de todas as marcações já lançadas neste serviço, usando o valor unitário atual (útil se o valor foi alterado depois de já ter marcações lançadas)"
-              >
-                {recalculando ? 'Recalculando...' : '🔄 Recalcular valores já lançados'}
-              </button>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6 }}>
+                Ao alterar o valor, as marcações já lançadas são recalculadas automaticamente
+                (meses já pagos não são alterados).
+              </div>
             </div>
 
 

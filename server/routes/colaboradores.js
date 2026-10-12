@@ -4,6 +4,7 @@ const db = require('../db/database');
 const XLSX = require('xlsx');
 const { autenticar, permitir } = require('../utils/auth');
 const { registrar } = require('../utils/auditoria');
+const { recalcularServicoEmSegundoPlano } = require('../utils/recalculoAutomatico');
 
 const router = express.Router();
 
@@ -281,12 +282,19 @@ router.post('/:id/precos', permitir('RH', 'ADM', 'FINANCEIRO'), async (req, res)
     );
   }
   await registrar(req.usuario.id, 'DEFINIR_PRECO_ESPECIFICO', 'colaborador_precos', req.params.id, { obra_servico_id, valor_unitario });
+  // Preço específico mudou: revaloriza as marcações já lançadas deste serviço.
+  recalcularServicoEmSegundoPlano(obra_servico_id);
   res.json({ ok: true });
 });
 
 router.delete('/:id/precos/:precoId', permitir('RH', 'ADM', 'FINANCEIRO'), async (req, res) => {
+  // Guarda o serviço antes de apagar, para poder revalorizar as marcações dele em seguida
+  // (sem o preço específico, elas voltam a usar o valor unitário padrão do serviço).
+  const precoRemovido = await db.get('SELECT obra_servico_id FROM colaborador_precos WHERE id = ? AND colaborador_id = ?',
+    req.params.precoId, req.params.id);
   await db.run('DELETE FROM colaborador_precos WHERE id = ? AND colaborador_id = ?', req.params.precoId, req.params.id);
   await registrar(req.usuario.id, 'REMOVER_PRECO_ESPECIFICO', 'colaborador_precos', req.params.id, { precoId: req.params.precoId });
+  if (precoRemovido) recalcularServicoEmSegundoPlano(precoRemovido.obra_servico_id);
   res.json({ ok: true });
 });
 

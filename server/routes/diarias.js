@@ -3,6 +3,7 @@ const db = require('../db/database');
 const { autenticar } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar } = require('../utils/auditoria');
+const { recalcularDiariasEmSegundoPlano } = require('../utils/recalculoAutomatico');
 
 const router = express.Router();
 
@@ -153,6 +154,8 @@ router.put('/valor', async (req, res) => {
   }
   await db.run('UPDATE colaboradores SET valor_diaria = ? WHERE id = ?', Number(valor_diaria) || 0, colaborador_id);
   await registrar(req.usuario.id, 'EDITAR_VALOR_DIARIA', 'colaboradores', colaborador_id, { valor_diaria });
+  // Valor da diária mudou: recalcula os meses já lançados (exceto os já pagos).
+  recalcularDiariasEmSegundoPlano(colaborador_id);
   res.json({ ok: true });
 });
 

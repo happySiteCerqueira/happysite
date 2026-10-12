@@ -3,6 +3,7 @@ const db = require('../db/database');
 const XLSX = require('xlsx');
 const { autenticar, permitir } = require('../utils/auth');
 const { registrar } = require('../utils/auditoria');
+const { recalcularServicoEmSegundoPlano } = require('../utils/recalculoAutomatico');
 
 const router = express.Router();
 
@@ -252,6 +253,14 @@ router.put('/servicos/:servicoId', permitir('RH', 'ADM', 'ENGENHEIRO', 'MESTRE')
     id
   );
   await registrar(req.usuario.id, 'EDITAR', 'obra_servicos', id, b);
+
+  // Se o valor unitário mudou, as marcações já lançadas ficaram com o preço antigo gravado.
+  // Recalcula automaticamente (em segundo plano) em vez de depender de alguém clicar em
+  // "Atualizar tudo". Meses já pagos são preservados pela própria função.
+  if (b.valor_unitario !== undefined && Number(b.valor_unitario) !== Number(atual.valor_unitario)) {
+    recalcularServicoEmSegundoPlano(id);
+  }
+
   res.json({ ok: true });
 });
 
@@ -511,16 +520,19 @@ router.post('/:id/precos/importar', permitir('RH', 'ADM', 'FINANCEIRO'), async (
 
   let atualizados = 0;
   const erros = [];
+  const servicosAlterados = []; // ids cujos preços mudaram, para revalorizar as marcações
 
   for (const l of linhas) {
     const id = l['ID (não alterar)'];
     const valor = Number(l['Valor Unitário (R$)']);
     if (!id || isNaN(valor)) { erros.push(l); continue; }
     const info = await db.run('UPDATE obra_servicos SET valor_unitario = ? WHERE id = ? AND obra_id = ?', valor, id, req.params.id);
-    if (info.changes > 0) atualizados++;
+    if (info.changes > 0) { atualizados++; servicosAlterados.push(id); }
   }
 
   await registrar(req.usuario.id, 'IMPORTAR_PRECOS', 'obras', req.params.id, { atualizados });
+  // Revaloriza as marcações já lançadas de cada serviço cujo preço mudou.
+  servicosAlterados.forEach(id => recalcularServicoEmSegundoPlano(id));
   res.json({ ok: true, atualizados, erros: erros.length });
 });
 
@@ -786,6 +798,8 @@ router.put('/servicos/:servicoId/quantidades', permitir('RH', 'ADM', 'ENGENHEIRO
     ON CONFLICT(obra_servico_id, celula_key) DO UPDATE SET quantidade = EXCLUDED.quantidade, atualizado_em = EXCLUDED.atualizado_em`,
     req.params.servicoId, celula_key, qtd);
   await registrar(req.usuario.id, 'SALVAR_QUANTIDADE', 'obra_servico_quantidades', req.params.servicoId, { celula_key, quantidade: qtd });
+  // Quantidade mudou: marcações já lançadas nesta célula precisam ser revalorizadas.
+  recalcularServicoEmSegundoPlano(req.params.servicoId);
   res.json({ ok: true });
 });
 
@@ -801,6 +815,7 @@ router.put('/servicos/:servicoId/quantidades-em-lote', permitir('RH', 'ADM', 'EN
       req.params.servicoId, key, qtd);
   }
   await registrar(req.usuario.id, 'SALVAR_QUANTIDADE_LOTE', 'obra_servico_quantidades', req.params.servicoId, { celulas, quantidade: qtd });
+  recalcularServicoEmSegundoPlano(req.params.servicoId);
   res.json({ ok: true, atualizados: celulas.length });
 });
 
@@ -871,6 +886,7 @@ router.put('/servicos/:servicoId/quantidades/replicar', permitir('RH', 'ADM', 'E
 
   await registrar(req.usuario.id, 'REPLICAR_QUANTIDADE', 'obra_servico_quantidades', req.params.servicoId,
     { celula_key_origem, andar_destino: andarDestino, quantidade, celulas: celulasAtualizadas });
+  recalcularServicoEmSegundoPlano(req.params.servicoId);
   res.json({ ok: true, quantidade, atualizados: celulasAtualizadas.length, celulas: celulasAtualizadas });
 });
 
@@ -931,6 +947,7 @@ router.post('/servicos/:servicoId/quantidades/importar', permitir('RH', 'ADM', '
   }
 
   await registrar(req.usuario.id, 'IMPORTAR_QUANTIDADES', 'obra_servico_quantidades', req.params.servicoId, { atualizados });
+  recalcularServicoEmSegundoPlano(req.params.servicoId);
   res.json({ ok: true, atualizados, erros: erros.length });
 });
 
@@ -1247,6 +1264,7 @@ router.put('/servicos/:servicoId/quantidades/aplicar-varios-andares', permitir('
 
   await registrar(req.usuario.id, 'APLICAR_QUANTIDADE_VARIOS_ANDARES', 'obra_servico_quantidades', req.params.servicoId,
     { celula_key_origem, andares_destino, quantidade: qtd, celulas: celulasAtualizadas });
+  recalcularServicoEmSegundoPlano(req.params.servicoId);
   res.json({ ok: true, quantidade: qtd, atualizados: celulasAtualizadas.length, celulas: celulasAtualizadas });
 });
 
