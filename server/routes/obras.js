@@ -597,17 +597,27 @@ router.post('/servicos/:servicoId/recalcular-valores', permitir('ENGENHEIRO', 'M
       // estava gravada na própria marcação (fallback, evita zerar por engano).
       const qtdAtual = qtdPorCelula[celulaKey] !== undefined ? qtdPorCelula[celulaKey] : linhas[0].quantidade;
 
-      if (linhas[0].grupo_id) {
-        // Marcação em grupo: valor total dividido igualmente entre os membros atuais da linha.
+      // Quando a célula tem MAIS DE UMA pessoa, o serviço foi executado em conjunto: a
+      // quantidade e o valor pertencem à célula como um todo e precisam ser RATEADOS.
+      // Isso vale tanto para grupo cadastrado (grupo_id preenchido) quanto para equipe avulsa
+      // (grupo_id NULL, marcada pela opção "várias pessoas").
+      //
+      // ATENÇÃO: sem essa checagem por linhas.length, a equipe avulsa caía no bloco individual e
+      // cada pessoa recebia a quantidade TOTAL da célula (ex: 386 m² x R$ 17 = R$ 6.562,00 para
+      // cada um dos 3, em vez de 128,67 m² e R$ 2.187,33 para cada).
+      const execucaoCompartilhada = !!linhas[0].grupo_id || linhas.length > 1;
+
+      if (execucaoCompartilhada) {
         const valorTotal = qtdAtual * (servico.valor_unitario || 0);
         const valorPorMembro = valorTotal / linhas.length;
+        const qtdPorMembro = qtdAtual / linhas.length;
         for (const linha of linhas) {
           await trx.run('UPDATE obra_servico_celulas SET quantidade = ?, valor = ? WHERE id = ?',
-            qtdAtual, valorPorMembro, linha.id);
+            qtdPorMembro, valorPorMembro, linha.id);
           atualizadas++;
         }
       } else {
-        // Marcação individual: respeita preço específico do colaborador, se houver.
+        // Marcação individual (uma única pessoa na célula): respeita preço específico dela.
         for (const linha of linhas) {
           const valorUnitario = precoPorColaborador[linha.colaborador_id] !== undefined
             ? precoPorColaborador[linha.colaborador_id]

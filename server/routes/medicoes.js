@@ -378,12 +378,22 @@ router.post('/atualizar-tudo', async (req, res) => {
 
         const qtdAtual = qtdPorCelula[celulaKey] !== undefined ? qtdPorCelula[celulaKey] : linhas[0].quantidade;
 
-        if (linhas[0].grupo_id) {
+        // Célula com MAIS DE UMA pessoa = serviço executado em conjunto: a quantidade e o valor
+        // são da célula e precisam ser rateados entre os executores. Vale para grupo cadastrado
+        // (grupo_id preenchido) e para equipe avulsa (grupo_id NULL, opção "várias pessoas").
+        //
+        // ATENÇÃO: sem o "linhas.length > 1", a equipe avulsa caía no bloco individual e cada
+        // pessoa ficava com a quantidade TOTAL da célula — ex: 386 m² x R$ 17 = R$ 6.562,00 para
+        // cada um dos 3, em vez de 128,67 m² e R$ 2.187,33 para cada.
+        const execucaoCompartilhada = !!linhas[0].grupo_id || linhas.length > 1;
+
+        if (execucaoCompartilhada) {
           const valorTotal = qtdAtual * (servico.valor_unitario || 0);
           const valorPorMembro = valorTotal / linhas.length;
+          const qtdPorMembro = qtdAtual / linhas.length;
           for (const linha of linhas) {
             await trx.run('UPDATE obra_servico_celulas SET quantidade = ?, valor = ? WHERE id = ?',
-              qtdAtual, valorPorMembro, linha.id);
+              qtdPorMembro, valorPorMembro, linha.id);
             servicosAtualizados++;
           }
         } else {
