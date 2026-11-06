@@ -10,7 +10,7 @@ router.use(autenticar, permissaoModulo('epi'));
 
 // Lista de colaboradores/empreiteiros ativos, usada no seletor da aba "Retirada". Existe aqui
 // (em vez de depender de /api/prestadores) porque aquela rota exige a permissão separada do
-// módulo "prestadores" — perfis com acesso ao EPI (MESTRE, ENGENHEIRO, SUPERVISOR, APONTADOR)
+// módulo "prestadores" — perfis com acesso ao EPI (MESTRE, ENGENHEIRO, ENCARREGADO, APONTADOR)
 // não têm necessariamente acesso a Prestadores, o que fazia a lista de colaboradores aparecer
 // vazia na hora de registrar uma retirada, mesmo esses perfis tendo acesso normal ao módulo EPI.
 router.get('/colaboradores', async (req, res) => {

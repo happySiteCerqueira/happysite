@@ -121,7 +121,7 @@ async function migrate() {
       nome TEXT NOT NULL,
       login TEXT NOT NULL UNIQUE,
       senha_hash TEXT NOT NULL,
-      perfil TEXT NOT NULL CHECK(perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE','SUPERVISOR','APONTADOR')),
+      perfil TEXT NOT NULL CHECK(perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE','ENCARREGADO','APONTADOR')),
       precisa_trocar_senha INTEGER NOT NULL DEFAULT 1,
       ativo INTEGER NOT NULL DEFAULT 1,
       criado_em TIMESTAMP DEFAULT NOW()
@@ -646,6 +646,41 @@ async function migrate() {
     );
   }
 
+  // Migração idempotente: o perfil "SUPERVISOR" passou a se chamar "ENCARREGADO".
+  // É só troca de NOME — permissões e comportamento continuam exatamente os mesmos.
+  //
+  // A ordem importa: primeiro soltamos o CHECK, depois renomeamos os registros já existentes
+  // (usuários e linhas de permissão) e só então fixamos o CHECK novo. Sem isso o UPDATE seria
+  // barrado pela própria constraint e quem era Supervisor ficaria sem acesso.
+  const aceitaEncarregado = await constraintContem('usuarios', 'perfil', 'ENCARREGADO');
+  if (!aceitaEncarregado) {
+    const cons = await pool.query(
+      `SELECT conname FROM pg_constraint WHERE conrelid = 'usuarios'::regclass AND contype = 'c'`
+    );
+    for (const row of cons.rows) {
+      const def = await pool.query('SELECT pg_get_constraintdef(oid) as def FROM pg_constraint WHERE conname = $1', [row.conname]);
+      if (def.rows[0] && def.rows[0].def.includes('perfil')) {
+        await pool.query(`ALTER TABLE usuarios DROP CONSTRAINT ${row.conname}`);
+      }
+    }
+
+    await pool.query("UPDATE usuarios SET perfil = 'ENCARREGADO' WHERE perfil = 'SUPERVISOR'");
+    // Pode já existir linha ENCARREGADO (banco novo): remove duplicatas antes de renomear,
+    // respeitando o UNIQUE(perfil, modulo) de perfil_permissoes.
+    await pool.query(`
+      DELETE FROM perfil_permissoes p
+      WHERE p.perfil = 'SUPERVISOR'
+        AND EXISTS (SELECT 1 FROM perfil_permissoes e WHERE e.perfil = 'ENCARREGADO' AND e.modulo = p.modulo)
+    `);
+    await pool.query("UPDATE perfil_permissoes SET perfil = 'ENCARREGADO' WHERE perfil = 'SUPERVISOR'");
+
+    await pool.query(
+      `ALTER TABLE usuarios ADD CONSTRAINT usuarios_perfil_check
+       CHECK (perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE','ENCARREGADO','APONTADOR'))`
+    );
+    console.log('[migracao] Perfil SUPERVISOR renomeado para ENCARREGADO.');
+  }
+
   // Seed: permissões padrão por perfil x módulo (equivalente ao que hoje está fixo no código via temPermissao)
   const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
   if (permCountRes.rows[0].c === 0) {
@@ -656,17 +691,17 @@ async function migrate() {
       'prestadores.cadastro',
       'epi.cadastrar'
     ];
-    const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
+    const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
     // Espelha as regras atuais do Layout.jsx/telas (temPermissao(...)):
     const PADRAO = {
-      obras: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'],
+      obras: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'],
       medicao: ['FINANCEIRO'],
       diarias: ['FINANCEIRO', 'RH'],
       prestadores: ['FINANCEIRO', 'RH'],
-      epi: ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR'],
+      epi: ['RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR'],
       financeiro: ['FINANCEIRO', 'RH'],
       aso: ['RH'],
-      agenda: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'],
+      agenda: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'],
       // Sub-abas: mesmo padrão que hoje está fixo em Financeiro.jsx/Prestadores.jsx/Epi.jsx
       'financeiro.receita': ['FINANCEIRO'],
       'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
@@ -674,7 +709,7 @@ async function migrate() {
       'financeiro.relatorios': ['FINANCEIRO'],
       'financeiro.resumo': [],
       'prestadores.cadastro': ['RH'],
-      'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR']
+      'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR']
     };
     for (const perfil of PERFIS) {
       for (const modulo of MODULOS) {
@@ -695,15 +730,15 @@ async function migrate() {
       'financeiro.relatorios': ['FINANCEIRO'],
       'financeiro.resumo': [],
       'prestadores.cadastro': ['RH'],
-      'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'SUPERVISOR', 'APONTADOR'],
+      'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR'],
       // Módulo novo (ASO): garante que já apareça liberado para RH mesmo em bancos que já
       // passaram pelo seed inicial antes deste módulo existir.
       'aso': ['RH'],
       // Módulo novo (Agenda): mesma ideia — nasce liberado para todos os perfis operacionais,
       // já que é uma agenda de compromissos compartilhada da empresa.
-      'agenda': ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR']
+      'agenda': ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR']
     };
-    const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
+    const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
     for (const perfil of PERFIS) {
       for (const modulo of Object.keys(SUBMODULOS_PADRAO)) {
         const permitido = SUBMODULOS_PADRAO[modulo].includes(perfil) ? 1 : 0;

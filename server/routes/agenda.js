@@ -7,7 +7,7 @@ const { registrar } = require('../utils/auditoria');
 const router = express.Router();
 
 // Perfis válidos como "categoria" de destinatário (mesma lista de usuarios.perfil).
-const PERFIS_VALIDOS = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
+const PERFIS_VALIDOS = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
 
 router.use(autenticar, permissaoModulo('agenda'));
 

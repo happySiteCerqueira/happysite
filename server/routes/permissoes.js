@@ -13,7 +13,7 @@ const MODULOS = [
   'epi.cadastrar'
 ];
 
-const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
+const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
 
 router.use(autenticar);
 

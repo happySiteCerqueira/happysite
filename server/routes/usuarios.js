@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { nome, login, senha, perfil } = req.body;
   if (!nome || !login || !senha || !perfil) return res.status(400).json({ erro: 'Preencha todos os campos' });
-  const perfisValidos = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'SUPERVISOR', 'APONTADOR'];
+  const perfisValidos = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
   if (!perfisValidos.includes(perfil)) return res.status(400).json({ erro: 'Perfil inválido' });
 
   // Verifica duplicidade ignorando maiúsculas/minúsculas (ILIKE), já que o login passou a ser
