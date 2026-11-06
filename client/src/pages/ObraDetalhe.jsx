@@ -209,7 +209,10 @@ export default function ObraDetalhe() {
         const mesMaisRecente = mesesOrdenados[0];
         const linhasDoMesHistorico = linhas.filter(l => l.mes_ciclo === mesMaisRecente);
         const base = linhasDoMesHistorico[0];
-        map[key] = { ...base, membrosGrupo: [], historica: true };
+        // "linhas" também aqui: sem isso, uma célula medida em mês ANTERIOR (ex: consultar em
+        // novembro algo medido em setembro) mostrava apenas a primeira pessoa, dando a impressão
+        // de que a divisão entre vários colaboradores havia se perdido.
+        map[key] = { ...base, membrosGrupo: [], historica: true, linhas: linhasDoMesHistorico };
         linhasDoMesHistorico.forEach(l => { if (l.grupo_id) map[key].membrosGrupo.push(l.colaborador_id); });
       });
 
@@ -1023,10 +1026,15 @@ export default function ObraDetalhe() {
         const { celulaKey, marc } = celulaHistoricaSelecionada;
         const ehGrupo = !!marc.grupo_id;
         const grupo = ehGrupo ? gruposPorId[marc.grupo_id] : null;
-        const nomesMembros = ehGrupo
-          ? (marc.membrosGrupo || []).map(idMembro => pessoasPorId[idMembro]?.nome).filter(Boolean)
-          : [];
-        const nomePessoa = !ehGrupo ? pessoasPorId[marc.colaborador_id]?.nome : null;
+        // Todas as pessoas que executaram esta célula no mês histórico. Cobre os três casos:
+        // uma pessoa só, grupo cadastrado e equipe avulsa ("várias pessoas"). Antes só eram
+        // tratados grupo/indivíduo, então uma medição dividida entre 3 pessoas aparecia com
+        // apenas 1 nome ao ser consultada num mês posterior.
+        const linhasExec = marc.linhas && marc.linhas.length > 0
+          ? marc.linhas
+          : [{ id: marc.id, colaborador_id: marc.colaborador_id, quantidade: marc.quantidade, valor: marc.valor }];
+        const qtdTotal = linhasExec.reduce((acc, l) => acc + (Number(l.quantidade) || 0), 0);
+        const valorTotal = linhasExec.reduce((acc, l) => acc + (Number(l.valor) || 0), 0);
         return (
           <div className="modal-overlay" onClick={() => setCelulaHistoricaSelecionada(null)}>
             <div className="modal-content" style={{ width: 340 }} onClick={e => e.stopPropagation()}>
@@ -1036,30 +1044,37 @@ export default function ObraDetalhe() {
               </p>
 
               <div className="card" style={{ marginTop: 8, marginBottom: 8 }}>
-                {ehGrupo ? (
-                  <>
-                    <div className="flex gap-2" style={{ alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ width: 14, height: 14, borderRadius: 4, background: grupo?.cor || '#7c3aed', display: 'inline-block' }} />
-                      <strong>👥 {grupo?.nome_grupo || 'Grupo'}</strong>
-                    </div>
-                    {nomesMembros.length > 0 ? (
-                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
-                        {nomesMembros.map((nome, i) => <li key={i}>{nome}</li>)}
-                      </ul>
-                    ) : (
-                      <span style={{ fontSize: 12, color: '#9ca3af' }}>Membros não identificados.</span>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex gap-2" style={{ alignItems: 'center' }}>
-                    <span style={{ width: 14, height: 14, borderRadius: 4, background: pessoasPorId[marc.colaborador_id]?.cor || '#9ca3af', display: 'inline-block' }} />
-                    <strong>{nomePessoa || 'Colaborador não identificado'}</strong>
+                {ehGrupo && (
+                  <div className="flex gap-2" style={{ alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ width: 14, height: 14, borderRadius: 4, background: grupo?.cor || '#7c3aed', display: 'inline-block' }} />
+                    <strong>👥 {grupo?.nome_grupo || 'Grupo'}</strong>
                   </div>
                 )}
+
+                {/* Uma linha por pessoa, com a parte que coube a cada uma */}
+                {linhasExec.map(l => {
+                  const pessoa = pessoasPorId[l.colaborador_id];
+                  return (
+                    <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '2px 0' }}>
+                      <span style={{ width: 12, height: 12, borderRadius: 3, background: pessoa?.cor || '#9ca3af', display: 'inline-block', flexShrink: 0 }} />
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {pessoa ? pessoa.nome : `Colaborador #${l.colaborador_id}`}
+                        {pessoa && pessoa.ativo === 0 && (
+                          <span style={{ color: '#9ca3af', fontSize: 11 }}> (desligado)</span>
+                        )}
+                        <span style={{ color: '#6b7280' }}> · {Number(l.quantidade) || 0} {servicoAtivo?.unidade || 'un'}</span>
+                      </span>
+                      <strong>R$ {(Number(l.valor) || 0).toFixed(2)}</strong>
+                    </div>
+                  );
+                })}
               </div>
 
               <div style={{ fontSize: 13, marginBottom: 12 }}>
-                Quantidade: <strong>{marc.quantidade}</strong> • Valor: <strong>R$ {Number(marc.valor || 0).toFixed(2)}</strong>
+                {linhasExec.length > 1 && (
+                  <span style={{ color: '#6b7280' }}>{linhasExec.length} pessoas · </span>
+                )}
+                Quantidade total: <strong>{qtdTotal}</strong> • Valor total: <strong>R$ {valorTotal.toFixed(2)}</strong>
               </div>
 
               <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setCelulaHistoricaSelecionada(null)}>Fechar</button>
