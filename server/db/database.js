@@ -681,6 +681,35 @@ async function migrate() {
     console.log('[migracao] Perfil SUPERVISOR renomeado para ENCARREGADO.');
   }
 
+  // Migração idempotente (executa uma única vez): o ENCARREGADO passou a ter acesso APENAS ao
+  // módulo EPI. Como as permissões ficam gravadas em perfil_permissoes, mudar só o seed não
+  // bastaria — bancos já existentes continuariam com Obras/Agenda liberados para ele.
+  //
+  // Usa a tabela de controle abaixo para rodar só na primeira vez; assim, se o ADM depois
+  // liberar outro módulo manualmente na tela de Controle de Acesso, essa escolha é respeitada
+  // e não volta a ser desfeita no próximo restart.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS migracoes_aplicadas (
+      chave TEXT PRIMARY KEY,
+      aplicada_em TIMESTAMP DEFAULT NOW()
+    );
+  `);
+  const CHAVE_ENC_SO_EPI = 'encarregado_apenas_epi';
+  const jaAplicada = await pool.query('SELECT 1 FROM migracoes_aplicadas WHERE chave = $1', [CHAVE_ENC_SO_EPI]);
+  if (jaAplicada.rows.length === 0) {
+    await pool.query("UPDATE perfil_permissoes SET permitido = 0 WHERE perfil = 'ENCARREGADO' AND modulo NOT LIKE 'epi%'");
+    // Garante que o EPI (e sua sub-aba de cadastro/entrada) fiquem liberados.
+    for (const modulo of ['epi', 'epi.cadastrar']) {
+      await pool.query(
+        `INSERT INTO perfil_permissoes (perfil, modulo, permitido) VALUES ('ENCARREGADO', $1, 1)
+         ON CONFLICT (perfil, modulo) DO UPDATE SET permitido = 1`,
+        [modulo]
+      );
+    }
+    await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_ENC_SO_EPI]);
+    console.log('[migracao] ENCARREGADO agora tem acesso somente ao modulo EPI.');
+  }
+
   // Seed: permissões padrão por perfil x módulo (equivalente ao que hoje está fixo no código via temPermissao)
   const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
   if (permCountRes.rows[0].c === 0) {
@@ -694,14 +723,15 @@ async function migrate() {
     const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
     // Espelha as regras atuais do Layout.jsx/telas (temPermissao(...)):
     const PADRAO = {
-      obras: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'],
+      // ENCARREGADO tem acesso APENAS ao módulo EPI — por isso não aparece nas demais listas.
+      obras: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR'],
       medicao: ['FINANCEIRO'],
       diarias: ['FINANCEIRO', 'RH'],
       prestadores: ['FINANCEIRO', 'RH'],
       epi: ['RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR'],
       financeiro: ['FINANCEIRO', 'RH'],
       aso: ['RH'],
-      agenda: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'],
+      agenda: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR'],
       // Sub-abas: mesmo padrão que hoje está fixo em Financeiro.jsx/Prestadores.jsx/Epi.jsx
       'financeiro.receita': ['FINANCEIRO'],
       'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
@@ -736,7 +766,7 @@ async function migrate() {
       'aso': ['RH'],
       // Módulo novo (Agenda): mesma ideia — nasce liberado para todos os perfis operacionais,
       // já que é uma agenda de compromissos compartilhada da empresa.
-      'agenda': ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR']
+      'agenda': ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR']
     };
     const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
     for (const perfil of PERFIS) {

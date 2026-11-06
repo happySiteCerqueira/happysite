@@ -33,6 +33,8 @@ function tituloDaRota(pathname) {
 
 export default function Layout() {
   const { usuario, logout, temPermissao } = useAuth();
+  // ENCARREGADO é um perfil restrito: acessa somente o módulo EPI.
+  const ehEncarregado = usuario?.perfil === 'ENCARREGADO';
   const { mes, setMes, mesVigente } = useApuracao();
   const location = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
@@ -78,8 +80,9 @@ export default function Layout() {
           <img src="/logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: 70, objectFit: 'contain' }} />
         </div>
         <nav style={{ flex: 1, overflowY: 'auto' }}>
-          <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>
-          <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>
+          {/* ENCARREGADO só enxerga o EPI — por isso Painel e Obras ficam ocultos para ele. */}
+          {!ehEncarregado && <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>}
+          {!ehEncarregado && <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>}
           {temPermissao('FINANCEIRO') && <NavLink to="/medicao" style={linkStyle}>💰 Medição</NavLink>}
 
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/diarias" style={linkStyle}>📅 Diárias</NavLink>}
@@ -88,7 +91,7 @@ export default function Layout() {
           {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
           {temPermissao('RH') && <NavLink to="/aso" style={linkStyle}>🩺 Controle de ASO</NavLink>}
-          {temPermissao('RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR') && <NavLink to="/agenda" style={linkStyle}>🗓️ Agenda</NavLink>}
+          {temPermissao('RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR') && <NavLink to="/agenda" style={linkStyle}>🗓️ Agenda</NavLink>}
 
 
 

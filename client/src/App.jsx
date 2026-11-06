@@ -21,6 +21,14 @@ import Agenda from './pages/Agenda';
 
 
 
+// Tela inicial depende do perfil: o ENCARREGADO só acessa o EPI, então vai direto para lá.
+// Os demais continuam caindo no Painel normalmente.
+function TelaInicial() {
+  const { usuario } = useAuth();
+  if (usuario?.perfil === 'ENCARREGADO') return <Navigate to="/epi" replace />;
+  return <Painel />;
+}
+
 function Privado({ children }) {
   const { usuario, carregando } = useAuth();
   if (carregando) return <div style={{ padding: 40 }}>Carregando...</div>;
@@ -35,7 +43,9 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/trocar-senha" element={<TrocarSenha />} />
       <Route path="/" element={<Privado><Layout /></Privado>}>
-        <Route index element={<Painel />} />
+        {/* ENCARREGADO só tem acesso ao EPI: ao entrar, cai direto nessa tela em vez do
+            Painel (que não é liberado para ele). */}
+        <Route index element={<TelaInicial />} />
         <Route path="obras" element={<Obras />} />
         <Route path="obras/:id" element={<ObraDetalhe />} />
         <Route path="configuracoes" element={<Configuracoes />} />
