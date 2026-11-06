@@ -8,6 +8,9 @@ import ControleAcesso from './ControleAcesso';
 export default function Configuracoes() {
   const { usuario, atualizarUsuario } = useAuth();
   const ehAdm = usuario?.perfil === 'ADM';
+  // ENCARREGADO só tem acesso ao módulo EPI: aqui ele enxerga apenas os dados da própria conta
+  // (para trocar a senha), sem a gestão de serviços padrão nem a vinculação de serviços a obras.
+  const ehEncarregado = usuario?.perfil === 'ENCARREGADO';
   const [subAba, setSubAba] = useState('geral'); // 'geral' | 'usuarios' | 'backup' | 'acessos'
 
 
@@ -18,6 +21,8 @@ export default function Configuracoes() {
   const [servicoParaAdd, setServicoParaAdd] = useState('');
 
   function carregar() {
+    // O ENCARREGADO não vê essas seções, então nem busca os dados delas.
+    if (ehEncarregado) return;
     api.get('/obras/servicos-padrao').then(res => setServicosPadrao(res.data));
     api.get('/obras').then(res => setObras(res.data));
   }
@@ -70,6 +75,7 @@ export default function Configuracoes() {
 
       {subAba === 'geral' && (
         <div>
+          {!ehEncarregado && (
           <div className="card" style={{ marginBottom: 16 }}>
             <h3>Serviços fechados padrão (usados ao criar novas obras)</h3>
             <div className="flex gap-2" style={{ marginBottom: 10 }}>
@@ -85,7 +91,9 @@ export default function Configuracoes() {
               ))}
             </div>
           </div>
+          )}
 
+          {!ehEncarregado && (
           <div className="card" style={{ marginBottom: 16 }}>
             <h3>Adicionar serviço a uma obra existente</h3>
             <div className="flex gap-2">
@@ -100,6 +108,7 @@ export default function Configuracoes() {
               <button className="btn-primary" onClick={addServicoNaObra}>Adicionar à obra</button>
             </div>
           </div>
+          )}
 
           <div className="card">
             <h3>Minha conta</h3>
