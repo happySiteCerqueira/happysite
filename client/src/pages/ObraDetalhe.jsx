@@ -28,6 +28,10 @@ export default function ObraDetalhe() {
   // Modal somente leitura: mostra quem executou uma célula já marcada em um mês anterior
   // (histórica), sem permitir editar/remarcar.
   const [celulaHistoricaSelecionada, setCelulaHistoricaSelecionada] = useState(null);
+  // Mover uma medição lançada no mês errado para o mês correto (sem desmarcar e refazer).
+  // Guarda { celulaKey, mesOrigem } enquanto o usuário escolhe o mês de destino.
+  const [movendoMes, setMovendoMes] = useState(null);
+  const [mesDestino, setMesDestino] = useState('');
 
   const [mostrarConfigServico, setMostrarConfigServico] = useState(false);
 
@@ -344,6 +348,30 @@ export default function ObraDetalhe() {
     carregarCelulas();
   }
 
+
+  // Abre o seletor de mês de destino para a célula informada.
+  function abrirMoverMes(celulaKey, mesOrigem) {
+    setMovendoMes({ celulaKey, mesOrigem });
+    setMesDestino(mesOrigem);
+  }
+
+  async function confirmarMoverMes() {
+    if (!movendoMes || !mesDestino) return;
+    try {
+      const res = await api.put(`/obras/servicos/${servicoAtivoId}/celulas/mover-mes`, {
+        celula_key: movendoMes.celulaKey,
+        mes_origem: movendoMes.mesOrigem,
+        mes_destino: mesDestino
+      });
+      alert(`Medição movida para ${mesDestino} (${res.data.movidas} lançamento(s)).`);
+      setMovendoMes(null);
+      setCelulaSelecionada(null);
+      setCelulaHistoricaSelecionada(null);
+      await carregarCelulas();
+    } catch (err) {
+      alert(err.response?.data?.erro || 'Erro ao mover a medição de mês');
+    }
+  }
 
   async function desmarcar() {
     await api.post(`/obras/servicos/${servicoAtivoId}/celulas`, {
@@ -922,6 +950,14 @@ export default function ObraDetalhe() {
                   <div style={{ fontSize: 10, color: '#6b7280', marginTop: 6 }}>
                     Para alterar, escolha abaixo novamente — a marcação atual será substituída.
                   </div>
+                  {/* Corrige lançamento feito com a Data de Apuração errada, sem refazer tudo */}
+                  <button
+                    className="btn-secondary btn-sm"
+                    style={{ width: '100%', marginTop: 6 }}
+                    onClick={() => abrirMoverMes(celulaSelecionada, mes)}
+                  >
+                    📅 Lancei no mês errado — mover
+                  </button>
                 </div>
               );
             })()}
@@ -1022,6 +1058,40 @@ export default function ObraDetalhe() {
       )}
 
 
+      {/* Escolha do mês de destino ao mover uma medição lançada na Data de Apuração errada */}
+      {movendoMes && (
+        <div className="modal-overlay" onClick={() => setMovendoMes(null)} style={{ zIndex: 60 }}>
+          <div className="modal-content" style={{ width: 320 }} onClick={e => e.stopPropagation()}>
+            <h4 style={{ marginTop: 0 }}>Mover medição de mês</h4>
+            <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6 }}>
+              Item: <strong>{rotulosAptos[movendoMes.celulaKey] || movendoMes.celulaKey}</strong><br />
+              Atualmente lançado em <strong>{rotuloMesAno(movendoMes.mesOrigem)}</strong>.
+            </p>
+
+            <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12 }}>Mover para o mês</label>
+              <input type="month" value={mesDestino} onChange={e => setMesDestino(e.target.value)} />
+            </div>
+
+            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 12 }}>
+              As pessoas, quantidades e valores são mantidos — muda apenas o mês da medição.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn-success"
+                style={{ flex: 1, fontWeight: 700 }}
+                disabled={!mesDestino || mesDestino === movendoMes.mesOrigem}
+                onClick={confirmarMoverMes}
+              >
+                ✔ Mover
+              </button>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setMovendoMes(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {celulaHistoricaSelecionada && (() => {
         const { celulaKey, marc } = celulaHistoricaSelecionada;
         const ehGrupo = !!marc.grupo_id;
@@ -1077,6 +1147,15 @@ export default function ObraDetalhe() {
                 Quantidade total: <strong>{qtdTotal}</strong> • Valor total: <strong>R$ {valorTotal.toFixed(2)}</strong>
               </div>
 
+              {temPermissao('ENGENHEIRO', 'MESTRE', 'RH') && (
+                <button
+                  className="btn-secondary"
+                  style={{ width: '100%', marginBottom: 6 }}
+                  onClick={() => abrirMoverMes(celulaKey, marc.mes_ciclo)}
+                >
+                  📅 Mover para outro mês
+                </button>
+              )}
               <button className="btn-secondary" style={{ width: '100%' }} onClick={() => setCelulaHistoricaSelecionada(null)}>Fechar</button>
             </div>
           </div>

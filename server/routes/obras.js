@@ -778,6 +778,58 @@ router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'AD
   res.json({ ok: true, valor });
 });
 
+// Move uma marcação já lançada de um mês para outro, mantendo as MESMAS pessoas, quantidades e
+// valores. Serve para corrigir o caso comum de medir com a Data de Apuração errada (ex: lançar
+// em novembro algo que era de outubro) sem precisar desmarcar e refazer tudo.
+router.put('/servicos/:servicoId/celulas/mover-mes', permitir('ENGENHEIRO', 'MESTRE', 'ADM', 'RH'), async (req, res) => {
+  const { celula_key, mes_origem, mes_destino } = req.body;
+  if (!celula_key || !mes_origem || !mes_destino) {
+    return res.status(400).json({ erro: 'celula_key, mes_origem e mes_destino são obrigatórios' });
+  }
+  if (!/^\d{4}-\d{2}$/.test(mes_destino)) {
+    return res.status(400).json({ erro: 'mes_destino inválido (use AAAA-MM)' });
+  }
+  if (mes_origem === mes_destino) {
+    return res.status(400).json({ erro: 'O mês de destino é o mesmo da marcação atual.' });
+  }
+
+  const linhas = await db.all(
+    'SELECT * FROM obra_servico_celulas WHERE obra_servico_id = ? AND celula_key = ? AND mes_ciclo = ?',
+    req.params.servicoId, celula_key, mes_origem
+  );
+  if (linhas.length === 0) return res.status(404).json({ erro: 'Nenhuma marcação encontrada nesse mês.' });
+
+  // Não permite mover para um mês onde a célula já tem marcação (evita sobrescrever outra medição).
+  const jaExiste = await db.get(
+    'SELECT 1 FROM obra_servico_celulas WHERE obra_servico_id = ? AND celula_key = ? AND mes_ciclo = ? LIMIT 1',
+    req.params.servicoId, celula_key, mes_destino
+  );
+  if (jaExiste) {
+    return res.status(400).json({ erro: 'Este item já possui medição no mês de destino. Remova-a antes de mover.' });
+  }
+
+  // Bloqueia se QUALQUER pessoa envolvida já teve a medição PAGA — no mês de origem ou no de
+  // destino. Mover alteraria um valor já liquidado, quebrando o histórico financeiro.
+  for (const l of linhas) {
+    const pago = await db.get(
+      "SELECT 1 FROM medicoes WHERE colaborador_id = ? AND mes_ciclo IN (?, ?) AND status = 'PAGO' LIMIT 1",
+      l.colaborador_id, mes_origem, mes_destino
+    );
+    if (pago) {
+      return res.status(400).json({ erro: 'Não é possível mover: há medição já PAGA para alguém desta marcação.' });
+    }
+  }
+
+  await db.run(
+    'UPDATE obra_servico_celulas SET mes_ciclo = ? WHERE obra_servico_id = ? AND celula_key = ? AND mes_ciclo = ?',
+    mes_destino, req.params.servicoId, celula_key, mes_origem
+  );
+
+  await registrar(req.usuario.id, 'MOVER_CELULA_MES', 'obra_servico_celulas', req.params.servicoId,
+    { celula_key, mes_origem, mes_destino, pessoas: linhas.length });
+  res.json({ ok: true, movidas: linhas.length });
+});
+
 // ---- Quantidade cadastrada por célula (base do cálculo de valor ao marcar quem executou) ----
 // Retorna um mapa { celula_key: quantidade } para facilitar o uso direto no front.
 router.get('/servicos/:servicoId/quantidades', async (req, res) => {
