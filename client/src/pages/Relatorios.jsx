@@ -14,7 +14,10 @@ export default function Relatorios() {
   const [dados, setDados] = useState(null);
 
   useEffect(() => {
-    api.get('/colaboradores').then(res => setColaboradores(res.data));
+    // status=todos: relatório é consulta HISTÓRICA. Quem foi desligado precisa continuar
+    // disponível no seletor, senão não há como conferir o que foi pago a essa pessoa no
+    // passado (ex: auditoria de meses anteriores).
+    api.get('/colaboradores', { params: { status: 'todos' } }).then(res => setColaboradores(res.data));
   }, []);
 
   function gerar() {
