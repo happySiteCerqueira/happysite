@@ -146,7 +146,11 @@ export default function ObraDetalhe() {
   }
 
   useEffect(() => {
-    api.get('/colaboradores').then(res => setTodasPessoas(res.data));
+    // status=todos (inclui desligados): uma medição já lançada é registro HISTÓRICO e precisa
+    // continuar mostrando quem executou, mesmo que a pessoa tenha sido desativada depois.
+    // Sem isso, o nome sumia do desenho/modal e parecia que a marcação havia se perdido —
+    // embora os dados sempre tenham permanecido íntegros no banco.
+    api.get('/colaboradores', { params: { status: 'todos' } }).then(res => setTodasPessoas(res.data));
   }, []);
 
   useEffect(() => {
