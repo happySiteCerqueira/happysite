@@ -628,23 +628,11 @@ async function migrate() {
     await pool.query("ALTER TABLE obra_servico_grupos ADD COLUMN cor TEXT NOT NULL DEFAULT '#7c3aed'");
   }
 
-  // Migração idempotente: perfis novos (SUPERVISOR, APONTADOR) no CHECK de usuarios.perfil
-  const temSupervisor = await constraintContem('usuarios', 'perfil', 'SUPERVISOR');
-  if (!temSupervisor) {
-    const constraints = await pool.query(
-      `SELECT conname FROM pg_constraint WHERE conrelid = 'usuarios'::regclass AND contype = 'c'`
-    );
-    for (const row of constraints.rows) {
-      const def = await pool.query('SELECT pg_get_constraintdef(oid) as def FROM pg_constraint WHERE conname = $1', [row.conname]);
-      if (def.rows[0] && def.rows[0].def.includes('perfil')) {
-        await pool.query(`ALTER TABLE usuarios DROP CONSTRAINT ${row.conname}`);
-      }
-    }
-    await pool.query(
-      `ALTER TABLE usuarios ADD CONSTRAINT usuarios_perfil_check
-       CHECK (perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE','SUPERVISOR','APONTADOR'))`
-    );
-  }
+  // OBS: a antiga migração que incluía SUPERVISOR/APONTADOR no CHECK foi removida — ela usava
+  // constraintContem('usuarios','perfil','SUPERVISOR'), que compara o NOME da constraint
+  // ("usuarios_perfil_check") e nunca encontrava o termo, fazendo o bloco rodar a cada start e
+  // derrubar o servidor ao tentar recriar uma constraint já existente.
+  // O bloco abaixo (SUPERVISOR -> ENCARREGADO) já deixa o CHECK no formato final correto.
 
   // Migração idempotente: o perfil "SUPERVISOR" passou a se chamar "ENCARREGADO".
   // É só troca de NOME — permissões e comportamento continuam exatamente os mesmos.
@@ -652,16 +640,24 @@ async function migrate() {
   // A ordem importa: primeiro soltamos o CHECK, depois renomeamos os registros já existentes
   // (usuários e linhas de permissão) e só então fixamos o CHECK novo. Sem isso o UPDATE seria
   // barrado pela própria constraint e quem era Supervisor ficaria sem acesso.
-  const aceitaEncarregado = await constraintContem('usuarios', 'perfil', 'ENCARREGADO');
+  // ATENÇÃO: constraintContem() casa pelo NOME da constraint (conname ILIKE), não pelo conteúdo.
+  // Como a constraint se chama "usuarios_perfil_check", procurar por 'ENCARREGADO' nela daria
+  // sempre falso e este bloco rodaria a CADA start, tentando recriar uma constraint existente e
+  // derrubando o servidor. Por isso consultamos a DEFINIÇÃO real da constraint aqui.
+  const defPerfil = await pool.query(`
+    SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+    WHERE conrelid = 'usuarios'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%perfil%'
+  `);
+  const aceitaEncarregado = defPerfil.rows.some(r => r.def && r.def.includes('ENCARREGADO'));
   if (!aceitaEncarregado) {
+    // DROP ... IF EXISTS: se a constraint já tiver sido removida num start anterior que falhou
+    // no meio, o comando não quebra.
     const cons = await pool.query(
-      `SELECT conname FROM pg_constraint WHERE conrelid = 'usuarios'::regclass AND contype = 'c'`
+      `SELECT conname FROM pg_constraint WHERE conrelid = 'usuarios'::regclass AND contype = 'c'
+         AND pg_get_constraintdef(oid) LIKE '%perfil%'`
     );
     for (const row of cons.rows) {
-      const def = await pool.query('SELECT pg_get_constraintdef(oid) as def FROM pg_constraint WHERE conname = $1', [row.conname]);
-      if (def.rows[0] && def.rows[0].def.includes('perfil')) {
-        await pool.query(`ALTER TABLE usuarios DROP CONSTRAINT ${row.conname}`);
-      }
+      await pool.query(`ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS ${row.conname}`);
     }
 
     await pool.query("UPDATE usuarios SET perfil = 'ENCARREGADO' WHERE perfil = 'SUPERVISOR'");
