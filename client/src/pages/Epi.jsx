@@ -408,7 +408,7 @@ function AbaEstoque() {
       </table>
 
       {editando && (
-        <div className="modal-overlay" onClick={() => setEditando(null)}>
+        <div className="modal-overlay">
           <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
             <h4 style={{ marginTop: 0 }}>Editar item</h4>
             <div className="flex-col gap-2" style={{ marginBottom: 8 }}>
@@ -591,7 +591,7 @@ function ModalCompletarAssinatura({ retirada, onFechar, onSalvo }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onFechar}>
+    <div className="modal-overlay">
       <div className="modal-content" style={{ width: 480, maxWidth: '95vw' }} onClick={e => e.stopPropagation()}>
         <h4 style={{ marginTop: 0 }}>Completar assinatura — {retirada.colaborador_nome}</h4>
         <p style={{ color: '#6b7280', fontSize: 13 }}>

@@ -175,7 +175,7 @@ function ModalRenovarAso({ colaborador, onFechar, onRenovado }) {
   const titulo = colaborador.sem_aso ? 'Registrar 1º ASO' : 'Renovar ASO';
 
   return (
-    <div className="modal-overlay" onClick={onFechar}>
+    <div className="modal-overlay">
       <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
         <h4 style={{ marginTop: 0 }}>{titulo} — {colaborador.nome}</h4>
         {!colaborador.sem_aso && !colaborador.alerta && (

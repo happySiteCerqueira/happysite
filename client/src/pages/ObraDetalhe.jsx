@@ -998,11 +998,26 @@ export default function ObraDetalhe() {
       )}
 
       {celulaSelecionada && (
-        <div className="modal-overlay" onClick={() => setCelulaSelecionada(null)}>
+        {/* Sem onClick no overlay: clicar fora NÃO fecha, para não perder o preenchimento.
+            A saída é pelo ✕ (sem salvar) ou pelos botões de ação. */}
+        <div className="modal-overlay">
           {/* Largura maior (e responsiva) para caber o nome da pessoa junto dos campos de
               quantidade/unitário/total sem truncar em uma letra só. */}
           <div className="modal-content" style={{ width: 'min(520px, 95vw)' }} onClick={e => e.stopPropagation()}>
-            <h4>Quem executou: {rotulosAptos[celulaSelecionada] || celulaSelecionada}</h4>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <h4 style={{ margin: 0, flex: 1 }}>Quem executou: {rotulosAptos[celulaSelecionada] || celulaSelecionada}</h4>
+              <button
+                type="button"
+                onClick={() => setCelulaSelecionada(null)}
+                title="Fechar sem salvar"
+                style={{
+                  background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6,
+                  width: 34, height: 30, cursor: 'pointer', fontSize: 15, fontWeight: 700, lineHeight: 1
+                }}
+              >
+                ✕
+              </button>
+            </div>
 
             {/* Se a célula JÁ foi medida neste mês, mostra primeiro COMO foi medida (quem,
                 quanto cada um fez e quanto recebeu). Antes a tela ia direto para a escolha de
@@ -1158,7 +1173,7 @@ export default function ObraDetalhe() {
 
       {/* Escolha do mês de destino ao mover uma medição lançada na Data de Apuração errada */}
       {movendoMes && (
-        <div className="modal-overlay" onClick={() => setMovendoMes(null)} style={{ zIndex: 60 }}>
+        <div className="modal-overlay" style={{ zIndex: 60 }}>
           <div className="modal-content" style={{ width: 320 }} onClick={e => e.stopPropagation()}>
             <h4 style={{ marginTop: 0 }}>Mover medição de mês</h4>
             <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6 }}>
@@ -1261,7 +1276,7 @@ export default function ObraDetalhe() {
       })()}
 
       {andarEditando && (
-        <div className="modal-overlay" onClick={() => setAndarEditando(null)}>
+        <div className="modal-overlay">
           <div className="modal-content" style={{ width: 340 }} onClick={e => e.stopPropagation()}>
             <h4>Renomear andar</h4>
             <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6 }}>
@@ -1294,7 +1309,7 @@ export default function ObraDetalhe() {
       )}
 
       {mostrarAlterarNome && celulaSelecionada && (
-        <div className="modal-overlay" onClick={() => setMostrarAlterarNome(false)}>
+        <div className="modal-overlay">
           <div className="modal-content" style={{ width: 340 }} onClick={e => e.stopPropagation()}>
             <h4>Alterar nome do apartamento</h4>
             <p style={{ fontSize: 12, color: '#6b7280' }}>
@@ -1323,7 +1338,7 @@ export default function ObraDetalhe() {
         const info = infoReplicacao(celulaSelecionada);
         if (!info) return null;
         return (
-          <div className="modal-overlay" onClick={() => setMostrarQtdVariosAndares(false)}>
+          <div className="modal-overlay">
             <div className="modal-content" style={{ width: 380, maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
               <h4>Definir quantidade em vários andares</h4>
               <p style={{ fontSize: 12, color: '#6b7280' }}>
@@ -1367,7 +1382,7 @@ export default function ObraDetalhe() {
       })()}
 
       {mostrarConfigServico && servicoAtivo && (
-        <div className="modal-overlay" onClick={() => setMostrarConfigServico(false)}>
+        <div className="modal-overlay">
           <div className="modal-content" style={{ width: 460, maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
             <h4>Configurar: {servicoAtivo.nome}</h4>
             <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
@@ -1518,7 +1533,7 @@ export default function ObraDetalhe() {
       )}
 
       {addObrasGrupoId && addObrasInfo && (
-        <div className="modal-overlay" onClick={() => setAddObrasGrupoId(null)}>
+        <div className="modal-overlay">
           <div className="modal-content" style={{ width: 420, maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
             <h4>Disponibilizar grupo em outras obras</h4>
             <p style={{ fontSize: 12, color: '#6b7280' }}>
@@ -1554,7 +1569,7 @@ export default function ObraDetalhe() {
       )}
 
       {mostrarQuantidades && servicoAtivo && (
-        <div className="modal-overlay" onClick={fecharQuantidades}>
+        <div className="modal-overlay">
           <div className="modal-content" style={{ width: 560, maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
             <h4>Quantidades: {servicoAtivo.nome}</h4>
             <p style={{ fontSize: 12, color: '#6b7280' }}>
@@ -1706,7 +1721,7 @@ export default function ObraDetalhe() {
       )}
 
       {mostrarEditarServicos && (
-        <div className="modal-overlay" onClick={() => setMostrarEditarServicos(false)}>
+        <div className="modal-overlay">
           <div className="modal-content" style={{ width: 420, maxHeight: '85vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
             <h4>Editar serviços desta obra</h4>
             <p style={{ fontSize: 12, color: '#6b7280' }}>Marque os serviços que esta obra deve ter. Ao salvar, os desmarcados serão removidos (exceto os que já têm lançamentos).</p>

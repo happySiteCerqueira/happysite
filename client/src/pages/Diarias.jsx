@@ -362,7 +362,7 @@ function ModalDetalheObras({ item, mes, obras, onFechar, onSalvo }) {
   const totalQtd = linhas.reduce((s, l) => s + (Number(l.quantidade) || 0), 0);
 
   return (
-    <div className="modal-overlay" onClick={() => { onFechar(); onSalvo(); }}>
+    <div className="modal-overlay">
       <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
         <h4 style={{ marginTop: 0 }}>Diárias por obra — {item.nome}</h4>
         <p style={{ fontSize: 12, color: '#6b7280', marginTop: -6 }}>

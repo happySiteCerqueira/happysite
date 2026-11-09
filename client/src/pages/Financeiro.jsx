@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import Modal from '../components/Modal';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
@@ -548,10 +549,14 @@ function Entrada() {
       </p>
 
       {mostrarModal && (
-        <div className="modal-overlay" onClick={() => setMostrarModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: 420 }}>
-            <h3>{editandoId ? 'Editar Entrada' : 'Nova Entrada'}</h3>
-
+        <Modal
+          titulo={editandoId ? 'Editar Entrada' : 'Nova Entrada'}
+          onFechar={() => setMostrarModal(false)}
+          onSalvar={salvar}
+          salvando={salvando}
+          largura="min(460px, 95vw)"
+        >
+          <>
             {erro && <div style={{ color: '#dc2626', marginBottom: 8 }}>{erro}</div>}
 
             <div className="flex-col gap-2">
@@ -627,14 +632,8 @@ function Entrada() {
               <input value={form.conta} onChange={e => setForm({ ...form, conta: e.target.value })} />
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
-              <button className="btn-secondary" onClick={() => setMostrarModal(false)}>Cancelar</button>
-              <button className="btn-primary" onClick={salvar} disabled={salvando}>
-                {salvando ? 'Salvando...' : 'Salvar'}
-              </button>
-            </div>
-          </div>
-        </div>
+          </>
+        </Modal>
       )}
     </div>
   );

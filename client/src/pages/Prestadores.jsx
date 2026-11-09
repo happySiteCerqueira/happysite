@@ -3,6 +3,7 @@ import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { useApuracao } from '../context/ApuracaoContext';
 import Cadastro from './Cadastro';
+import Modal from '../components/Modal';
 
 // Formata uma data (Date, string ISO ou 'YYYY-MM-DD') como dd/mm/aaaa, ignorando timezone
 // (usa os componentes UTC para evitar que colunas DATE do Postgres "voltem" um dia por fuso).
@@ -362,9 +363,15 @@ function ListaPrestadores() {
 
       {/* Modal de edição de cadastro */}
       {editando && (
-        <div className="modal-overlay" onClick={fecharEdicao}>
-          <div className="modal-content" style={{ width: 640 }} onClick={e => e.stopPropagation()}>
-            <h4 style={{ marginTop: 0 }}>Editar cadastro</h4>
+        <Modal
+          titulo="Editar cadastro"
+          onFechar={fecharEdicao}
+          onSalvar={salvarEdicao}
+          salvando={salvandoEdicao}
+          textoSalvar="Salvar alterações"
+          largura="min(660px, 95vw)"
+        >
+          <>
             {erroEdicao && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erroEdicao}</div>}
 
             <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
@@ -396,20 +403,8 @@ function ListaPrestadores() {
               {linhaCampo('Valor da Diária (R$)', editando.valor_diaria, e => setEditando({ ...editando, valor_diaria: e.target.value }), 'number')}
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                className="btn-success"
-                disabled={salvandoEdicao}
-                onClick={salvarEdicao}
-                style={{ flex: 1, fontWeight: 700, fontSize: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }}
-              >
-                {salvandoEdicao ? 'Salvando...' : '✔ Salvar alterações'}
-              </button>
-
-              <button className="btn-secondary" onClick={fecharEdicao} style={{ flex: 1 }}>Cancelar</button>
-            </div>
-          </div>
-        </div>
+          </>
+        </Modal>
       )}
 
       {/* Modal de histórico (visualização, ao clicar na linha) */}

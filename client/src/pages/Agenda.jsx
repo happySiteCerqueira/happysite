@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../api/api';
 import { useApuracao } from '../context/ApuracaoContext';
 import { useAuth } from '../context/AuthContext';
+import Modal from '../components/Modal';
 import { ativarNotificacoes, desativarNotificacoes, enviarTeste, permissaoAtual, suportaNotificacoes, ehIosSemInstalar } from '../utils/notificacoes';
 
 // Opções prontas de lembrete (em minutos antes do compromisso), além da entrada manual.
@@ -643,9 +644,14 @@ function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onFechar}>
-      <div className="modal-content" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
-        <h4 style={{ marginTop: 0 }}>{ehEdicao ? 'Editar compromisso' : 'Novo compromisso'}</h4>
+    <Modal
+      titulo={ehEdicao ? 'Editar compromisso' : 'Novo compromisso'}
+      onFechar={onFechar}
+      onSalvar={salvar}
+      salvando={salvando}
+      largura="min(480px, 95vw)"
+    >
+      <>
         {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
         <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
@@ -858,13 +864,7 @@ function ModalCompromisso({ evento, obras, destinatarios, onFechar, onSalvo }) {
           <textarea rows={3} value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Detalhes do compromisso" />
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-success" disabled={salvando} onClick={salvar} style={{ flex: 1, fontWeight: 700 }}>
-            {salvando ? 'Salvando...' : '✔ Salvar'}
-          </button>
-          <button className="btn-secondary" onClick={onFechar} style={{ flex: 1 }}>Cancelar</button>
-        </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 }
