@@ -422,17 +422,33 @@ export default function ObraDetalhe() {
   // as pessoas já lançadas e os valores de cada uma. Assim dá para corrigir só o que está errado
   // (ex: a quantidade de uma pessoa) sem remover a marcação e refazer tudo do zero.
   //
-  // Os valores entram como ajuste manual porque é exatamente o que está gravado hoje; quem
-  // quiser voltar à divisão automática é só apagar o campo.
+  // Preenchemos QTD e UNITÁRIO (não o total). Antes o total era pré-preenchido como ajuste
+  // manual e, como o total manual tem prioridade sobre "qtd x unitário", alterar a quantidade
+  // de alguém não mudava o valor que a pessoa recebia — a metragem ficava certa e o dinheiro
+  // errado. Gravando o unitário, o total volta a ser recalculado a cada mudança de qtd.
   function editarMarcacaoAtual(linhasMarcadas) {
     if (!linhasMarcadas || linhasMarcadas.length === 0) return;
     const ids = linhasMarcadas.map(l => l.colaborador_id);
+    const unitPadrao = Number(servicoAtivo?.valor_unitario) || 0;
     const ajustes = {};
     linhasMarcadas.forEach(l => {
-      ajustes[l.colaborador_id] = {
-        qtd: String(Number(l.quantidade) || 0),
-        total: String(Number(l.valor) || 0)
-      };
+      const q = Number(l.quantidade) || 0;
+      const v = Number(l.valor) || 0;
+      // Unitário efetivo do que está gravado. Sem quantidade não dá para derivar: nesse caso
+      // mantemos o total travado, que é o único dado confiável do lançamento.
+      if (q > 0) {
+        const unitEfetivo = v / q;
+        ajustes[l.colaborador_id] = {
+          qtd: String(q),
+          // Só grava o unitário quando ele difere do preço do serviço, para o campo continuar
+          // em branco (seguindo o padrão) nos casos normais.
+          ...(Math.abs(unitEfetivo - unitPadrao) > 0.005
+            ? { unit: String(Number(unitEfetivo.toFixed(4))) }
+            : {})
+        };
+      } else {
+        ajustes[l.colaborador_id] = { total: String(v) };
+      }
     });
     setModoEquipe(true);
     setEquipeSelecionada(ids);
@@ -1820,9 +1836,23 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
   function calcularTotalPessoa(id) {
     const totalManual = campo(id, 'total');
     if (totalManual !== '') return Number(totalManual) || 0;
+    return calcularPorQtdUnit(id);
+  }
+
+  // Resultado de qtd x unitário, ignorando o total manual.
+  function calcularPorQtdUnit(id) {
     const q = campo(id, 'qtd') !== '' ? Number(campo(id, 'qtd')) : qtdAutomatica;
     const u = campo(id, 'unit') !== '' ? Number(campo(id, 'unit')) : unitServico;
     return (q || 0) * (u || 0);
+  }
+
+  // Um total digitado à mão sobrepõe qtd x unitário. Isso é proposital, mas quando a pessoa
+  // muda a quantidade e esquece o total preenchido, o valor a receber fica desatualizado sem
+  // nenhum aviso. Aqui detectamos essa divergência para sinalizar na tela.
+  function totalDesatualizado(id) {
+    const totalManual = campo(id, 'total');
+    if (totalManual === '') return false;
+    return Math.abs((Number(totalManual) || 0) - calcularPorQtdUnit(id)) > 0.01;
   }
 
   function alternar(id) {
@@ -1892,14 +1922,36 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
                     title="Valor unitário para esta pessoa"
                     style={{ width: 76, fontSize: 12, padding: '3px 4px' }}
                   />
+                  {/* Borda laranja + botão de recalcular quando o total fixado não bate mais
+                      com qtd x unitário (ex: a quantidade foi corrigida depois). */}
                   <input
                     type="number" step="0.01"
                     value={campo(p.id, 'total')}
                     placeholder={calcularTotalPessoa(p.id).toFixed(2)}
                     onChange={e => setCampo(p.id, 'total', e.target.value)}
-                    title="Valor total desta pessoa (sobrepõe qtd x unitário)"
-                    style={{ width: 84, fontSize: 12, padding: '3px 4px', fontWeight: 700 }}
+                    title={totalDesatualizado(p.id)
+                      ? `Total fixado à mão. Por qtd x unitário daria R$ ${calcularPorQtdUnit(p.id).toFixed(2)}.`
+                      : 'Valor total desta pessoa (sobrepõe qtd x unitário)'}
+                    style={{
+                      width: 84, fontSize: 12, padding: '3px 4px', fontWeight: 700,
+                      ...(totalDesatualizado(p.id)
+                        ? { border: '2px solid #f59e0b', background: '#fffbeb' }
+                        : {})
+                    }}
                   />
+                  {totalDesatualizado(p.id) && (
+                    <button
+                      type="button"
+                      onClick={() => setCampo(p.id, 'total', '')}
+                      title={`Recalcular: usar R$ ${calcularPorQtdUnit(p.id).toFixed(2)} (qtd x unitário)`}
+                      style={{
+                        border: 'none', background: '#f59e0b', color: '#fff', borderRadius: 4,
+                        width: 22, height: 24, cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0
+                      }}
+                    >
+                      ↻
+                    </button>
+                  )}
                 </>
               )}
             </div>
