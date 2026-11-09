@@ -227,6 +227,10 @@ export default function ObraDetalhe() {
   const servicoAtivo = obra?.servicos?.find(s => s.id === servicoAtivoId);
   const pessoasPorId = {};
   todasPessoas.forEach(p => { pessoasPorId[p.id] = p; });
+  // NOTA: "todasPessoas" inclui desligados de propósito, para que medições antigas continuem
+  // mostrando o nome de quem executou. Nas listas de CONFIGURAÇÃO (liberar pessoas no serviço e
+  // montar grupos) elas são filtradas com p.ativo !== 0 no próprio JSX — mantendo visível apenas
+  // quem já estiver vinculado, para que ainda seja possível removê-la.
   const gruposPorId = {};
   grupos.forEach(g => { gruposPorId[g.id] = g; });
 
@@ -1324,16 +1328,20 @@ export default function ObraDetalhe() {
                       <button className="btn-danger btn-sm" onClick={() => excluirGrupo(g.id)}>Excluir</button>
                     </div>
                     <div style={{ maxHeight: 130, overflow: 'auto' }}>
-                      {todasPessoas.map(p => {
-                        const jaEsta = g.membros.some(m => m.id === p.id);
-                        return (
-                          <label key={p.id} className="flex gap-2" style={{ alignItems: 'center', fontSize: 13 }}>
-                            <input type="checkbox" checked={jaEsta} onChange={() => alternarMembroGrupo(g.id, p.id, jaEsta)} />
-                            <span style={{ width: 10, height: 10, background: p.cor, borderRadius: 2, display: 'inline-block' }}></span>
-                            {p.nome}
-                          </label>
-                        );
-                      })}
+                      {/* Idem: só ativos, mantendo quem já é membro para poder ser retirado */}
+                      {todasPessoas
+                        .filter(p => p.ativo !== 0 || g.membros.some(m => m.id === p.id))
+                        .map(p => {
+                          const jaEsta = g.membros.some(m => m.id === p.id);
+                          return (
+                            <label key={p.id} className="flex gap-2" style={{ alignItems: 'center', fontSize: 13 }}>
+                              <input type="checkbox" checked={jaEsta} onChange={() => alternarMembroGrupo(g.id, p.id, jaEsta)} />
+                              <span style={{ width: 10, height: 10, background: p.cor, borderRadius: 2, display: 'inline-block' }}></span>
+                              {p.nome}
+                              {p.ativo === 0 && <span style={{ color: '#9ca3af', fontSize: 11 }}>(desligado)</span>}
+                            </label>
+                          );
+                        })}
                     </div>
                   </div>
                 ))}
@@ -1343,16 +1351,21 @@ export default function ObraDetalhe() {
 
             <h5>Pessoas/Empresas liberadas para este serviço</h5>
             <div className="flex-col gap-2" style={{ maxHeight: 200, overflow: 'auto' }}>
-              {todasPessoas.map(p => {
-                const liberado = pessoasLiberadas.some(pl => pl.id === p.id);
-                return (
-                  <label key={p.id} className="flex gap-2" style={{ alignItems: 'center' }}>
-                    <input type="checkbox" checked={liberado} onChange={() => liberado ? desvincularPessoa(p.id) : vincularPessoa(p.id)} />
-                    <span style={{ width: 12, height: 12, background: p.cor, borderRadius: 3, display: 'inline-block' }}></span>
-                    {p.nome}
-                  </label>
-                );
-              })}
+              {/* Só pessoas ativas — mais quem já estiver liberado, mesmo que desligado depois,
+                  para continuar sendo possível desmarcá-la. */}
+              {todasPessoas
+                .filter(p => p.ativo !== 0 || pessoasLiberadas.some(pl => pl.id === p.id))
+                .map(p => {
+                  const liberado = pessoasLiberadas.some(pl => pl.id === p.id);
+                  return (
+                    <label key={p.id} className="flex gap-2" style={{ alignItems: 'center' }}>
+                      <input type="checkbox" checked={liberado} onChange={() => liberado ? desvincularPessoa(p.id) : vincularPessoa(p.id)} />
+                      <span style={{ width: 12, height: 12, background: p.cor, borderRadius: 3, display: 'inline-block' }}></span>
+                      {p.nome}
+                      {p.ativo === 0 && <span style={{ color: '#9ca3af', fontSize: 11 }}>(desligado)</span>}
+                    </label>
+                  );
+                })}
             </div>
             <button className="btn-primary" style={{ marginTop: 12, width: '100%' }} onClick={() => setMostrarConfigServico(false)}>Fechar</button>
           </div>
