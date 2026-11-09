@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>HappySite - Manual de Arquitetura</title>
+<style>
+@page { size: A4; margin: 1.6cm 1.4cm; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: #1f2937;
+  line-height: 1.62;
+  font-size: 10.6pt;
+  margin: 0 auto;
+  max-width: 900px;
+  padding: 10px;
+}
+h1 {
+  color: #1e3a8a;
+  border-bottom: 4px solid #2563eb;
+  padding-bottom: 10px;
+  font-size: 25pt;
+  margin-bottom: 6px;
+}
+h2 {
+  color: #1e40af;
+  background: #eff6ff;
+  border-left: 5px solid #2563eb;
+  padding: 7px 12px;
+  font-size: 15pt;
+  margin-top: 30px;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+h3 {
+  color: #1e40af;
+  font-size: 12.5pt;
+  margin-top: 22px;
+  border-bottom: 1px solid #dbeafe;
+  padding-bottom: 4px;
+  page-break-after: avoid;
+  break-after: avoid;
+}
+h4 { color: #374151; font-size: 11pt; margin-top: 16px; }
+p { margin: 9px 0; text-align: justify; }
+a { color: #1d4ed8; text-decoration: none; }
+code {
+  font-family: Consolas, "Courier New", monospace;
+  background: #f1f5f9;
+  color: #b91c1c;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9.2pt;
+  white-space: nowrap;
+}
+pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 11px 14px;
+  border-radius: 7px;
+  overflow-x: auto;
+  font-size: 8.6pt;
+  line-height: 1.45;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+  white-space: pre;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 13px 0;
+  font-size: 9.1pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+th {
+  background: #1e40af;
+  color: #fff;
+  text-align: left;
+  padding: 7px 9px;
+  font-weight: 600;
+}
+td {
+  border: 1px solid #e5e7eb;
+  padding: 6px 9px;
+  vertical-align: top;
+}
+tr:nth-child(even) td { background: #f8fafc; }
+blockquote {
+  background: #fffbeb;
+  border-left: 5px solid #f59e0b;
+  margin: 13px 0;
+  padding: 9px 14px;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+blockquote p { margin: 5px 0; }
+blockquote pre { margin: 7px 0; }
+ul, ol { margin: 9px 0; padding-left: 26px; }
+li { margin: 4px 0; }
+li.sub { margin-left: 18px; list-style-type: circle; }
+hr { border: none; border-top: 1px solid #e5e7eb; margin: 22px 0; }
+strong { color: #111827; }
+</style>
+</head>
+<body>
+<h1 id="happysite-manual-de-arquitetura">HappySite — Manual de Arquitetura</h1>
+<p><strong>Sistema de administração de obras — Cerqueira Engenharia</strong></p>
+<blockquote>
+<p><strong>Para que serve este documento:</strong> descrever <em>como o sistema funciona por dentro</em> — onde está hospedado, como os dados fluem, onde fica cada coisa e por que foi feita daquele jeito. <strong>Não é</strong> um manual de operação (não ensina a usar as telas).</p>
+<p><strong>Público-alvo:</strong> programadores, designers web, administradores de sistema e assistentes de IA que precisem dar manutenção ou evoluir o projeto.</p>
+<p>Última revisão: novembro de 2026.</p>
+</blockquote>
+<hr>
+<h2 id="índice">Índice</h2>
+<ol>
+<li><a href="#1-visão-geral">Visão geral</a></li>
+<li><a href="#2-stack-e-decisões-técnicas">Stack e decisões técnicas</a></li>
+<li><a href="#3-hospedagem-e-infraestrutura">Hospedagem e infraestrutura</a></li>
+<li><a href="#4-deploy-automático">Deploy automático</a></li>
+<li><a href="#5-mapa-de-pastas">Mapa de pastas</a></li>
+<li><a href="#6-backend-anatomia">Backend: anatomia</a></li>
+<li><a href="#7-modelo-de-dados">Modelo de dados</a></li>
+<li><a href="#8-autenticação-e-permissões">Autenticação e permissões</a></li>
+<li><a href="#9-frontend-anatomia">Frontend: anatomia</a></li>
+<li><a href="#10-domínios-funcionais">Domínios funcionais</a></li>
+<li><a href="#11-processos-em-segundo-plano">Processos em segundo plano</a></li>
+<li><a href="#12-convenções-e-armadilhas">Convenções e armadilhas</a></li>
+<li><a href="#13-dívida-técnica-e-melhorias">Dívida técnica e melhorias</a></li>
+</ol>
+<hr>
+<h2 id="1-visão-geral">1. Visão geral</h2>
+<p>O HappySite é um sistema web interno que administra o ciclo de trabalho de uma construtora: cadastro de obras, apontamento do que cada colaborador executou, cálculo do que cada um tem a receber, controle de EPI, ASO, agenda de compromissos e o financeiro de entrada.</p>
+<h3 id="o-conceito-central-a-célula">O conceito central: a "célula"</h3>
+<p>Quase tudo no sistema gira em torno de uma ideia só. Uma obra é desenhada como um <strong>prédio virtual</strong>, e esse prédio é fatiado em <strong>células</strong> — cada célula é um pedaço mensurável da obra:</p>
+<pre><code>Cobertura
+  Caixa d'água / Ático
+7º Andar  →  Corredor | Elevador | Escada | Apto 701 | Apto 702 ...
+6º Andar  →  Corredor | Elevador | Escada | Apto 601 | Apto 602 ...
+...
+Térreo    →  Corredor | Elevador | Escada | Vaga 1 | Vaga 2 ...
+Laje Piso Térreo
+Fundação - Etapa 1..N</code></pre>
+<p>Cada célula tem uma <strong>chave textual</strong> (<code>apto-b0-a3-2</code>, <code>escada-terreo</code>, <code>fundacao-1</code>) que é o identificador usado no banco inteiro. <strong>Marcar uma célula</strong> significa dizer: <em>"fulano executou este serviço neste pedaço da obra, neste mês"</em>. Dessa marcação nasce todo o resto — a medição, o valor a pagar, os relatórios.</p>
+<h3 id="fluxo-macro">Fluxo macro</h3>
+<pre><code>Cadastra obra (wizard: blocos, andares, aptos)
+        ↓
+Configura serviços da obra (alvenaria, reboco...) com preço unitário e equipe
+        ↓
+Marca células no desenho do prédio  ──→  grava em obra_servico_celulas (qtd + valor)
+        ↓
+Lança diárias e pagamentos antecipados (vale, FGTS, adiantamento...)
+        ↓
+Medição do mês = soma das células + diárias − descontos
+        ↓
+Fecha/paga a medição  →  status PAGO congela o histórico</code></pre>
+<h3 id="módulos">Módulos</h3>
+<table><thead><tr>
+<th>Módulo</th>
+<th>O que resolve</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Painel</strong></td>
+<td>Visão geral: avisos de ASO, experiência, resumo do mês</td>
+</tr>
+<tr>
+<td><strong>Obras</strong></td>
+<td>Cadastro da obra, desenho do prédio, serviços, marcação de células</td>
+</tr>
+<tr>
+<td><strong>Medição</strong></td>
+<td>Consolidação mensal do que cada pessoa tem a receber; fechamento e pagamento</td>
+</tr>
+<tr>
+<td><strong>Diárias</strong></td>
+<td>Lançamento de diárias por pessoa/mês, com rateio entre obras</td>
+</tr>
+<tr>
+<td><strong>Prestadores</strong></td>
+<td>Cadastro de colaboradores (CLT e PJ) e histórico</td>
+</tr>
+<tr>
+<td><strong>EPI</strong></td>
+<td>Estoque, retirada com assinatura digital e termo em PDF</td>
+</tr>
+<tr>
+<td><strong>ASO</strong></td>
+<td>Controle de validade do atestado de saúde ocupacional</td>
+</tr>
+<tr>
+<td><strong>Financeiro</strong></td>
+<td>Receitas (entradas), pagamentos, gastos e relatórios</td>
+</tr>
+<tr>
+<td><strong>Agenda</strong></td>
+<td>Compromissos com destinatários e lembretes push</td>
+</tr>
+<tr>
+<td><strong>Backup</strong></td>
+<td>Exportação/importação de todos os dados</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="2-stack-e-decisões-técnicas">2. Stack e decisões técnicas</h2>
+<h3 id="backend-server">Backend (<code>/server</code>)</h3>
+<table><thead><tr>
+<th>Item</th>
+<th>Escolha</th>
+</tr></thead><tbody>
+<tr>
+<td>Runtime</td>
+<td>Node.js 22 LTS</td>
+</tr>
+<tr>
+<td>Framework</td>
+<td>Express 5</td>
+</tr>
+<tr>
+<td>Banco</td>
+<td>PostgreSQL 16 (driver <code>pg</code>)</td>
+</tr>
+<tr>
+<td>Módulos</td>
+<td>CommonJS (<code>require</code>)</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td><code>jsonwebtoken</code> + <code>bcryptjs</code></td>
+</tr>
+<tr>
+<td>Upload</td>
+<td><code>multer</code> (comprovantes em disco)</td>
+</tr>
+<tr>
+<td>Planilhas</td>
+<td><code>xlsx</code> (importação/exportação)</td>
+</tr>
+<tr>
+<td>Push</td>
+<td><code>web-push</code> (VAPID)</td>
+</tr>
+<tr>
+<td>Drive</td>
+<td><code>googleapis</code> (backup externo)</td>
+</tr>
+<tr>
+<td>Datas</td>
+<td><code>dayjs</code></td>
+</tr>
+</tbody></table>
+<h3 id="frontend-client">Frontend (<code>/client</code>)</h3>
+<table><thead><tr>
+<th>Item</th>
+<th>Escolha</th>
+</tr></thead><tbody>
+<tr>
+<td>Biblioteca</td>
+<td>React 18 (apenas função + hooks, sem classes)</td>
+</tr>
+<tr>
+<td>Build</td>
+<td>Vite (variante Rolldown — exige Node 20.12+/22+)</td>
+</tr>
+<tr>
+<td>Rotas</td>
+<td><code>react-router-dom</code></td>
+</tr>
+<tr>
+<td>HTTP</td>
+<td><code>axios</code> com interceptors</td>
+</tr>
+<tr>
+<td>Estado</td>
+<td>Context API (<code>AuthContext</code>, <code>ApuracaoContext</code>) — <strong>sem Redux</strong></td>
+</tr>
+<tr>
+<td>Estilo</td>
+<td>CSS global (<code>index.css</code>) + estilos inline — <strong>sem Tailwind</strong></td>
+</tr>
+<tr>
+<td>PWA</td>
+<td>Service Worker próprio (<code>sw-push.js</code>)</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>Regra ao evoluir:</strong> não introduza bibliotecas novas sem necessidade real. O projeto é deliberadamente enxuto para ser mantido por uma pessoa só.</p>
+</blockquote>
+<h3 id="três-decisões-que-explicam-muita-coisa">Três decisões que explicam muita coisa</h3>
+<p><strong>1. Camada de compatibilidade SQL (<code>server/db/database.js</code>)</strong> O sistema nasceu em SQLite (<code>better-sqlite3</code>) e migrou para PostgreSQL. Para não reescrever centenas de queries, existe um adaptador que traduz na hora:</p>
+<ul>
+<li>placeholders <code>?</code> → <code>$1, $2, $3...</code></li>
+<li><code>INSERT</code> sem <code>RETURNING</code> ganha <code>RETURNING id</code> automaticamente (emula <code>lastInsertRowid</code>)</li>
+<li>expõe a API antiga: <code>db.get()</code>, <code>db.all()</code>, <code>db.run()</code>, <code>db.transaction()</code></li>
+</ul>
+<p>Por isso o código das rotas usa <code>?</code> mesmo sendo Postgres. <strong>É intencional.</strong></p>
+<p><strong>2. Backend serve o frontend</strong> Não há servidor web separado para o React. O Express entrega a API em <code>/api/*</code> e também os arquivos estáticos de <code>client/dist</code>. Um único container, um único processo.</p>
+<p><strong>3. Migrações no boot</strong> Não há Prisma, Knex ou ferramenta de migration. O arquivo <code>database.js</code> roda um <code>migrate()</code> idempotente toda vez que o servidor sobe: cria tabelas com <code>CREATE TABLE IF NOT EXISTS</code>, adiciona colunas se não existirem, popula dados-semente. O servidor só aceita conexões depois que a promessa <code>db.pronto</code> resolve.</p>
+<hr>
+<h2 id="3-hospedagem-e-infraestrutura">3. Hospedagem e infraestrutura</h2>
+<h3 id="onde-está">Onde está</h3>
+<table><thead><tr>
+<th></th>
+<th></th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Provedor</strong></td>
+<td>AWS Lightsail (VPS)</td>
+</tr>
+<tr>
+<td><strong>Região</strong></td>
+<td>us-east-1 (Virgínia) — <strong>fuso diferente de Brasília</strong></td>
+</tr>
+<tr>
+<td><strong>IP</strong></td>
+<td><code>3.228.110.68</code></td>
+</tr>
+<tr>
+<td><strong>Domínio</strong></td>
+<td><code>app.cerqueiraengenharia.com.br</code></td>
+</tr>
+<tr>
+<td><strong>SO</strong></td>
+<td>Ubuntu</td>
+</tr>
+<tr>
+<td><strong>Caminho</strong></td>
+<td><code>/opt/happysite</code></td>
+</tr>
+<tr>
+<td><strong>RAM</strong></td>
+<td>2 GB (limitação relevante — ver adiante)</td>
+</tr>
+<tr>
+<td><strong>Acesso</strong></td>
+<td><code>ssh -i ~/.ssh/deploy_happysite ubuntu@3.228.110.68</code></td>
+</tr>
+</tbody></table>
+<h3 id="histórico-por-que-um-vps">Histórico: por que um VPS</h3>
+<p>A versão anterior usava Render (free) + Neon (free). Ambos hibernavam por inatividade, causando <em>cold start</em>: tela branca e espera longa no primeiro acesso do dia. A migração para um VPS único — com banco, aplicação e proxy no mesmo servidor — resolveu isso. Sobraram no código alguns vestígios dessa época (rota <code>/ping</code> de keep-alive, comentários sobre Render, <code>render.yaml</code>).</p>
+<h3 id="os-três-containers">Os três containers</h3>
+<pre><code>                    Internet (443/80)
+                           │
+                    ┌──────▼───────┐
+                    │    caddy     │  HTTPS automático (Let's Encrypt)
+                    │   2-alpine   │  renovação sem intervenção
+                    └──────┬───────┘
+                           │ reverse_proxy app:3001
+                    ┌──────▼───────┐
+                    │     app      │  Node 22 — Express + React buildado
+                    │ (Dockerfile) │  volumes: /app/data, /app/backups
+                    └──────┬───────┘
+                           │ postgresql://db:5432
+                    ┌──────▼───────┐
+                    │      db      │  Postgres 16-alpine
+                    │              │  volume: db_data ← OS DADOS VIVEM AQUI
+                    └──────────────┘</code></pre>
+<p>Definidos em <code>docker-compose.yml</code>. Todos com <code>restart: unless-stopped</code>. O <code>app</code> só sobe depois que o <code>db</code> passa no healthcheck (<code>pg_isready</code>).</p>
+<h3 id="volumes-onde-os-dados-persistem">Volumes (onde os dados persistem)</h3>
+<table><thead><tr>
+<th>Volume</th>
+<th>Conteúdo</th>
+<th>Crítico?</th>
+</tr></thead><tbody>
+<tr>
+<td><code>db_data</code></td>
+<td><strong>Todo o banco PostgreSQL</strong></td>
+<td>🔴 Sim — perder isto é perder tudo</td>
+</tr>
+<tr>
+<td><code>app_data</code></td>
+<td>Comprovantes enviados (upload)</td>
+<td>🟡 Sim</td>
+</tr>
+<tr>
+<td><code>app_backups</code></td>
+<td>Backups JSON automáticos</td>
+<td>🟢 Recuperável</td>
+</tr>
+<tr>
+<td><code>caddy_data</code></td>
+<td>Certificados TLS</td>
+<td>🟢 Recriável</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>⚠️ <code>docker compose down -v</code> <strong>apaga os volumes</strong>. Nunca use a flag <code>-v</code> em produção.</p>
+</blockquote>
+<h3 id="dockerfile-build-em-dois-estágios">Dockerfile (build em dois estágios)</h3>
+<ol>
+<li><strong>Estágio build</strong> — instala dependências do server (<code>--omit=dev</code>) e do client, roda</li>
+</ol>
+<p><code>vite build</code> gerando <code>client/dist</code>.</p>
+<ol>
+<li><strong>Estágio final</strong> — imagem limpa com apenas <code>server/</code>, <code>client/dist/</code> e <code>package.json</code>.</li>
+</ol>
+<p>Comando: <code>node server/server.js</code>.</p>
+<p>Node 22 é obrigatório: o Vite usado depende de <code>node:util.styleText</code>, ausente em versões antigas.</p>
+<h3 id="variáveis-de-ambiente">Variáveis de ambiente</h3>
+<p>Ficam no <code>.env</code> da <strong>raiz do projeto no servidor</strong> (<code>/opt/happysite/.env</code>), fora do Git.</p>
+<table><thead><tr>
+<th>Variável</th>
+<th>Papel</th>
+<th>Se faltar</th>
+</tr></thead><tbody>
+<tr>
+<td><code>DB_PASSWORD</code></td>
+<td>Senha do Postgres</td>
+<td>🔴 Nada funciona</td>
+</tr>
+<tr>
+<td><code>DATABASE_URL</code></td>
+<td>Montada pelo compose</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>DB_SSL</code></td>
+<td><code>false</code> no VPS (Postgres local)</td>
+<td>Erro de conexão</td>
+</tr>
+<tr>
+<td><code>PORT</code></td>
+<td><code>3001</code></td>
+<td>Usa 3001</td>
+</tr>
+<tr>
+<td><code>VAPID_PUBLIC_KEY</code> / <code>VAPID_PRIVATE_KEY</code></td>
+<td>Notificações push</td>
+<td>Push desligado, resto normal</td>
+</tr>
+<tr>
+<td><code>VAPID_SUBJECT</code></td>
+<td>E-mail de contato VAPID</td>
+<td>Usa padrão</td>
+</tr>
+<tr>
+<td><code>GOOGLE_SERVICE_ACCOUNT_JSON</code></td>
+<td>Backup no Drive</td>
+<td>Backup só local</td>
+</tr>
+</tbody></table>
+<p>Módulos opcionais <strong>degradam em silêncio</strong> em vez de quebrar: sem VAPID, o push apenas não liga.</p>
+<hr>
+<h2 id="4-deploy-automático">4. Deploy automático</h2>
+<p><code>.github/workflows/deploy.yml</code> — dispara a cada push na <code>main</code> (ou manualmente em <em>Actions → Run workflow</em>). Leva de <strong>5 a 10 minutos</strong>.</p>
+<pre><code>push na main
+   ↓
+GitHub Actions (appleboy/ssh-action) conecta por SSH
+   ↓
+cd /opt/happysite
+git fetch origin main &amp;&amp; git reset --hard origin/main
+   ↓
+sudo docker image prune -f          ← libera RAM/disco ANTES do build
+   ↓
+sudo docker compose up -d --build   ← rebuild e restart
+   ↓
+sleep 15 &amp;&amp; docker compose ps       ← confirma que subiu</code></pre>
+<p><strong>Secrets necessários:</strong> <code>DEPLOY_KEY</code> (chave SSH privada), <code>DEPLOY_HOST</code>, <code>DEPLOY_USER</code>.</p>
+<h3 id="detalhes-que-importam">Detalhes que importam</h3>
+<ul>
+<li><strong><code>git reset --hard</code>, não <code>git pull</code>.</strong> Pull falha silenciosamente se houver qualquer alteração</li>
+</ul>
+<p>local no servidor. O reset garante paridade exata com o GitHub. Arquivos no <code>.gitignore</code> (como o <code>.env</code>) <strong>não são afetados</strong>.</p>
+<ul>
+<li><strong><code>image prune</code> antes do build.</strong> Com 2 GB de RAM, build + containers já travaram o servidor</li>
+</ul>
+<p>por falta de memória.</p>
+<ul>
+<li><strong><code>concurrency: deploy-producao</code></strong> impede dois deploys simultâneos corrompendo o build.</li>
+<li><strong><code>command_timeout: 20m</code></strong> — o build leva de 3 a 6 minutos nesta instância.</li>
+</ul>
+<h3 id="success-no-github-aplicação-no-ar">⚠️ "Success" no GitHub ≠ aplicação no ar</h3>
+<p>O workflow pode concluir com sucesso e a aplicação estar quebrada (erro de runtime, container em loop de restart). <strong>Sempre confirme de verdade:</strong></p>
+<pre><code># 1. O workflow terminou?
+Invoke-RestMethod 'https://api.github.com/repos/happySiteCerqueira/happysite/actions/runs?per_page=1'
+
+# 2. O commit certo está no servidor e os containers de pé?
+ssh -i ~/.ssh/deploy_happysite ubuntu@3.228.110.68 `
+  "cd /opt/happysite &amp;&amp; git rev-parse --short HEAD &amp;&amp; sudo docker compose ps"
+
+# 3. O site responde?
+Invoke-WebRequest 'https://app.cerqueiraengenharia.com.br' -UseBasicParsing</code></pre>
+<h3 id="verificação-pré-push">Verificação pré-push</h3>
+<p>O build acontece no servidor. <strong>Um erro de sintaxe JSX derruba o deploy</strong> — já aconteceu. Se houver Node na máquina local, rode <code>npm --prefix client run build</code> antes do push. Sem Node, a checagem mínima é contar delimitadores:</p>
+<pre><code>$t = Get-Content 'client\src\pages\ObraDetalhe.jsx' -Raw
+foreach ($p in @(@('{','}'),@('(',')'),@('[',']'))) {
+  $a=([regex]::Matches($t,[regex]::Escape($p[0]))).Count
+  $b=([regex]::Matches($t,[regex]::Escape($p[1]))).Count
+  "$($p[0]) $a vs $($p[1]) $b -&gt; $(if($a -eq $b){'OK'}else{'DESBALANCEADO'})"
+}</code></pre>
+<p>Isso detecta desbalanceamento, mas <strong>não</strong> erros semânticos. É um paliativo, não uma garantia.</p>
+<h3 id="comandos-úteis-no-servidor">Comandos úteis no servidor</h3>
+<pre><code>cd /opt/happysite
+sudo docker compose ps                    # estado dos containers
+sudo docker compose logs -f app           # logs em tempo real
+sudo docker compose logs --tail 100 app   # últimas 100 linhas
+sudo docker compose restart app           # reinicia só a aplicação
+sudo docker compose exec db psql -U happysite -d happysite   # console SQL</code></pre>
+<hr>
+<h2 id="5-mapa-de-pastas">5. Mapa de pastas</h2>
+<pre><code>HappySite/
+├── .github/workflows/deploy.yml   Deploy automático
+├── client/                        Frontend React
+│   ├── public/                    Ícones, logo, manifest
+│   └── src/
+│       ├── main.jsx               Entrada; registra SW e checa atualização
+│       ├── App.jsx                Rotas e guarda de autenticação
+│       ├── index.css              CSS global (.btn-*, .modal-*, .card)
+│       ├── sw-push.js             Service Worker (push + cache PWA)
+│       ├── api/api.js             Instância axios + interceptors
+│       ├── context/
+│       │   ├── AuthContext.jsx       Usuário logado, login/logout, temPermissao()
+│       │   └── ApuracaoContext.jsx   Mês de apuração global
+│       ├── components/
+│       │   ├── Layout.jsx            Menu lateral, topo mobile, seletor de mês
+│       │   ├── Modal.jsx           ★ Janela padrão (usar sempre esta)
+│       │   ├── PredioDesenho.jsx     Desenho interativo do prédio
+│       │   ├── ObraWizard.jsx        Assistente de criação de obra
+│       │   ├── AssinaturaCanvas.jsx  Assinatura a dedo/mouse (EPI)
+│       │   └── ErrorBoundary.jsx     Captura erros de render
+│       ├── pages/                 Uma tela por módulo
+│       └── utils/
+│           ├── celulasPredio.js   ★ Gera as chaves das células
+│           ├── medicaoExport.js      Exportação da medição
+│           ├── termoEpiPdf.js        PDF do termo de EPI
+│           └── notificacoes.js       Inscrição push no navegador
+├── server/                        Backend Express
+│   ├── server.js                  Bootstrap, rotas, estáticos, SPA fallback
+│   ├── db/
+│   │   ├── database.js          ★ Conexão, adaptador SQL e TODAS as migrações
+│   │   └── seed.js                Dados iniciais
+│   ├── routes/                    Um arquivo por recurso da API
+│   └── utils/
+│       ├── auth.js                JWT: gerarToken, autenticar, permitir
+│       ├── permissaoModulo.js     Permissão por módulo (consulta o banco)
+│       ├── recalculoAutomatico.js ★ Recálculo de valores lançados
+│       ├── lembretes.js         ★ Agendador de notificações
+│       ├── push.js                Envio Web Push
+│       ├── aso.js                 Regras de vencimento do ASO
+│       ├── celulasLabel.js        Chave da célula → rótulo legível (backend)
+│       ├── backupAutomatico.js    Backup diário
+│       ├── googleDrive.js         Upload para o Drive
+│       ├── auditoria.js           Registro de ações
+│       └── verificarRotas.js    ★ Trava: rota não registrada = não sobe
+├── data/comprovantes/             Uploads (volume app_data)
+├── backups/                       Backups JSON (volume app_backups)
+├── docker-compose.yml             Orquestração
+├── Dockerfile                     Build da aplicação
+├── Caddyfile                      Proxy e HTTPS
+├── DEPLOY_VPS.md                  Passo a passo da infraestrutura
+└── ARQUITETURA_SISTEMA.md         Este documento</code></pre>
+<p>★ = arquivos centrais, leia primeiro ao assumir o projeto.</p>
+<blockquote>
+<p><strong>Nota:</strong> <code>tools-cor-notebook/</code> e <code>ALTERAR DE COMPUTADOR/</code> são utilitários avulsos, sem relação com a aplicação.</p>
+</blockquote>
+<h3 id="os-maiores-arquivos-atenção-redobrada">Os maiores arquivos (atenção redobrada)</h3>
+<table><thead><tr>
+<th>Arquivo</th>
+<th>Linhas</th>
+<th>Observação</th>
+</tr></thead><tbody>
+<tr>
+<td><code>client/src/pages/ObraDetalhe.jsx</code></td>
+<td>~2000</td>
+<td>Tela mais complexa; candidata a divisão</td>
+</tr>
+<tr>
+<td><code>server/routes/obras.js</code></td>
+<td>~1300</td>
+<td>Serviços, células, grupos, quantidades</td>
+</tr>
+<tr>
+<td><code>client/src/pages/Financeiro.jsx</code></td>
+<td>~980</td>
+<td>Quatro abas numa tela só</td>
+</tr>
+<tr>
+<td><code>client/src/pages/Agenda.jsx</code></td>
+<td>~870</td>
+<td>Calendário + destinatários + lembretes</td>
+</tr>
+<tr>
+<td><code>server/db/database.js</code></td>
+<td>~800</td>
+<td>Esquema e histórico de migrações</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="6-backend-anatomia">6. Backend: anatomia</h2>
+<h3 id="sequência-de-inicialização-serverserverjs">Sequência de inicialização (<code>server/server.js</code>)</h3>
+<pre><code>1. require('./db/database')      → dispara as migrações (promessa db.pronto)
+2. verificarRotasRegistradas()   → se faltar app.use, process.exit(1)
+3. Middlewares: cors, express.json (limite 10 MB)
+4. GET /ping                     → keep-alive (sem auth, sem banco)
+5. /comprovantes                 → arquivos enviados (estáticos)
+6. app.use('/api/...')           → 17 routers
+7. Estáticos do client/dist + fallback do SPA
+8. await db.pronto → app.listen(3001)
+9. iniciarBackupAutomatico() e iniciarAgendadorLembretes()</code></pre>
+<blockquote>
+<p>O passo 8 é importante: o servidor <strong>não aceita requisições antes das migrações terminarem</strong>. Se a migração falhar, o processo sai com código 1 e o container reinicia.</p>
+</blockquote>
+<h3 id="a-trava-de-rotas-verificarrotasjs">A trava de rotas (<code>verificarRotas.js</code>)</h3>
+<p>Já aconteceu de um módulo inteiro (EPI) existir em <code>routes/</code> e <strong>sumir do site</strong> porque faltava o <code>app.use()</code> correspondente. Agora, se houver um arquivo em <code>server/routes/</code> sem registro no <code>server.js</code>, o servidor <strong>recusa subir</strong>. Falha de propósito, para não publicar versão quebrada.</p>
+<p><strong>Consequência prática:</strong> ao criar <code>server/routes/novo.js</code>, registre-o obrigatoriamente:</p>
+<pre><code>app.use('/api/novo', require('./routes/novo'));</code></pre>
+<h3 id="cache-e-o-fallback-do-spa">Cache e o fallback do SPA</h3>
+<p>Dois problemas reais resolvidos aqui:</p>
+<p><strong>1. App preso em versão antiga.</strong> Arquivos com hash no nome (<code>index-AbC123.js</code>) podem ser cacheados indefinidamente. Mas <code>index.html</code>, <code>sw-push.js</code>, <code>sw.js</code>, <code>manifest.webmanifest</code> e <code>registerSW.js</code> recebem <code>Cache-Control: no-cache, no-store, must-revalidate</code> — sem isso, o app instalado no celular nunca percebia que havia versão nova.</p>
+<p><strong>2. Tela branca após deploy.</strong> O fallback do SPA só devolve <code>index.html</code> para rotas de <em>navegação</em> (sem extensão no último segmento). Pedidos a arquivos estáticos inexistentes recebem 404 de verdade. Antes, um bundle antigo recebia o HTML com status 200, o navegador tentava executar HTML como JavaScript, falhava em silêncio e o React nunca montava.</p>
+<pre><code>app.get(/^(?!\/api).*/, (req, res, next) =&gt; {
+  const ultimoSegmento = req.path.split('/').pop() || '';
+  if (ultimoSegmento.includes('.')) return next();  // 404 real
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(clientBuildPath, 'index.html'));
+});</code></pre>
+<h3 id="rotas-da-api">Rotas da API</h3>
+<table><thead><tr>
+<th>Rota</th>
+<th>Arquivo</th>
+<th>Responsabilidade</th>
+</tr></thead><tbody>
+<tr>
+<td><code>/api/auth</code></td>
+<td><code>auth.js</code></td>
+<td>Login, troca de senha</td>
+</tr>
+<tr>
+<td><code>/api/usuarios</code></td>
+<td><code>usuarios.js</code></td>
+<td>CRUD de usuários do sistema</td>
+</tr>
+<tr>
+<td><code>/api/colaboradores</code></td>
+<td><code>colaboradores.js</code></td>
+<td>Cadastro de pessoas (CLT/PJ)</td>
+</tr>
+<tr>
+<td><code>/api/obras</code></td>
+<td><code>obras.js</code></td>
+<td>Obras, serviços, células, grupos, quantidades</td>
+</tr>
+<tr>
+<td><code>/api/medicoes</code></td>
+<td><code>medicoes.js</code></td>
+<td>Consolidação mensal, fechamento, comprovantes</td>
+</tr>
+<tr>
+<td><code>/api/diarias</code></td>
+<td><code>diarias.js</code></td>
+<td>Diárias e rateio entre obras</td>
+</tr>
+<tr>
+<td><code>/api/pagamentos-antecipados</code></td>
+<td><code>pagamentos-antecipados.js</code></td>
+<td>Vale, FGTS, adiantamento</td>
+</tr>
+<tr>
+<td><code>/api/prestadores</code></td>
+<td><code>prestadores.js</code></td>
+<td>Visão de prestadores e histórico</td>
+</tr>
+<tr>
+<td><code>/api/epi</code></td>
+<td><code>epi.js</code></td>
+<td>Estoque, retiradas, assinatura</td>
+</tr>
+<tr>
+<td><code>/api/aso</code></td>
+<td><code>aso.js</code></td>
+<td>Vencimentos e histórico de ASO</td>
+</tr>
+<tr>
+<td><code>/api/financeiro</code></td>
+<td><code>financeiro.js</code></td>
+<td>Receitas, importação de planilha</td>
+</tr>
+<tr>
+<td><code>/api/agenda</code></td>
+<td><code>agenda.js</code></td>
+<td>Compromissos, destinatários, lembretes</td>
+</tr>
+<tr>
+<td><code>/api/push</code></td>
+<td><code>push.js</code></td>
+<td>Inscrição de dispositivos</td>
+</tr>
+<tr>
+<td><code>/api/painel</code></td>
+<td><code>painel.js</code></td>
+<td>Indicadores da tela inicial</td>
+</tr>
+<tr>
+<td><code>/api/permissoes</code></td>
+<td><code>permissoes.js</code></td>
+<td>Matriz perfil × módulo</td>
+</tr>
+<tr>
+<td><code>/api/relatorios</code></td>
+<td><code>relatorios.js</code></td>
+<td>Relatórios diversos</td>
+</tr>
+<tr>
+<td><code>/api/backup</code></td>
+<td><code>backup.js</code></td>
+<td>Exportar/importar dados</td>
+</tr>
+</tbody></table>
+<h3 id="padrão-de-um-arquivo-de-rota">Padrão de um arquivo de rota</h3>
+<pre><code>const express = require('express');
+const db = require('../db/database');
+const { autenticar, permitir } = require('../utils/auth');
+const { permissaoModulo } = require('../utils/permissaoModulo');
+const { registrar } = require('../utils/auditoria');
+
+const router = express.Router();
+
+router.use(autenticar);                    // exige token
+router.use(permissaoModulo('financeiro')); // exige permissão do módulo
+
+router.get('/receitas', async (req, res) =&gt; {
+  const linhas = await db.all('SELECT * FROM financeiro_receitas WHERE id = ?', id);
+  res.json(linhas);
+});
+
+module.exports = router;</code></pre>
+<p>Observe: placeholders <code>?</code> (traduzidos pelo adaptador) e parâmetros <strong>soltos</strong>, não em array.</p>
+<h3 id="transações">Transações</h3>
+<p>Use quando várias gravações precisam ser atômicas:</p>
+<pre><code>await db.transaction(async (trx) =&gt; {
+  await trx.run('INSERT INTO ...');
+  await trx.run('UPDATE ...');
+  // erro aqui = ROLLBACK automático
+});</code></pre>
+<hr>
+<h2 id="7-modelo-de-dados">7. Modelo de dados</h2>
+<p>PostgreSQL 16, <strong>32 tabelas</strong>. Todo o esquema está em <code>server/db/database.js</code>.</p>
+<h3 id="diagrama-de-relacionamentos">Diagrama de relacionamentos</h3>
+<pre><code>usuarios ──&lt; auditoria
+   │  └──&lt; push_assinaturas
+   │
+colaboradores ──┬──&lt; obra_servico_pessoas &gt;── obra_servicos
+   │            ├──&lt; obra_servico_grupo_membros &gt;── obra_servico_grupos
+   │            ├──&lt; colaborador_precos &gt;── obra_servicos
+   │            ├──&lt; obra_servico_celulas          ★ o coração do sistema
+   │            ├──&lt; diarias ──&lt; diaria_obras
+   │            ├──&lt; pagamentos_antecipados
+   │            ├──&lt; medicoes
+   │            ├──&lt; epi_retiradas ──&lt; epi_retirada_itens
+   │            └──&lt; aso_historico
+   │
+obras ──┬──&lt; obra_servicos ──┬──&lt; obra_servico_celulas
+        │                    ├──&lt; obra_servico_quantidades
+        │                    └──&lt; obra_servico_grupos
+        ├──&lt; obra_apto_rotulos
+        ├──&lt; obra_andar_rotulos
+        └──&lt; agenda_eventos (SET NULL)
+
+agenda_eventos ──┬──&lt; agenda_evento_usuarios
+                 ├──&lt; agenda_evento_perfis
+                 └──&lt; agenda_lembretes
+
+epi_itens ──&lt; epi_movimentos
+perfil_permissoes · financeiro_receitas · notificacoes_enviadas · migracoes_aplicadas</code></pre>
+<h3 id="colaboradores-as-pessoas"><code>colaboradores</code> — as pessoas</h3>
+<table><thead><tr>
+<th>Coluna</th>
+<th>Observação</th>
+</tr></thead><tbody>
+<tr>
+<td><code>tipo</code></td>
+<td><code>'CPF'</code> (CLT) ou <code>'PJ'</code> (empreiteiro) — <strong>distinção usada em várias regras</strong></td>
+</tr>
+<tr>
+<td><code>nome</code>, <code>documento</code>, <code>telefone</code>, <code>email</code>, <code>endereco</code></td>
+<td>Dados básicos</td>
+</tr>
+<tr>
+<td><code>funcao</code></td>
+<td>Cargo; em PJ usa-se <code>contato_responsavel</code></td>
+</tr>
+<tr>
+<td><code>banco</code>, <code>agencia</code>, <code>conta</code>, <code>pix</code></td>
+<td>Dados de pagamento</td>
+</tr>
+<tr>
+<td><code>cor</code></td>
+<td>Cor da pessoa no desenho do prédio</td>
+</tr>
+<tr>
+<td><code>valor_diaria</code></td>
+<td>Base do cálculo de diárias</td>
+</tr>
+<tr>
+<td><code>ativo</code></td>
+<td><code>1</code>/<code>0</code></td>
+</tr>
+<tr>
+<td><code>data_admissao</code></td>
+<td>Base do período de experiência</td>
+</tr>
+<tr>
+<td><code>experiencia_status</code></td>
+<td><code>EM_EXPERIENCIA</code> / <code>EFETIVADO</code> / <code>DISPENSADO</code></td>
+</tr>
+<tr>
+<td><code>confirmado_45_dias</code></td>
+<td>Marco intermediário</td>
+</tr>
+<tr>
+<td><code>data_primeiro_aso</code></td>
+<td>Base do vencimento de ASO</td>
+</tr>
+<tr>
+<td><code>data_desligamento</code></td>
+<td>Carência de 35 dias nos lançamentos</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>Regra recorrente:</strong> ASO e período de experiência valem <strong>apenas para <code>tipo = 'CPF'</code></strong>. PJ não tem exame ocupacional nem experiência.</p>
+</blockquote>
+<h3 id="obras-a-estrutura-do-prédio"><code>obras</code> — a estrutura do prédio</h3>
+<p>A geometria fica em colunas <strong>JSON serializado como TEXT</strong> (herança do SQLite):</p>
+<table><thead><tr>
+<th>Coluna</th>
+<th>Formato</th>
+</tr></thead><tbody>
+<tr>
+<td><code>blocos_pavimentos</code></td>
+<td><code>[{ qtd_andares, apto_por_andar }, ...]</code></td>
+</tr>
+<tr>
+<td><code>itens_terreo</code></td>
+<td><code>["Portaria", "Salão de festas", ...]</code></td>
+</tr>
+<tr>
+<td><code>itens_cobertura</code></td>
+<td><code>["Casa de máquinas", ...]</code></td>
+</tr>
+<tr>
+<td><code>terreo_tipo</code></td>
+<td><code>'estacionamento'</code> ou <code>'apartamento'</code></td>
+</tr>
+<tr>
+<td><code>tem_transicao</code>, <code>tem_atico</code>, <code>tem_caixa_dagua</code></td>
+<td>Flags <code>1</code>/<code>0</code></td>
+</tr>
+<tr>
+<td><code>fundacao_etapas</code></td>
+<td>Número de etapas</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>⚠️ São strings JSON, <strong>não</strong> colunas <code>jsonb</code>. Exigem <code>JSON.parse</code>/<code>stringify</code>. Migrar para <code>jsonb</code> seria uma melhoria real, mas exige alterar todas as leituras.</p>
+</blockquote>
+<h3 id="obraservicos-serviço-contratado-numa-obra"><code>obra_servicos</code> — serviço contratado numa obra</h3>
+<table><thead><tr>
+<th>Coluna</th>
+<th>Valores</th>
+</tr></thead><tbody>
+<tr>
+<td><code>modo_medicao</code></td>
+<td><code>'apartamento'</code> \</td>
+<td><code>'pavimento'</code> \</td>
+<td><code>'frente_fundo'</code> — define quais células existem</td>
+</tr>
+<tr>
+<td><code>modo_execucao</code></td>
+<td><code>'individual'</code> \</td>
+<td><code>'grupo'</code></td>
+</tr>
+<tr>
+<td><code>valor_unitario</code></td>
+<td>Preço padrão por unidade</td>
+</tr>
+<tr>
+<td><code>unidade</code></td>
+<td><code>'m²'</code>, <code>'un'</code>...</td>
+</tr>
+<tr>
+<td><code>ordem</code></td>
+<td>Ordem de exibição</td>
+</tr>
+</tbody></table>
+<h3 id="obraservicocelulas-o-coração-do-sistema"><code>obra_servico_celulas</code> — ★ o coração do sistema</h3>
+<p>Cada linha = <strong>uma pessoa executou um serviço numa célula, num mês</strong>.</p>
+<pre><code>id, obra_servico_id, celula_key, colaborador_id, grupo_id,
+mes_ciclo,        -- 'YYYY-MM'
+quantidade,       -- parte DESTA pessoa (já rateada)
+valor,            -- parte DESTA pessoa (já rateada)
+criado_por, criado_em
+UNIQUE(obra_servico_id, celula_key, mes_ciclo, colaborador_id)</code></pre>
+<p><strong>Regra de ouro do rateio:</strong> se uma <code>(celula_key, mes_ciclo)</code> tem <strong>mais de uma linha</strong>, é execução compartilhada — vale tanto para grupo cadastrado quanto para equipe avulsa. Nesse caso <code>quantidade</code> e <code>valor</code> de cada linha são <strong>a fração daquela pessoa</strong>, não o total da célula. Para obter o total da célula, <strong>some as linhas</strong>.</p>
+<pre><code>const execucaoCompartilhada = !!linhas[0].grupo_id || linhas.length &gt; 1;
+const qtdGravadaTotal = linhas.reduce((acc, l) =&gt; acc + (Number(l.quantidade) || 0), 0);</code></pre>
+<h3 id="tabelas-de-apoio-das-obras">Tabelas de apoio das obras</h3>
+<table><thead><tr>
+<th>Tabela</th>
+<th>Papel</th>
+</tr></thead><tbody>
+<tr>
+<td><code>obra_servico_quantidades</code></td>
+<td>Metragem cadastrada por célula (a "verdade" do tamanho)</td>
+</tr>
+<tr>
+<td><code>obra_servico_pessoas</code></td>
+<td>Quem está alocado no serviço</td>
+</tr>
+<tr>
+<td><code>obra_servico_grupos</code></td>
+<td>Equipes fixas; <code>grupo_vinculo_id</code> sincroniza membros entre obras</td>
+</tr>
+<tr>
+<td><code>obra_servico_grupo_membros</code></td>
+<td>Integrantes do grupo</td>
+</tr>
+<tr>
+<td><code>colaborador_precos</code></td>
+<td>Preço unitário <strong>específico</strong> de uma pessoa (sobrepõe o do serviço)</td>
+</tr>
+<tr>
+<td><code>obra_apto_rotulos</code></td>
+<td>Renomear apartamento (ex: "302" → "Cobertura A")</td>
+</tr>
+<tr>
+<td><code>obra_andar_rotulos</code></td>
+<td>Renomear andar</td>
+</tr>
+</tbody></table>
+<h3 id="financeiro-e-pagamento">Financeiro e pagamento</h3>
+<table><thead><tr>
+<th>Tabela</th>
+<th>Chave única</th>
+<th>Conteúdo</th>
+</tr></thead><tbody>
+<tr>
+<td><code>diarias</code></td>
+<td><code>(colaborador_id, mes_ciclo)</code></td>
+<td>Quantidade, unitário usado, total</td>
+</tr>
+<tr>
+<td><code>diaria_obras</code></td>
+<td><code>(colaborador_id, mes_ciclo, obra_id)</code></td>
+<td>Rateio das diárias por obra</td>
+</tr>
+<tr>
+<td><code>pagamentos_antecipados</code></td>
+<td><code>(colaborador_id, mes_ciclo)</code></td>
+<td><code>vale</code>, <code>fgts</code>, <code>taxa</code>, <code>pagto</code>, <code>vale_extra</code>, <code>adiantamento</code>, <code>vale_ex_rh</code></td>
+</tr>
+<tr>
+<td><code>medicoes</code></td>
+<td><code>(colaborador_id, mes_ciclo, obra_id)</code></td>
+<td>Bruto, descontos, líquido, <code>status</code>, comprovante</td>
+</tr>
+<tr>
+<td><code>financeiro_receitas</code></td>
+<td>—</td>
+<td>Entradas: obra, serviço, bruto/líquido, <code>com_nota</code>, status</td>
+</tr>
+</tbody></table>
+<p><strong><code>medicoes.status</code>:</strong> <code>PENDENTE</code> → <code>APROVADO</code> → <code>PAGO</code>. <strong><code>PAGO</code> congela o histórico</strong> — nenhum recálculo automático toca meses pagos.</p>
+<p><strong><code>financeiro_receitas.servico</code></strong> aceita apenas: <code>Pintura</code>, <code>Produção</code>, <code>Diárias</code>, <code>Reforma N</code>, <code>Reforma S</code>. Regra do líquido: <code>com_nota = true</code> → desconta 11 % (<code>bruto × 0,89</code>); <code>com_nota = false</code> → líquido igual ao bruto.</p>
+<blockquote>
+<p>Valores de <code>pagamentos_antecipados</code> podem ser <strong>negativos</strong> (saldo a favor da pessoa). Por isso as consultas usam <code>&lt;&gt; 0</code> e não <code>&gt; 0</code> — filtrar só positivos fazia a pessoa sumir da Medição.</p>
+</blockquote>
+<h3 id="agenda-e-notificações">Agenda e notificações</h3>
+<table><thead><tr>
+<th>Tabela</th>
+<th>Papel</th>
+</tr></thead><tbody>
+<tr>
+<td><code>agenda_eventos</code></td>
+<td><code>data</code>, <code>data_fim</code> (período), <code>periodo</code> (<code>HORA</code>/<code>DIA_INTEIRO</code>/<code>MANHA</code>/<code>TARDE</code>/<code>NOITE</code>), <code>hora</code>, <code>obra_id</code>, <code>concluido</code></td>
+</tr>
+<tr>
+<td><code>agenda_evento_usuarios</code></td>
+<td>Destinatários individuais</td>
+</tr>
+<tr>
+<td><code>agenda_evento_perfis</code></td>
+<td>Destinatários por perfil (ex: todo o RH)</td>
+</tr>
+<tr>
+<td><code>agenda_lembretes</code></td>
+<td>"avise X minutos antes" (vários por evento)</td>
+</tr>
+<tr>
+<td><code>push_assinaturas</code></td>
+<td>Um registro <strong>por dispositivo</strong> (<code>endpoint</code> único)</td>
+</tr>
+<tr>
+<td><code>notificacoes_enviadas</code></td>
+<td>Chave única do envio — impede duplicidade</td>
+</tr>
+</tbody></table>
+<p>A chave de <code>notificacoes_enviadas</code> segue um padrão legível: <code>agenda:12:1440</code> (evento 12, 24 h antes), <code>aso:7:2026-09-20:lembrete</code>, <code>exp:3:45:2026-10-01:dia</code>.</p>
+<h3 id="epi-aso-e-controle">EPI, ASO e controle</h3>
+<table><thead><tr>
+<th>Tabela</th>
+<th>Papel</th>
+</tr></thead><tbody>
+<tr>
+<td><code>epi_itens</code></td>
+<td>Catálogo com <code>ca</code>, <code>quantidade</code>, <code>estoque_minimo</code></td>
+</tr>
+<tr>
+<td><code>epi_retiradas</code></td>
+<td>Retirada com <code>assinatura</code> (imagem base64)</td>
+</tr>
+<tr>
+<td><code>epi_retirada_itens</code></td>
+<td>Itens da retirada (descrição e CA <strong>copiados</strong> — histórico imutável)</td>
+</tr>
+<tr>
+<td><code>epi_movimentos</code></td>
+<td><code>ENTRADA</code>/<code>SAIDA</code> do estoque</td>
+</tr>
+<tr>
+<td><code>aso_historico</code></td>
+<td>Cada renovação de ASO</td>
+</tr>
+<tr>
+<td><code>perfil_permissoes</code></td>
+<td>Matriz <code>(perfil, modulo) → permitido</code></td>
+</tr>
+<tr>
+<td><code>auditoria</code></td>
+<td>Ação, entidade, detalhes, usuário</td>
+</tr>
+<tr>
+<td><code>migracoes_aplicadas</code></td>
+<td>Controle de migrações de execução única</td>
+</tr>
+</tbody></table>
+<h3 id="convenções-do-esquema">Convenções do esquema</h3>
+<ul>
+<li><strong><code>mes_ciclo</code></strong> é sempre <code>TEXT</code> no formato <code>'YYYY-MM'</code>. É a dimensão temporal de quase tudo.</li>
+<li><strong>Booleanos como <code>INTEGER</code></strong> (<code>1</code>/<code>0</code>) — herança do SQLite. Exceção: <code>financeiro_receitas.com_nota</code>,</li>
+</ul>
+<p>que é <code>BOOLEAN</code> de verdade.</p>
+<ul>
+<li><strong>Enums via <code>CHECK</code></strong>, não tipos <code>ENUM</code> do Postgres. Para aceitar um valor novo é preciso</li>
+</ul>
+<p>derrubar e recriar a constraint (há exemplos no <code>database.js</code>).</p>
+<ul>
+<li><strong><code>ON DELETE CASCADE</code></strong> nos filhos; <strong><code>SET NULL</code></strong> onde o histórico deve sobreviver</li>
+</ul>
+<p>(apagar uma obra não apaga o compromisso da agenda, apenas o desvincula).</p>
+<h3 id="como-escrever-uma-migração">Como escrever uma migração</h3>
+<pre><code>// 1) Coluna nova — sempre checando antes
+if (!(await colunaExiste('tabela', 'coluna_nova'))) {
+  await pool.query('ALTER TABLE tabela ADD COLUMN coluna_nova TEXT');
+  await pool.query('UPDATE tabela SET coluna_nova = ... WHERE ...');  // backfill
+}
+
+// 2) Tabela nova
+await pool.query(`CREATE TABLE IF NOT EXISTS nova (...);`);
+
+// 3) Operação única e irrepetível
+const ja = await db.get('SELECT 1 FROM migracoes_aplicadas WHERE nome = ?', 'minha_migracao');
+if (!ja) {
+  /* ... executa ... */
+  await db.run('INSERT INTO migracoes_aplicadas (nome) VALUES (?)', 'minha_migracao');
+}</code></pre>
+<blockquote>
+<p>🔴 <strong>Armadilha histórica:</strong> <code>constraintContem()</code> compara o <strong>nome</strong> da constraint, não o conteúdo. Usar isso como verificação derrubou o servidor num loop de <code>process.exit(1)</code>. Hoje a checagem correta usa <code>pg_get_constraintdef()</code>.</p>
+</blockquote>
+<hr>
+<h2 id="8-autenticação-e-permissões">8. Autenticação e permissões</h2>
+<h3 id="fluxo-de-login">Fluxo de login</h3>
+<pre><code>POST /api/auth/login { login, senha }
+   ↓  bcrypt.compare contra senha_hash
+   ↓  jwt.sign({ id, login, perfil, nome }, SECRET, { expiresIn: '12h' })
+   ↓
+Cliente guarda em localStorage: hs_token, hs_usuario
+   ↓
+Toda requisição: Authorization: Bearer &lt;token&gt;   (interceptor do axios)
+   ↓
+Resposta 401 → limpa storage e redireciona para /login</code></pre>
+<p>Senha inicial do admin: <code>admin</code> / <code>admin</code>, com <code>precisa_trocar_senha = 1</code> forçando a troca no primeiro acesso.</p>
+<h3 id="os-sete-perfis">Os sete perfis</h3>
+<table><thead><tr>
+<th>Perfil</th>
+<th>Alcance</th>
+</tr></thead><tbody>
+<tr>
+<td><code>ADM</code></td>
+<td><strong>Tudo.</strong> Ignora qualquer verificação de permissão</td>
+</tr>
+<tr>
+<td><code>RH</code></td>
+<td>Pessoas, EPI, ASO, diárias, prestadores, financeiro parcial</td>
+</tr>
+<tr>
+<td><code>FINANCEIRO</code></td>
+<td>Medição, financeiro completo, diárias, prestadores</td>
+</tr>
+<tr>
+<td><code>ENGENHEIRO</code></td>
+<td>Obras, EPI, agenda</td>
+</tr>
+<tr>
+<td><code>MESTRE</code></td>
+<td>Obras, EPI, agenda</td>
+</tr>
+<tr>
+<td><code>ENCARREGADO</code></td>
+<td><strong>Somente EPI</strong> — perfil restrito</td>
+</tr>
+<tr>
+<td><code>APONTADOR</code></td>
+<td>Obras, EPI, agenda</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>O perfil <code>ENCARREGADO</code> substituiu o antigo <code>SUPERVISOR</code> (houve migração dos dados). Seu tratamento é especial em três lugares: menu lateral oculto (<code>Layout.jsx</code>), tela inicial redirecionada para <code>/epi</code> (<code>App.jsx</code> → <code>TelaInicial</code>) e Configurações reduzida a "Minha conta".</p>
+</blockquote>
+<h3 id="duas-camadas-de-autorização">Duas camadas de autorização</h3>
+<p><strong>1. <code>permitir(...perfis)</code></strong> — verificação estática, codificada na rota:</p>
+<pre><code>router.get('/relatorio', permitir('ADM', 'FINANCEIRO'), handler);
+// ADM sempre passa, independentemente da lista</code></pre>
+<p><strong>2. <code>permissaoModulo('nome')</code></strong> — verificação dinâmica, consultando <code>perfil_permissoes</code>:</p>
+<pre><code>router.use(permissaoModulo('financeiro'));</code></pre>
+<p>A segunda é a preferida: permite ao ADM reconfigurar acessos pela tela <strong>Controle de Acesso</strong> sem alterar código.</p>
+<h3 id="módulos-e-sub-módulos">Módulos e sub-módulos</h3>
+<p>A tabela <code>perfil_permissoes</code> aceita granularidade com ponto:</p>
+<pre><code>obras · medicao · diarias · prestadores · epi · financeiro · aso · agenda
+financeiro.receita · financeiro.pagamentos · financeiro.gastos
+financeiro.relatorios · financeiro.resumo
+prestadores.cadastro · epi.cadastrar</code></pre>
+<p>Os padrões iniciais são semeados em <code>database.js</code>. Submódulos novos são inseridos com <code>ON CONFLICT DO NOTHING</code>, preservando configurações já ajustadas manualmente.</p>
+<h3 id="no-frontend">No frontend</h3>
+<p><code>AuthContext</code> expõe <code>temPermissao(...perfis)</code>, usada para esconder itens de menu e botões:</p>
+<pre><code>{temPermissao('FINANCEIRO', 'RH') &amp;&amp; &lt;NavLink to="/financeiro"&gt;💵 Financeiro&lt;/NavLink&gt;}</code></pre>
+<blockquote>
+<p>⚠️ <strong>Esconder no frontend não é segurança.</strong> É conveniência visual. A proteção real está sempre no backend. Toda rota nova precisa do seu próprio middleware.</p>
+</blockquote>
+<h3 id="pontos-fracos-conhecidos">Pontos fracos conhecidos</h3>
+<table><thead><tr>
+<th>Problema</th>
+<th>Onde</th>
+<th>Gravidade</th>
+</tr></thead><tbody>
+<tr>
+<td><code>JWT_SECRET</code> fixo no código-fonte</td>
+<td><code>server/utils/auth.js</code></td>
+<td>🔴 Alta — deveria vir do <code>.env</code></td>
+</tr>
+<tr>
+<td>Token em <code>localStorage</code></td>
+<td><code>api.js</code></td>
+<td>🟡 Vulnerável a XSS; cookie <code>httpOnly</code> seria melhor</td>
+</tr>
+<tr>
+<td>Sem refresh token</td>
+<td>—</td>
+<td>🟢 Baixa — expira em 12 h e exige novo login</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="9-frontend-anatomia">9. Frontend: anatomia</h2>
+<h3 id="inicialização">Inicialização</h3>
+<p><code>main.jsx</code> monta a árvore de providers e registra o Service Worker:</p>
+<pre><code>&lt;AuthProvider&gt;
+  &lt;ApuracaoProvider&gt;
+    &lt;BrowserRouter&gt;
+      &lt;ErrorBoundary&gt;
+        &lt;App /&gt;</code></pre>
+<h3 id="os-dois-contextos">Os dois contextos</h3>
+<p><strong><code>AuthContext</code></strong> — usuário logado, <code>login()</code>, <code>logout()</code>, <code>temPermissao()</code>. Lê <code>hs_token</code> e <code>hs_usuario</code> do <code>localStorage</code> ao iniciar.</p>
+<p><strong><code>ApuracaoContext</code></strong> — o <strong>mês de apuração global</strong> (<code>'YYYY-MM'</code>), exibido no topo e usado por Medição, Diárias, Pagamentos Antecipados, histórico de Prestadores e marcação de células.</p>
+<p>Detalhe deliberado: fica em <strong><code>sessionStorage</code></strong>, não <code>localStorage</code>. Ao reabrir o app ou dar F5, volta sempre ao mês vigente; durante a navegação, permanece onde o usuário deixou. Exceção: <em>Financeiro → Resumo</em> tem período próprio.</p>
+<h3 id="rotas">Rotas</h3>
+<table><thead><tr>
+<th>Caminho</th>
+<th>Tela</th>
+</tr></thead><tbody>
+<tr>
+<td><code>/login</code>, <code>/trocar-senha</code></td>
+<td>Públicas</td>
+</tr>
+<tr>
+<td><code>/</code></td>
+<td><code>TelaInicial</code> → Painel (ou <code>/epi</code> se ENCARREGADO)</td>
+</tr>
+<tr>
+<td><code>/obras</code>, <code>/obras/:id</code></td>
+<td>Lista e detalhe da obra</td>
+</tr>
+<tr>
+<td><code>/medicao</code>, <code>/diarias</code>, <code>/prestadores</code></td>
+<td>Operação</td>
+</tr>
+<tr>
+<td><code>/epi</code>, <code>/aso</code>, <code>/financeiro</code>, <code>/agenda</code></td>
+<td>Módulos</td>
+</tr>
+<tr>
+<td><code>/configuracoes</code></td>
+<td>Conta, usuários, permissões, backup</td>
+</tr>
+</tbody></table>
+<p>O componente <code>&lt;Privado&gt;</code> protege tudo: sem usuário → <code>/login</code>; com <code>precisa_trocar_senha</code> → <code>/trocar-senha</code>.</p>
+<h3 id="padrão-de-uma-página">Padrão de uma página</h3>
+<pre><code>export default function MinhaTela() {
+  const { usuario, temPermissao } = useAuth();
+  const { mes } = useApuracao();
+  const [dados, setDados] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() =&gt; { carregar(); }, [mes]);
+
+  async function carregar() {
+    setCarregando(true);
+    try {
+      const { data } = await api.get('/recurso', { params: { mes } });
+      setDados(data);
+    } finally { setCarregando(false); }
+  }
+  // ...
+}</code></pre>
+<p>Sem React Query, SWR ou cache global: cada tela busca o que precisa e guarda em estado local.</p>
+<h3 id="modais-o-componente-modaljsx">Modais — o componente <code>Modal.jsx</code></h3>
+<p>Antes, cada tela montava o seu próprio modal com <code>onClick={fechar}</code> no overlay. Um clique acidental fora da janela <strong>apagava todo o preenchimento</strong>. O componente padrão resolve isso:</p>
+<ul>
+<li><strong>não fecha ao clicar fora</strong> — a saída é sempre consciente;</li>
+<li>cabeçalho estilo Windows: <strong>💾</strong> salvar (verde) e <strong>✕</strong> fechar (vermelho);</li>
+<li>rodapé opcional com botões nomeados.</li>
+</ul>
+<pre><code>&lt;Modal titulo="Nova receita" onFechar={() =&gt; setAberto(false)} onSalvar={salvar} salvando={salvando}&gt;
+  &lt;input ... /&gt;
+&lt;/Modal&gt;</code></pre>
+<blockquote>
+<p><strong>Ao criar qualquer modal novo, use este componente.</strong> Já foi aplicado em Financeiro/Receita, Agenda e Prestadores; os demais tiveram o <code>onClick</code> do overlay removido.</p>
+</blockquote>
+<h3 id="pwa-e-notificações">PWA e notificações</h3>
+<ul>
+<li><code>sw-push.js</code> — Service Worker com <code>NavigationRoute</code> e recepção de push.</li>
+<li><code>main.jsx</code> — checagem periódica de nova versão (evita app preso em build antigo).</li>
+<li><code>utils/notificacoes.js</code> — pede permissão e envia a assinatura ao backend.</li>
+<li>Nome do app instalado: <strong>"Cerqueira Eng."</strong></li>
+</ul>
+<blockquote>
+<p><strong>iOS:</strong> notificações push só funcionam se o site estiver <strong>instalado na tela de início</strong> (iOS 16.4+). Limitação da Apple, não do sistema.</p>
+</blockquote>
+<h3 id="estilo">Estilo</h3>
+<p>CSS global em <code>index.css</code> com classes utilitárias (<code>.btn-success</code>, <code>.btn-secondary</code>, <code>.btn-sm</code>, <code>.card</code>, <code>.modal-overlay</code>, <code>.modal-content</code>, <code>.layout-*</code>), complementado por estilos inline para ajustes pontuais. Responsividade por media queries: em telas pequenas o menu lateral vira gaveta com barra superior.</p>
+<hr>
+<h2 id="10-domínios-funcionais">10. Domínios funcionais</h2>
+<h3 id="101-obras-e-o-sistema-de-células">10.1 Obras e o sistema de células</h3>
+<p><strong>Geração das chaves</strong> — <code>client/src/utils/celulasPredio.js</code> é a fonte da verdade no frontend; <code>server/utils/celulasLabel.js</code> faz o caminho inverso (chave → rótulo) no backend. <strong>Os dois precisam concordar.</strong></p>
+<p>A lista de células é gerada de cima para baixo, como no desenho:</p>
+<pre><code>Cobertura → Caixa d'água → Ático → andares (topo ao térreo) →
+Transição → Térreo → Laje Piso Térreo → Fundação → Itens do térreo</code></pre>
+<p><strong>Formato das chaves:</strong></p>
+<table><thead><tr>
+<th>Padrão</th>
+<th>Exemplo</th>
+<th>Significado</th>
+</tr></thead><tbody>
+<tr>
+<td><code>apto-b{bloco}-a{andar}-{pos}</code></td>
+<td><code>apto-b0-a3-2</code></td>
+<td>3º apto do 4º andar, bloco 1</td>
+</tr>
+<tr>
+<td><code>corredor-b{b}-a{a}</code></td>
+<td><code>corredor-b0-a3</code></td>
+<td>Corredor daquele andar</td>
+</tr>
+<tr>
+<td><code>elevador-b{b}-a{a}</code> / <code>escada-b{b}-a{a}</code></td>
+<td></td>
+<td>Idem</td>
+</tr>
+<tr>
+<td><code>pav-b{b}-a{a}</code></td>
+<td><code>pav-b0-a3</code></td>
+<td>Pavimento inteiro (modo <code>pavimento</code>)</td>
+</tr>
+<tr>
+<td><code>pav-b{b}-a{a}-frente</code> / <code>-fundo</code></td>
+<td></td>
+<td>Modo <code>frente_fundo</code></td>
+</tr>
+<tr>
+<td><code>terreo-{i}</code>, <code>terreo-grupo</code></td>
+<td></td>
+<td>Térreo</td>
+</tr>
+<tr>
+<td><code>fundacao-{n}</code></td>
+<td><code>fundacao-2</code></td>
+<td>Etapa de fundação</td>
+</tr>
+<tr>
+<td><code>cobertura-{item}</code>, <code>terreoitem-{item}</code></td>
+<td></td>
+<td>Itens livres</td>
+</tr>
+<tr>
+<td><code>caixa_dagua</code>, <code>atico</code>, <code>viga-transicao</code>, <code>pilar-{i}</code></td>
+<td></td>
+<td>Fixos</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>Índices de bloco e andar são <strong>0-based</strong>; a posição do apartamento também. Mas o número exibido do andar é 1-based e sequencial entre blocos.</p>
+</blockquote>
+<p><strong>Numeração automática dos apartamentos</strong> — o multiplicador se adapta à quantidade por andar: até 9 aptos/andar → ×10 (11, 12... 101, 102); 10 a 99 → ×100 (101... 1001). O térreo nunca recebe prefixo. Rótulos podem ser sobrescritos em <code>obra_apto_rotulos</code>.</p>
+<blockquote>
+<p>⚠️ <strong>Mudar a geometria da obra depois de ter marcações é perigoso.</strong> Remover um andar ou alterar a quantidade de apartamentos muda as chaves geradas, e marcações antigas podem ficar órfãs (apontando para chaves que não existem mais).</p>
+</blockquote>
+<h3 id="102-medição-como-o-valor-é-calculado">10.2 Medição — como o valor é calculado</h3>
+<p>Esta é a regra mais importante e a que mais gerou defeitos. <strong>Três fontes concorrem</strong>, nesta ordem de prioridade:</p>
+<pre><code>1. Total digitado manualmente  →  vence tudo (valor fechado combinado)
+2. Qtd × Unitário da pessoa    →  colaborador_precos (preço específico)
+3. Qtd × Unitário do serviço   →  obra_servicos.valor_unitario (padrão)</code></pre>
+<pre><code>function calcularTotalPessoa(id) {
+  const totalManual = campo(id, 'total');
+  if (totalManual !== '') return Number(totalManual) || 0;   // prioridade 1
+  return calcularPorQtdUnit(id);                              // prioridades 2 e 3
+}</code></pre>
+<blockquote>
+<p>🔴 <strong>Defeito histórico (corrigido):</strong> ao abrir uma medição para edição, o sistema pré-preenchia o campo <strong>Total</strong>. Como o total manual tem prioridade, alterar a quantidade mudava a metragem mas <strong>não o valor</strong>. Hoje a edição preenche <code>qtd</code> e — quando o unitário efetivo difere do padrão — também <code>unit</code>, deixando o total ser recalculado. Há ainda um aviso visual (borda laranja + botão ↻) quando um total fixado diverge de <code>qtd × unit</code>.</p>
+</blockquote>
+<p><strong>Rateio</strong> — numa execução compartilhada, o total da célula é dividido igualmente:</p>
+<pre><code>const valorTotal = qtdAtual * (servico.valor_unitario || 0);
+const valorPorMembro = valorTotal / linhas.length;
+const qtdPorMembro = qtdAtual / linhas.length;</code></pre>
+<p><strong>Consolidação mensal</strong> (<code>/api/medicoes/gerar</code>): agrupa por colaborador todas as células do mês, soma, e inclui também quem só teve diária ou pagamento antecipado. Com filtro de obra ativo, diárias e antecipados só entram se a pessoa também tiver lançamento naquelas obras.</p>
+<h3 id="103-recálculo-automático">10.3 Recálculo automático</h3>
+<p><code>server/utils/recalculoAutomatico.js</code>. Substituiu os antigos botões "Atualizar tudo" e "Recalcular valores", que dependiam de alguém lembrar de clicar.</p>
+<p><strong>Dispara quando:</strong> muda o preço unitário do serviço, o preço específico de um colaborador, a quantidade de uma célula ou o valor da diária de alguém.</p>
+<p><strong>Duas regras invioláveis:</strong></p>
+<ol>
+<li><strong>Meses <code>PAGO</code> nunca são alterados</strong> — basta um envolvido ter recebido para a célula inteira</li>
+</ol>
+<p>ficar protegida.</p>
+<ol>
+<li><strong>Execução compartilhada rateia</strong> quantidade e valor entre os executores.</li>
+</ol>
+<p>Roda em segundo plano (<code>recalcularServicoEmSegundoPlano</code>): não atrasa a resposta ao usuário e qualquer falha vai apenas para o log, sem derrubar a operação principal.</p>
+<h3 id="104-diárias-antecipados-e-desligamento">10.4 Diárias, antecipados e desligamento</h3>
+<ul>
+<li><strong>Diárias</strong> — <code>quantidade × valor_diaria</code> do cadastro, com rateio opcional por obra</li>
+</ul>
+<p>(<code>diaria_obras</code>).</p>
+<ul>
+<li><strong>Pagamentos antecipados</strong> — sete campos de desconto; aceitam <strong>valores negativos</strong></li>
+</ul>
+<p>(saldo a favor da pessoa).</p>
+<ul>
+<li><strong>Desligamento</strong> — <code>data_desligamento</code> registrada; a pessoa continua aparecendo nos</li>
+</ul>
+<p>lançamentos por <strong>35 dias de carência</strong>, depois só com o checkbox "incluir desligados". O histórico de medições sempre mostra o nome, mesmo de desligados.</p>
+<h3 id="105-epi">10.5 EPI</h3>
+<p>Estoque em <code>epi_itens</code> com <code>estoque_minimo</code>. A retirada grava a <strong>assinatura do colaborador</strong> (base64, capturada em canvas via <code>AssinaturaCanvas.jsx</code>) e gera termo em PDF (<code>utils/termoEpiPdf.js</code>).</p>
+<p>Detalhe relevante: <code>epi_retirada_itens</code> <strong>copia</strong> descrição e CA do item no momento da retirada. Se o catálogo mudar depois, o termo assinado continua refletindo o que foi efetivamente entregue — histórico imutável.</p>
+<h3 id="106-aso">10.6 ASO</h3>
+<p>Validade de <strong>1 ano "inclusivo"</strong>: o dia do exame conta como primeiro dia, então o vencimento é <code>data_base + 364 dias</code> (exame em 15/01/2025 vence em 14/01/2026).</p>
+<p>A data-base é a última renovação em <code>aso_historico</code> ou, se nunca houve, <code>data_primeiro_aso</code>. Alerta a partir de <strong>6 dias</strong> do vencimento. Quem nunca fez ASO aparece primeiro na lista. <strong>Apenas CLT (<code>tipo = 'CPF'</code>)</strong> — PJ é excluído.</p>
+<h3 id="107-financeiro-receitas">10.7 Financeiro — Receitas</h3>
+<p>Entradas com obra (texto livre, com autocomplete das obras cadastradas), serviço (lista fechada), valor bruto e o flag <code>com_nota</code>. Líquido: com nota desconta 11 %; sem nota, igual ao bruto. A importação por planilha Excel tolera acentos, maiúsculas e espaços ao casar o nome do serviço (<code>normalizarTexto</code>).</p>
+<p>Status: <code>EM_ANALISE</code> → <code>CONFIRMADO</code> → <code>PAGO</code>.</p>
+<h3 id="108-agenda">10.8 Agenda</h3>
+<p>Compromissos com período de vários dias (<code>data_fim</code>), horário flexível (<code>HORA</code>, <code>DIA_INTEIRO</code>, <code>MANHA</code>, <code>TARDE</code>, <code>NOITE</code>), destinatários por usuário e/ou por perfil, e lembretes push configuráveis. Quem criou sempre vê o próprio compromisso, mesmo sem se marcar. O ADM tem filtros acumulativos (meus / marcados / internos) e há um quadro com os próximos 20 compromissos.</p>
+<h3 id="109-backup">10.9 Backup</h3>
+<ul>
+<li><strong>Automático:</strong> diário, JSON com todas as tabelas listadas em <code>utils/tabelasBackup.js</code>,</li>
+</ul>
+<p>mantendo os últimos 7 (<code>auto-YYYY-MM-DD.json</code>). Envio opcional ao Google Drive via conta de serviço.</p>
+<ul>
+<li><strong>Manual:</strong> exportação e importação pela tela de Backup, com cópia de segurança gerada antes</li>
+</ul>
+<p>de qualquer importação.</p>
+<hr>
+<h2 id="11-processos-em-segundo-plano">11. Processos em segundo plano</h2>
+<p>Dois agendadores sobem junto com o servidor (<code>server.js</code>), ambos em memória — <strong>não há cron externo nem fila</strong>. Se o container reinicia, os temporizadores recomeçam.</p>
+<h3 id="backup-automático">Backup automático</h3>
+<p>Primeira execução 1 minuto após o boot, depois a cada 24 h. Gera o JSON, tenta copiar para a pasta local do Drive (ambiente de desenvolvimento), envia pela API do Drive (produção) e limpa backups com mais de 7 dias.</p>
+<h3 id="agendador-de-notificações-utilslembretesjs">Agendador de notificações (<code>utils/lembretes.js</code>)</h3>
+<p>Roda <strong>a cada minuto</strong>, com primeira verificação 20 s após o boot.</p>
+<blockquote>
+<p>🕐 <strong>Fuso horário — ponto crítico.</strong> O servidor está em us-east-1. A hora local da máquina <strong>não pode</strong> ser usada. Todo cálculo é feito explicitamente em <strong>UTC−3</strong> (Brasília):</p>
+<pre><code>const FUSO_BR = -3;
+function agoraBrasilia() {
+  return new Date(new Date().getTime() + FUSO_BR * 60 * 60 * 1000);
+}</code></pre>
+</blockquote>
+<p><strong>Dois tipos de aviso:</strong></p>
+<table><thead><tr>
+<th>Tipo</th>
+<th>Quando</th>
+<th>Para quem</th>
+</tr></thead><tbody>
+<tr>
+<td>Lembretes da Agenda</td>
+<td>Conforme <code>minutos_antes</code> de cada compromisso</td>
+<td>Destinatários do evento</td>
+</tr>
+<tr>
+<td>ASO e Experiência</td>
+<td>Sempre <strong>08:00</strong>, uma vez por dia</td>
+<td>Perfis de alerta do RH</td>
+</tr>
+</tbody></table>
+<p><strong>Regras de data dos avisos fixos:</strong></p>
+<ul>
+<li>Fim de semana <strong>recua para sexta</strong> (<code>recuarParaDiaUtil</code>): vence sábado ou domingo → avisa sexta.</li>
+<li>Há também um aviso prévio de 24 h, igualmente ajustado para dia útil.</li>
+<li>Experiência avisa em <strong>dois marcos</strong>: 45 e 90 dias (<code>data_admissao + dias − 1</code>).</li>
+<li>Se o servidor estiver fora do ar às 08:00, o aviso sai assim que voltar, no mesmo dia.</li>
+</ul>
+<p><strong>Anti-duplicidade:</strong> antes de enviar, grava uma chave única em <code>notificacoes_enviadas</code>. Se a chave já existe, não envia. Para compromissos sem hora exata, usa horário de referência: <code>DIA_INTEIRO</code>/<code>MANHA</code> = 8 h, <code>TARDE</code> = 13 h, <code>NOITE</code> = 18 h.</p>
+<p><strong>Limpeza automática:</strong> assinaturas push que retornam 404/410 (app desinstalado, permissão revogada) são removidas do banco.</p>
+<hr>
+<h2 id="12-convenções-e-armadilhas">12. Convenções e armadilhas</h2>
+<h3 id="idioma-do-código">Idioma do código</h3>
+<p><strong>Tudo em português:</strong> nomes de variáveis, funções, tabelas, colunas e comentários. <code>calcularTotalPessoa</code>, <code>obra_servico_celulas</code>, <code>recalcularServicoEmSegundoPlano</code>. Mantenha o padrão — misturar inglês deixa o código inconsistente.</p>
+<h3 id="comentários-explicam-o-porquê">Comentários explicam o <em>porquê</em></h3>
+<p>O código é fortemente comentado, e os comentários registram <strong>a razão histórica</strong> da decisão — geralmente um defeito real que aconteceu. Exemplo:</p>
+<pre><code>// "&lt;&gt; 0" (não apenas "&gt; 0"): um total negativo é um lançamento válido também — acontece
+// quando Vale Extra ou Vale Ex RH são lançados com valor negativo (saldo a favor da pessoa).</code></pre>
+<blockquote>
+<p><strong>Não remova esses comentários.</strong> Eles são a memória do projeto. Ao corrigir algo não trivial, escreva o porquê no mesmo estilo.</p>
+</blockquote>
+<h3 id="armadilhas-que-já-causaram-problemas-reais">⚠️ Armadilhas que já causaram problemas reais</h3>
+<p><strong>1. Encoding — nunca use <code>Set-Content</code> em arquivos com acentos</strong> Corrompe UTF-8 (vira <code>MediÃ§Ã£o</code>). Use sempre a ferramenta de edição do editor. Isto já afetou arquivos do projeto.</p>
+<p><strong>2. JSX — comentário logo após <code>&amp;&amp; (</code> quebra o build</strong></p>
+<pre><code>{/* ERRADO — derruba o build */}
+{condicao &amp;&amp; (
+  {/* comentário aqui */}
+  &lt;div&gt;...&lt;/div&gt;
+)}
+
+{/* CERTO */}
+{condicao &amp;&amp; (
+  // comentário assim
+  &lt;div&gt;...&lt;/div&gt;
+)}</code></pre>
+<p><strong>3. <code>constraintContem()</code> compara nome, não conteúdo</strong> Usar essa função como verificação derrubou o servidor num loop de <code>process.exit(1)</code>. Para checar o conteúdo de uma constraint, use <code>pg_get_constraintdef()</code>.</p>
+<p><strong>4. Deploy "success" não significa aplicação no ar</strong> Confirme sempre via API do GitHub, SSH e requisição ao site.</p>
+<p><strong>5. Rota nova sem <code>app.use()</code> impede o servidor de subir</strong> É proposital (ver <code>verificarRotas.js</code>), mas surpreende quem não conhece.</p>
+<p><strong>6. Alterar geometria de obra com marcações existentes gera células órfãs</strong></p>
+<h3 id="checklist-para-adicionar-um-módulo-novo">Checklist para adicionar um módulo novo</h3>
+<pre><code>Backend
+  □ server/routes/novo.js
+  □ app.use('/api/novo', require('./routes/novo'))   ← obrigatório
+  □ router.use(autenticar) e permissaoModulo('novo')
+  □ Tabelas em database.js (CREATE TABLE IF NOT EXISTS)
+  □ Adicionar 'novo' à lista MODULOS e ao PADRAO de permissões
+  □ Incluir tabelas novas em utils/tabelasBackup.js   ← fácil de esquecer
+
+Frontend
+  □ client/src/pages/Novo.jsx
+  □ &lt;Route path="novo" ...&gt; em App.jsx
+  □ NavLink com temPermissao(...) em Layout.jsx
+  □ Entrada em TITULOS_ROTA (título no mobile)
+  □ Usar &lt;Modal&gt; nos formulários
+
+Validação
+  □ npm --prefix client run build (se houver Node local)
+  □ Commit, push, confirmar deploy de verdade</code></pre>
+<h3 id="git-e-deploy">Git e deploy</h3>
+<pre><code>git add caminho/do/arquivo
+git commit -m "Descrição objetiva do que mudou"
+git push origin main
+# aguardar 5-10 min e CONFIRMAR o deploy</code></pre>
+<p>Mensagens em português, no imperativo, descrevendo o efeito. Evite acentos na mensagem se o terminal tiver problemas de encoding.</p>
+<hr>
+<h2 id="13-dívida-técnica-e-melhorias">13. Dívida técnica e melhorias</h2>
+<h3 id="dívida-conhecida">Dívida conhecida</h3>
+<table><thead><tr>
+<th>Item</th>
+<th>Onde</th>
+<th>Impacto</th>
+</tr></thead><tbody>
+<tr>
+<td><code>JWT_SECRET</code> fixo no código</td>
+<td><code>utils/auth.js</code></td>
+<td>🔴 Segurança — mover para <code>.env</code></td>
+</tr>
+<tr>
+<td>Zero testes automatizados</td>
+<td>Projeto todo</td>
+<td>🔴 Toda validação é manual</td>
+</tr>
+<tr>
+<td><code>ObraDetalhe.jsx</code> com ~2000 linhas</td>
+<td><code>pages/</code></td>
+<td>🟡 Difícil de manter</td>
+</tr>
+<tr>
+<td>JSON como TEXT</td>
+<td><code>obras.*</code></td>
+<td>🟡 Migrar para <code>jsonb</code></td>
+</tr>
+<tr>
+<td>Booleanos como INTEGER</td>
+<td>Várias tabelas</td>
+<td>🟢 Herança do SQLite</td>
+</tr>
+<tr>
+<td>Sem índices explícitos</td>
+<td>Banco</td>
+<td>🟡 Só os de PK/UNIQUE</td>
+</tr>
+<tr>
+<td>Agendadores em memória</td>
+<td><code>lembretes.js</code></td>
+<td>🟡 Sem redundância</td>
+</tr>
+<tr>
+<td>Vestígios do Render</td>
+<td><code>/ping</code>, <code>render.yaml</code></td>
+<td>🟢 Limpeza cosmética</td>
+</tr>
+<tr>
+<td>Token em <code>localStorage</code></td>
+<td><code>api.js</code></td>
+<td>🟡 Exposto a XSS</td>
+</tr>
+</tbody></table>
+<h3 id="pendência-funcional-em-aberto">Pendência funcional em aberto</h3>
+<p><strong>Financeiro → Receita: extrair relatório.</strong> Solicitado e ainda não implementado. Deve pedir intervalo de datas e tipo de entrada (ex.: pintura diária ou produção).</p>
+<p>Esboço de implementação:</p>
+<ul>
+<li>Backend: <code>GET /api/financeiro/receitas/relatorio?inicio=&amp;fim=&amp;servico=</code> em</li>
+</ul>
+<p><code>routes/financeiro.js</code>, reaproveitando os filtros existentes e o <code>xlsx</code> já em uso.</p>
+<ul>
+<li>Frontend: botão na aba Receita abrindo um <code>&lt;Modal&gt;</code> com os campos e disparando o download.</li>
+</ul>
+<h3 id="melhorias-sugeridas-por-prioridade">Melhorias sugeridas, por prioridade</h3>
+<p><strong>Alta</strong></p>
+<ol>
+<li>Mover <code>JWT_SECRET</code> para variável de ambiente.</li>
+<li>Testes automatizados do cálculo de medição e do rateio — é a área mais sensível e a que mais</li>
+</ol>
+<p>apresentou defeitos.</p>
+<ol>
+<li>Resolver o ambiente local (Node no PATH) para permitir <code>npm run build</code> antes do push.</li>
+</ol>
+<p><strong>Média</strong></p>
+<ol>
+<li>Dividir <code>ObraDetalhe.jsx</code> em componentes menores.</li>
+<li>Índices em <code>obra_servico_celulas (mes_ciclo, obra_servico_id)</code> e <code>medicoes (mes_ciclo)</code>.</li>
+<li>Padronizar todos os modais restantes com <code>&lt;Modal&gt;</code>.</li>
+<li>Log estruturado em vez de <code>console.log</code>.</li>
+</ol>
+<p><strong>Baixa</strong></p>
+<ol>
+<li>Migrar colunas JSON para <code>jsonb</code>.</li>
+<li>Remover vestígios do Render.</li>
+<li>Normalizar booleanos para <code>BOOLEAN</code>.</li>
+</ol>
+<h3 id="como-começar-a-mexer-no-projeto">Como começar a mexer no projeto</h3>
+<ol>
+<li>Leia este documento inteiro.</li>
+<li>Leia <code>server/db/database.js</code> — o esquema explica o domínio melhor que qualquer texto.</li>
+<li>Leia <code>client/src/utils/celulasPredio.js</code> — entender as células é entender o sistema.</li>
+<li>Leia <code>server/utils/recalculoAutomatico.js</code> — concentra as regras financeiras.</li>
+<li>Só então abra as telas.</li>
+</ol>
+<p>E, acima de tudo: <strong>confirme o deploy de verdade antes de dar qualquer tarefa por concluída.</strong></p>
+<hr>
+<p><em>Documento gerado a partir da leitura do código-fonte em novembro de 2026. Ao alterar a arquitetura, atualize este arquivo no mesmo commit.</em></p>
+
+</body>
+</html>
