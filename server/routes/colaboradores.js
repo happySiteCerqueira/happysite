@@ -206,7 +206,9 @@ router.put('/:id', permitir('RH', 'ADM'), async (req, res) => {
 
 
 router.delete('/:id', permitir('RH'), async (req, res) => {
-  await db.run('UPDATE colaboradores SET ativo = 0 WHERE id = ?', req.params.id);
+  // Guarda a data do desligamento: é ela que permite continuar oferecendo a pessoa nos
+  // lançamentos durante a janela de carência (produção do mês anterior ainda a medir/pagar).
+  await db.run('UPDATE colaboradores SET ativo = 0, data_desligamento = CURRENT_DATE WHERE id = ?', req.params.id);
   await registrar(req.usuario.id, 'DESATIVAR', 'colaboradores', req.params.id, {});
   res.json({ ok: true });
 });
@@ -215,7 +217,8 @@ router.delete('/:id', permitir('RH'), async (req, res) => {
 router.put('/:id/reativar', permitir('RH', 'ADM'), async (req, res) => {
   const c = await db.get('SELECT * FROM colaboradores WHERE id = ?', req.params.id);
   if (!c) return res.status(404).json({ erro: 'Não encontrado' });
-  await db.run('UPDATE colaboradores SET ativo = 1 WHERE id = ?', req.params.id);
+  // Limpa a data de desligamento: a pessoa voltou a ser ativa normalmente.
+  await db.run('UPDATE colaboradores SET ativo = 1, data_desligamento = NULL WHERE id = ?', req.params.id);
   await registrar(req.usuario.id, 'REATIVAR', 'colaboradores', req.params.id, {});
   res.json({ ok: true });
 });

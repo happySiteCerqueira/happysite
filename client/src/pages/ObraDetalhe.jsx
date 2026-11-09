@@ -35,6 +35,8 @@ export default function ObraDetalhe() {
   // Busca na tela "Configurar serviço": com muitos colaboradores, rolar a lista inteira é lento.
   const [buscaPessoa, setBuscaPessoa] = useState('');
   const [filtroFuncao, setFiltroFuncao] = useState('');
+  // Escape manual: traz TODOS os desligados, inclusive os antigos (fora da janela de carência).
+  const [incluirDesligados, setIncluirDesligados] = useState(false);
 
   const [mostrarConfigServico, setMostrarConfigServico] = useState(false);
 
@@ -246,6 +248,27 @@ export default function ObraDetalhe() {
     todasPessoas.filter(p => p.ativo !== 0).map(funcaoDe).filter(f => f.trim())
   )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
+  // Janela de carência após o desligamento. Motivo: o pagamento é feito no mês seguinte ao
+  // trabalho, então quem saiu dia 05 ainda tem produção a medir/receber na virada do mês.
+  // 35 dias cobre com folga esse ciclo (saiu dia 05 → continua disponível até dia ~09/10 do
+  // mês seguinte), evitando ter que reativar a pessoa só para fechar a medição.
+  const DIAS_CARENCIA_DESLIGADO = 35;
+
+  // Dias desde o desligamento. Retorna null quando a pessoa está ativa ou quando a data é
+  // desconhecida (desligamentos anteriores à criação da coluna data_desligamento).
+  function diasDesdeDesligamento(p) {
+    if (p.ativo !== 0 || !p.data_desligamento) return null;
+    const d = new Date(p.data_desligamento);
+    if (isNaN(d.getTime())) return null;
+    return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  // Pessoa desligada que ainda está dentro da janela — aparece automaticamente nas listas.
+  function dentroDaCarencia(p) {
+    const dias = diasDesdeDesligamento(p);
+    return dias !== null && dias <= DIAS_CARENCIA_DESLIGADO;
+  }
+
   // Aplica busca por nome (ignora acentos e maiúsculas) e filtro por cargo.
   // "jaVinculada" entra sempre, mesmo que não case com os filtros, para que uma pessoa já
   // marcada nunca fique escondida — senão seria impossível desmarcá-la.
@@ -254,12 +277,24 @@ export default function ObraDetalhe() {
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     return lista.filter(p => {
       if (jaVinculada(p)) return true;
-      if (p.ativo === 0) return false;
+      // Desligados: entram se estiverem na carência (automático) ou se o usuário pediu todos.
+      if (p.ativo === 0 && !incluirDesligados && !dentroDaCarencia(p)) return false;
       if (filtroFuncao && funcaoDe(p) !== filtroFuncao) return false;
       if (!termo) return true;
       const nome = (p.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       return nome.includes(termo);
     });
+  }
+
+  // Texto curto do status de desligamento, exibido ao lado do nome nas listas.
+  function rotuloDesligado(p) {
+    if (p.ativo !== 0) return null;
+    const dias = diasDesdeDesligamento(p);
+    if (dias === null) return '(desligado)';
+    if (dias <= DIAS_CARENCIA_DESLIGADO) {
+      return `(desligado há ${dias} dia${dias === 1 ? '' : 's'})`;
+    }
+    return '(desligado)';
   }
   const gruposPorId = {};
   grupos.forEach(g => { gruposPorId[g.id] = g; });
@@ -1360,6 +1395,17 @@ export default function ObraDetalhe() {
               )}
             </div>
 
+            {/* Quem saiu há até 35 dias já aparece sozinho (produção do mês anterior ainda a
+                medir). Esta caixa é o escape para casos fora dessa janela. */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={incluirDesligados}
+                onChange={e => setIncluirDesligados(e.target.checked)}
+              />
+              Incluir colaboradores desligados há mais de {DIAS_CARENCIA_DESLIGADO} dias
+            </label>
+
             {servicoAtivo.modo_execucao === 'grupo' && (
               <div style={{ marginBottom: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
                 <h5>Grupos de execução</h5>
@@ -1396,7 +1442,11 @@ export default function ObraDetalhe() {
                               <input type="checkbox" checked={jaEsta} onChange={() => alternarMembroGrupo(g.id, p.id, jaEsta)} />
                               <span style={{ width: 10, height: 10, background: p.cor, borderRadius: 2, display: 'inline-block' }}></span>
                               {p.nome}
-                              {p.ativo === 0 && <span style={{ color: '#9ca3af', fontSize: 11 }}>(desligado)</span>}
+                              {p.ativo === 0 && (
+                                <span style={{ color: dentroDaCarencia(p) ? '#b45309' : '#9ca3af', fontSize: 11 }}>
+                                  {rotuloDesligado(p)}
+                                </span>
+                              )}
                             </label>
                           );
                         })}
@@ -1421,7 +1471,11 @@ export default function ObraDetalhe() {
                       <span style={{ width: 12, height: 12, background: p.cor, borderRadius: 3, display: 'inline-block' }}></span>
                       {p.nome}
                       {funcaoDe(p) && <span style={{ color: '#9ca3af', fontSize: 11 }}>· {funcaoDe(p)}</span>}
-                      {p.ativo === 0 && <span style={{ color: '#9ca3af', fontSize: 11 }}>(desligado)</span>}
+                      {p.ativo === 0 && (
+                        <span style={{ color: dentroDaCarencia(p) ? '#b45309' : '#9ca3af', fontSize: 11 }}>
+                          {rotuloDesligado(p)}
+                        </span>
+                      )}
                     </label>
                   );
                 })}

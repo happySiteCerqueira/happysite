@@ -482,6 +482,15 @@ async function migrate() {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN data_admissao DATE');
   }
 
+  // Migração idempotente: data em que o colaborador foi desligado. Antes o sistema só guardava
+  // ativo=0, sem saber QUANDO saiu — e isso é necessário para continuar oferecendo a pessoa nos
+  // lançamentos por um período após o desligamento (produção do mês anterior que ainda será
+  // medida e paga). Registros desligados antes desta coluna existir ficam com NULL e são
+  // tratados como "desligamento antigo".
+  if (!(await colunaExiste('colaboradores', 'data_desligamento'))) {
+    await pool.query('ALTER TABLE colaboradores ADD COLUMN data_desligamento DATE');
+  }
+
   // Migração idempotente: data do primeiro ASO (Atestado de Saúde Ocupacional) em colaboradores
   if (!(await colunaExiste('colaboradores', 'data_primeiro_aso'))) {
     await pool.query('ALTER TABLE colaboradores ADD COLUMN data_primeiro_aso DATE');
