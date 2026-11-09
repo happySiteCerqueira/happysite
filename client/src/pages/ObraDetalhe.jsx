@@ -997,9 +997,9 @@ export default function ObraDetalhe() {
         </div>
       )}
 
+      {/* Sem onClick no overlay: clicar fora NÃO fecha, para não perder o preenchimento.
+          A saída é pelo ✕ (sem salvar) ou pelos botões de ação. */}
       {celulaSelecionada && (
-        {/* Sem onClick no overlay: clicar fora NÃO fecha, para não perder o preenchimento.
-            A saída é pelo ✕ (sem salvar) ou pelos botões de ação. */}
         <div className="modal-overlay">
           {/* Largura maior (e responsiva) para caber o nome da pessoa junto dos campos de
               quantidade/unitário/total sem truncar em uma letra só. */}
