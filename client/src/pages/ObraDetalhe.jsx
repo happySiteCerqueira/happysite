@@ -32,6 +32,9 @@ export default function ObraDetalhe() {
   // Guarda { celulaKey, mesOrigem } enquanto o usuário escolhe o mês de destino.
   const [movendoMes, setMovendoMes] = useState(null);
   const [mesDestino, setMesDestino] = useState('');
+  // Busca na tela "Configurar serviço": com muitos colaboradores, rolar a lista inteira é lento.
+  const [buscaPessoa, setBuscaPessoa] = useState('');
+  const [filtroFuncao, setFiltroFuncao] = useState('');
 
   const [mostrarConfigServico, setMostrarConfigServico] = useState(false);
 
@@ -231,6 +234,33 @@ export default function ObraDetalhe() {
   // mostrando o nome de quem executou. Nas listas de CONFIGURAÇÃO (liberar pessoas no serviço e
   // montar grupos) elas são filtradas com p.ativo !== 0 no próprio JSX — mantendo visível apenas
   // quem já estiver vinculado, para que ainda seja possível removê-la.
+
+  // Função/cargo da pessoa: empreiteiros (PJ) não têm "função", usam o contato responsável —
+  // mesmo padrão já adotado em Medição, Diárias e Prestadores.
+  function funcaoDe(p) {
+    return (p.tipo === 'PJ' ? p.contato_responsavel : p.funcao) || '';
+  }
+
+  // Opções do filtro de cargo, montadas a partir de quem está ativo (sem repetir, em ordem).
+  const funcoesDisponiveis = [...new Set(
+    todasPessoas.filter(p => p.ativo !== 0).map(funcaoDe).filter(f => f.trim())
+  )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  // Aplica busca por nome (ignora acentos e maiúsculas) e filtro por cargo.
+  // "jaVinculada" entra sempre, mesmo que não case com os filtros, para que uma pessoa já
+  // marcada nunca fique escondida — senão seria impossível desmarcá-la.
+  function filtrarPessoas(lista, jaVinculada) {
+    const termo = buscaPessoa.trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return lista.filter(p => {
+      if (jaVinculada(p)) return true;
+      if (p.ativo === 0) return false;
+      if (filtroFuncao && funcaoDe(p) !== filtroFuncao) return false;
+      if (!termo) return true;
+      const nome = (p.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return nome.includes(termo);
+    });
+  }
   const gruposPorId = {};
   grupos.forEach(g => { gruposPorId[g.id] = g; });
 
@@ -1302,6 +1332,34 @@ export default function ObraDetalhe() {
             </div>
 
 
+            {/* Busca por nome + filtro por cargo. Fica aqui em cima porque vale tanto para a
+                montagem dos grupos quanto para a lista de pessoas liberadas, logo abaixo. */}
+            <div style={{ display: 'flex', gap: 6, marginTop: 12, marginBottom: 4, flexWrap: 'wrap' }}>
+              <input
+                placeholder="🔍 Buscar pessoa por nome..."
+                value={buscaPessoa}
+                onChange={e => setBuscaPessoa(e.target.value)}
+                style={{ flex: 1, minWidth: 140, fontSize: 13 }}
+              />
+              <select
+                value={filtroFuncao}
+                onChange={e => setFiltroFuncao(e.target.value)}
+                style={{ fontSize: 13, maxWidth: 170 }}
+              >
+                <option value="">Todos os cargos</option>
+                {funcoesDisponiveis.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+              {(buscaPessoa || filtroFuncao) && (
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => { setBuscaPessoa(''); setFiltroFuncao(''); }}
+                  title="Limpar busca e filtro"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
             {servicoAtivo.modo_execucao === 'grupo' && (
               <div style={{ marginBottom: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
                 <h5>Grupos de execução</h5>
@@ -1328,9 +1386,9 @@ export default function ObraDetalhe() {
                       <button className="btn-danger btn-sm" onClick={() => excluirGrupo(g.id)}>Excluir</button>
                     </div>
                     <div style={{ maxHeight: 130, overflow: 'auto' }}>
-                      {/* Idem: só ativos, mantendo quem já é membro para poder ser retirado */}
-                      {todasPessoas
-                        .filter(p => p.ativo !== 0 || g.membros.some(m => m.id === p.id))
+                      {/* Idem: só ativos, mantendo quem já é membro para poder ser retirado.
+                          Respeita também a busca/filtro de cargo definidos acima. */}
+                      {filtrarPessoas(todasPessoas, p => g.membros.some(m => m.id === p.id))
                         .map(p => {
                           const jaEsta = g.membros.some(m => m.id === p.id);
                           return (
@@ -1350,11 +1408,11 @@ export default function ObraDetalhe() {
             )}
 
             <h5>Pessoas/Empresas liberadas para este serviço</h5>
+
             <div className="flex-col gap-2" style={{ maxHeight: 200, overflow: 'auto' }}>
               {/* Só pessoas ativas — mais quem já estiver liberado, mesmo que desligado depois,
                   para continuar sendo possível desmarcá-la. */}
-              {todasPessoas
-                .filter(p => p.ativo !== 0 || pessoasLiberadas.some(pl => pl.id === p.id))
+              {filtrarPessoas(todasPessoas, p => pessoasLiberadas.some(pl => pl.id === p.id))
                 .map(p => {
                   const liberado = pessoasLiberadas.some(pl => pl.id === p.id);
                   return (
@@ -1362,10 +1420,14 @@ export default function ObraDetalhe() {
                       <input type="checkbox" checked={liberado} onChange={() => liberado ? desvincularPessoa(p.id) : vincularPessoa(p.id)} />
                       <span style={{ width: 12, height: 12, background: p.cor, borderRadius: 3, display: 'inline-block' }}></span>
                       {p.nome}
+                      {funcaoDe(p) && <span style={{ color: '#9ca3af', fontSize: 11 }}>· {funcaoDe(p)}</span>}
                       {p.ativo === 0 && <span style={{ color: '#9ca3af', fontSize: 11 }}>(desligado)</span>}
                     </label>
                   );
                 })}
+              {filtrarPessoas(todasPessoas, p => pessoasLiberadas.some(pl => pl.id === p.id)).length === 0 && (
+                <div style={{ color: '#9ca3af', fontSize: 12 }}>Nenhuma pessoa encontrada com esses filtros.</div>
+              )}
             </div>
             <button className="btn-primary" style={{ marginTop: 12, width: '100%' }} onClick={() => setMostrarConfigServico(false)}>Fechar</button>
           </div>
