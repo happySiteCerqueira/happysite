@@ -418,6 +418,27 @@ export default function ObraDetalhe() {
   }
 
 
+  // Reabre a medição atual em modo de edição: liga o modo equipe e pré-preenche a seleção com
+  // as pessoas já lançadas e os valores de cada uma. Assim dá para corrigir só o que está errado
+  // (ex: a quantidade de uma pessoa) sem remover a marcação e refazer tudo do zero.
+  //
+  // Os valores entram como ajuste manual porque é exatamente o que está gravado hoje; quem
+  // quiser voltar à divisão automática é só apagar o campo.
+  function editarMarcacaoAtual(linhasMarcadas) {
+    if (!linhasMarcadas || linhasMarcadas.length === 0) return;
+    const ids = linhasMarcadas.map(l => l.colaborador_id);
+    const ajustes = {};
+    linhasMarcadas.forEach(l => {
+      ajustes[l.colaborador_id] = {
+        qtd: String(Number(l.quantidade) || 0),
+        total: String(Number(l.valor) || 0)
+      };
+    });
+    setModoEquipe(true);
+    setEquipeSelecionada(ids);
+    setAjustesValor(ajustes);
+  }
+
   // Abre o seletor de mês de destino para a célula informada.
   function abrirMoverMes(celulaKey, mesOrigem) {
     setMovendoMes({ celulaKey, mesOrigem });
@@ -978,7 +999,9 @@ export default function ObraDetalhe() {
 
       {celulaSelecionada && (
         <div className="modal-overlay" onClick={() => setCelulaSelecionada(null)}>
-          <div className="modal-content" style={{ width: 320 }} onClick={e => e.stopPropagation()}>
+          {/* Largura maior (e responsiva) para caber o nome da pessoa junto dos campos de
+              quantidade/unitário/total sem truncar em uma letra só. */}
+          <div className="modal-content" style={{ width: 'min(520px, 95vw)' }} onClick={e => e.stopPropagation()}>
             <h4>Quem executou: {rotulosAptos[celulaSelecionada] || celulaSelecionada}</h4>
 
             {/* Se a célula JÁ foi medida neste mês, mostra primeiro COMO foi medida (quem,
@@ -1016,9 +1039,15 @@ export default function ObraDetalhe() {
                       <strong>R$ {totalCelula.toFixed(2)}</strong>
                     </div>
                   )}
-                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 6 }}>
-                    Para alterar, escolha abaixo novamente — a marcação atual será substituída.
-                  </div>
+                  {/* Editar: reabre a seleção JÁ PREENCHIDA com quem está lançado e os valores
+                      atuais, para corrigir um detalhe sem precisar remover e refazer do zero. */}
+                  <button
+                    className="btn-primary btn-sm"
+                    style={{ width: '100%', marginTop: 8 }}
+                    onClick={() => editarMarcacaoAtual(linhasMarcadas)}
+                  >
+                    ✏️ Editar esta medição
+                  </button>
                   {/* Corrige lançamento feito com a Data de Apuração errada, sem refazer tudo */}
                   <button
                     className="btn-secondary btn-sm"
@@ -1730,6 +1759,17 @@ export default function ObraDetalhe() {
   );
 }
 
+// Nome curto para listas apertadas: primeiro nome completo + inicial do segundo.
+// Ex: "José Carlos da Silva" -> "José C." | "Maria" -> "Maria"
+// Evita que o nome seja cortado em uma letra só quando dividimos espaço com os campos de
+// quantidade, valor unitário e total.
+function nomeCurto(nomeCompleto) {
+  const partes = (nomeCompleto || '').trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return '';
+  if (partes.length === 1) return partes[0];
+  return `${partes[0]} ${partes[1].charAt(0).toUpperCase()}.`;
+}
+
 // Seleção de VÁRIAS pessoas para um mesmo serviço/célula, dividindo o trabalho entre elas.
 //
 // Por padrão a quantidade do serviço é dividida igualmente e todos recebem o mesmo valor
@@ -1793,10 +1833,10 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
         {/* Cabeçalho das colunas de ajuste */}
         {selecionados.length > 0 && (
           <div style={{ display: 'flex', gap: 4, fontSize: 10, color: '#9ca3af', fontWeight: 700, paddingLeft: 30, marginBottom: 2 }}>
-            <span style={{ flex: 1 }}></span>
-            <span style={{ width: 54, textAlign: 'center' }}>Qtd</span>
-            <span style={{ width: 60, textAlign: 'center' }}>Unit.</span>
-            <span style={{ width: 66, textAlign: 'center' }}>Total</span>
+            <span style={{ flex: 1, minWidth: 110 }}></span>
+            <span style={{ width: 70, textAlign: 'center' }}>Qtd</span>
+            <span style={{ width: 76, textAlign: 'center' }}>Unit.</span>
+            <span style={{ width: 84, textAlign: 'center' }}>Total</span>
           </div>
         )}
 
@@ -1812,8 +1852,12 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
               }}
             >
               <input type="checkbox" checked={marcado} onChange={() => alternar(p.id)} />
-              <span style={{ flex: 1, fontSize: 12, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {p.nome}
+              {/* minWidth garante espaço para o nome curto; o title mostra o nome completo */}
+              <span
+                title={p.nome}
+                style={{ flex: 1, fontSize: 12, minWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {nomeCurto(p.nome)}
               </span>
               {marcado && (
                 <>
@@ -1823,7 +1867,7 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
                     placeholder={qtdAutomatica.toFixed(2).replace(/\.00$/, '')}
                     onChange={e => setCampo(p.id, 'qtd', e.target.value)}
                     title="Quantidade feita por esta pessoa"
-                    style={{ width: 54, fontSize: 11, padding: '2px 3px' }}
+                    style={{ width: 70, fontSize: 12, padding: '3px 4px' }}
                   />
                   <input
                     type="number" step="0.01"
@@ -1831,7 +1875,7 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
                     placeholder={unitServico.toFixed(2)}
                     onChange={e => setCampo(p.id, 'unit', e.target.value)}
                     title="Valor unitário para esta pessoa"
-                    style={{ width: 60, fontSize: 11, padding: '2px 3px' }}
+                    style={{ width: 76, fontSize: 12, padding: '3px 4px' }}
                   />
                   <input
                     type="number" step="0.01"
@@ -1839,7 +1883,7 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
                     placeholder={calcularTotalPessoa(p.id).toFixed(2)}
                     onChange={e => setCampo(p.id, 'total', e.target.value)}
                     title="Valor total desta pessoa (sobrepõe qtd x unitário)"
-                    style={{ width: 66, fontSize: 11, padding: '2px 3px', fontWeight: 700 }}
+                    style={{ width: 84, fontSize: 12, padding: '3px 4px', fontWeight: 700 }}
                   />
                 </>
               )}
