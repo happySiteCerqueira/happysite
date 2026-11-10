@@ -171,8 +171,12 @@ export function gerarTermoAdvertenciaPdf(adv) {
   y += linhasAviso.length * 4 + 8;
 
   // ---- Local e data ----
+  // A cidade/UF vem do cadastro da obra. Só cai para a linha pontilhada quando a obra ainda
+  // não tem esses campos preenchidos (ou quando nenhuma obra foi vinculada).
   garantirEspaco(12);
-  doc.text(`Local e data: ______________________________, ${dataPorExtenso(adv.data_ocorrencia)}.`, margem, y);
+  const cidadeUf = [adv.obra_cidade, adv.obra_estado].filter(Boolean).join('/');
+  const localFecho = cidadeUf || '______________________________';
+  doc.text(`${localFecho}, ${dataPorExtenso(adv.data_ocorrencia)}.`, margem, y);
   y += 12;
 
   // ---- Assinatura do empregador (sempre manuscrita na via impressa) ----

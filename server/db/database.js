@@ -669,11 +669,30 @@ async function migrate() {
   if (!(await colunaExiste('advertencias', 'obra_nome'))) {
     await pool.query('ALTER TABLE advertencias ADD COLUMN obra_nome TEXT');
   }
+  // Cidade e estado da obra. Usados no fecho dos documentos formais ("Cidade/UF, 10 de
+  // novembro de 2026") — hoje no termo de advertência, e disponíveis para outros documentos.
+  // Ficam separados do "endereco" (rua/número) de propósito: só assim dá para montar essa
+  // linha sem depender de interpretar um texto livre.
+  if (!(await colunaExiste('obras', 'cidade'))) {
+    await pool.query('ALTER TABLE obras ADD COLUMN cidade TEXT');
+  }
+  if (!(await colunaExiste('obras', 'estado'))) {
+    await pool.query('ALTER TABLE obras ADD COLUMN estado TEXT');
+  }
+
   // O endereço da obra é o "Local" do termo. Copiado junto com o nome, pelo mesmo motivo:
   // se a obra for editada depois, o documento já emitido continua reproduzindo o endereço
   // que valia na data do fato.
   if (!(await colunaExiste('advertencias', 'obra_endereco'))) {
     await pool.query('ALTER TABLE advertencias ADD COLUMN obra_endereco TEXT');
+  }
+  // Cidade/estado também são copiados: compõem o fecho "Cidade/UF, data" do termo e precisam
+  // ficar congelados no documento emitido.
+  if (!(await colunaExiste('advertencias', 'obra_cidade'))) {
+    await pool.query('ALTER TABLE advertencias ADD COLUMN obra_cidade TEXT');
+  }
+  if (!(await colunaExiste('advertencias', 'obra_estado'))) {
+    await pool.query('ALTER TABLE advertencias ADD COLUMN obra_estado TEXT');
   }
 
   // ---- Catálogo de modelos de advertência (o sistema "aprende" motivos novos) ----

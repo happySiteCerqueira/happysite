@@ -19,6 +19,8 @@ export default function ObraWizard({ onClose, onCriada, obraExistente }) {
   const [dados, setDados] = useState(() => obraExistente ? {
     nome: obraExistente.nome || '',
     endereco: obraExistente.endereco || '',
+    cidade: obraExistente.cidade || '',
+    estado: obraExistente.estado || '',
     tem_transicao: !!obraExistente.tem_transicao,
     terreo_tipo: obraExistente.terreo_tipo || 'estacionamento',
     terreo_qtd_apto: obraExistente.terreo_qtd_apto || 0,
@@ -31,7 +33,7 @@ export default function ObraWizard({ onClose, onCriada, obraExistente }) {
     itens_terreo: [...(obraExistente.itens_terreo || [])],
     itens_cobertura: [...(obraExistente.itens_cobertura || [])]
   } : {
-    nome: '', endereco: '',
+    nome: '', endereco: '', cidade: '', estado: '',
     tem_transicao: false,
     terreo_tipo: 'estacionamento',
     terreo_qtd_apto: 0,
@@ -134,8 +136,38 @@ export default function ObraWizard({ onClose, onCriada, obraExistente }) {
           <div className="flex-col gap-2">
             <label>Nome da obra</label>
             <input value={dados.nome} onChange={e => alterar('nome', e.target.value)} autoFocus />
-            <label>Endereço</label>
-            <input value={dados.endereco} onChange={e => alterar('endereco', e.target.value)} />
+            <label>Endereço (rua e número)</label>
+            <input
+              value={dados.endereco}
+              onChange={e => alterar('endereco', e.target.value)}
+              placeholder="Ex: Rua Morro do Clemente, 196"
+            />
+            {/* Cidade e estado ficam em campos próprios (e não dentro do endereço) porque são
+                usados para montar o fecho dos documentos formais: "Cidade/UF, 10 de novembro
+                de 2026" no termo de advertência. */}
+            <div className="flex gap-2">
+              <div className="flex-col gap-2" style={{ flex: 1 }}>
+                <label>Cidade</label>
+                <input
+                  value={dados.cidade}
+                  onChange={e => alterar('cidade', e.target.value)}
+                  placeholder="Ex: São Paulo"
+                />
+              </div>
+              <div className="flex-col gap-2" style={{ width: 90 }}>
+                <label>Estado (UF)</label>
+                <input
+                  value={dados.estado}
+                  onChange={e => alterar('estado', e.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="SP"
+                  maxLength={2}
+                />
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: '#6b7280' }}>
+              A cidade e o estado são usados para preencher automaticamente o local nos documentos
+              oficiais (ex: termo de advertência).
+            </div>
             <label style={{ marginTop: 8 }}>
               <input type="checkbox" checked={dados.tem_transicao} onChange={e => alterar('tem_transicao', e.target.checked)} /> Tem transição (pilares/viga de transição)
             </label>

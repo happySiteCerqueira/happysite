@@ -259,6 +259,8 @@ function AbaDarAdvertencia({ onRegistrada }) {
         dias_suspensao: tipo === 'SUSPENSAO' ? Number(diasSuspensao) : 0,
         obra_nome: obraSelecionada?.nome || null,
         obra_endereco: obraSelecionada?.endereco || null,
+        obra_cidade: obraSelecionada?.cidade || null,
+        obra_estado: obraSelecionada?.estado || null,
         colaborador_nome: colaboradorDados?.nome || colaboradorSelecionado?.nome || '',
         colaborador_funcao: colaboradorDados?.funcao || '',
         colaborador_documento: colaboradorDados?.documento || '',
@@ -331,6 +333,15 @@ function AbaDarAdvertencia({ onRegistrada }) {
               : <span style={{ color: '#b45309' }}>
                   esta obra está sem endereço no cadastro — o termo sairá com a linha em branco.
                 </span>}
+            <div style={{ marginTop: 2 }}>
+              🏙️ <strong>Cidade/UF:</strong>{' '}
+              {(obraSelecionada.cidade || obraSelecionada.estado)
+                ? [obraSelecionada.cidade, obraSelecionada.estado].filter(Boolean).join('/')
+                : <span style={{ color: '#b45309' }}>
+                    não cadastrada — preencha no cadastro da obra para o termo sair com o local
+                    de assinatura preenchido.
+                  </span>}
+            </div>
           </div>
         )}
       </div>

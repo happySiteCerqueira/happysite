@@ -50,7 +50,7 @@ router.get('/colaboradores/:id', async (req, res) => {
 // ativas: fora as finalizadas e as que estão na lixeira.
 router.get('/obras', async (req, res) => {
   res.json(await db.all(
-    `SELECT id, nome, endereco FROM obras
+    `SELECT id, nome, endereco, cidade, estado FROM obras
      WHERE status NOT IN ('FINALIZADA', 'EXCLUIDA') ORDER BY nome`
   ));
 });
@@ -75,7 +75,7 @@ router.get('/', async (req, res) => {
     SELECT a.id, a.colaborador_id, a.tipo, a.data_ocorrencia, a.motivo, a.descricao,
            a.dias_suspensao, a.criado_em,
            a.modelo, a.artigo_clt, a.hora_ocorrencia,
-           a.obra_id, a.obra_nome, a.obra_endereco,
+           a.obra_id, a.obra_nome, a.obra_endereco, a.obra_cidade, a.obra_estado,
            a.assinatura_colaborador, a.recusou_assinar,
            a.testemunha1_nome, a.testemunha1_cpf, a.testemunha1_assinatura,
            a.testemunha2_nome, a.testemunha2_cpf, a.testemunha2_assinatura,
@@ -170,12 +170,16 @@ router.post('/', async (req, res) => {
   let obraId = null;
   let obraNome = null;
   let obraEndereco = null;
+  let obraCidade = null;
+  let obraEstado = null;
   if (obra_id) {
-    const obra = await db.get('SELECT id, nome, endereco FROM obras WHERE id = ?', obra_id);
+    const obra = await db.get('SELECT id, nome, endereco, cidade, estado FROM obras WHERE id = ?', obra_id);
     if (!obra) return res.status(400).json({ erro: 'Obra não encontrada.' });
     obraId = obra.id;
     obraNome = obra.nome;
     obraEndereco = obra.endereco || null;
+    obraCidade = obra.cidade || null;
+    obraEstado = obra.estado || null;
   }
 
   // APRENDIZADO: motivo digitado à mão vira um modelo reutilizável. ON CONFLICT DO NOTHING
@@ -197,15 +201,16 @@ router.post('/', async (req, res) => {
   const info = await db.run(
     `INSERT INTO advertencias
        (colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao, aplicada_por,
-        modelo, artigo_clt, hora_ocorrencia, obra_id, obra_nome, obra_endereco,
+        modelo, artigo_clt, hora_ocorrencia,
+        obra_id, obra_nome, obra_endereco, obra_cidade, obra_estado,
         assinatura_colaborador, recusou_assinar,
         testemunha1_nome, testemunha1_cpf, testemunha1_assinatura,
         testemunha2_nome, testemunha2_cpf, testemunha2_assinatura)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     colaborador_id, tipoFinal, data_ocorrencia, motivo.trim(), (descricao || '').trim() || null,
     dias, req.usuario.id,
     texto(modelo) || null, texto(artigo_clt) || null, texto(hora_ocorrencia) || null,
-    obraId, obraNome, obraEndereco,
+    obraId, obraNome, obraEndereco, obraCidade, obraEstado,
     assinaturaFinal, houveRecusa,
     houveRecusa ? texto(testemunha1_nome) : null,
     houveRecusa ? texto(testemunha1_cpf) : null,

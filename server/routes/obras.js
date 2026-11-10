@@ -137,10 +137,13 @@ router.post('/', permitir('RH'), async (req, res) => {
   if (!b.nome) return res.status(400).json({ erro: 'Nome da obra é obrigatório' });
 
   const info = await db.run(`INSERT INTO obras
-    (nome, endereco, tem_transicao, terreo_tipo, terreo_qtd_apto, fundacao_etapas,
+    (nome, endereco, cidade, estado, tem_transicao, terreo_tipo, terreo_qtd_apto, fundacao_etapas,
      tem_atico, tem_caixa_dagua, itens_terreo, itens_cobertura, blocos_pavimentos, numeracao_apto)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     b.nome, b.endereco || null,
+    // Cidade/UF alimentam o fecho dos documentos formais (ex: termo de advertência).
+    (b.cidade || '').trim() || null,
+    (b.estado || '').trim().toUpperCase() || null,
     b.tem_transicao ? 1 : 0,
     b.terreo_tipo || 'estacionamento',
     b.terreo_qtd_apto || 0,
@@ -175,11 +178,13 @@ router.put('/:id', permitir('ADM'), async (req, res) => {
   if (!atual) return res.status(404).json({ erro: 'Obra não encontrada' });
   const b = req.body;
 
-  await db.run(`UPDATE obras SET nome=?, endereco=?, tem_transicao=?, terreo_tipo=?, terreo_qtd_apto=?,
+  await db.run(`UPDATE obras SET nome=?, endereco=?, cidade=?, estado=?, tem_transicao=?, terreo_tipo=?, terreo_qtd_apto=?,
     fundacao_etapas=?, tem_atico=?, tem_caixa_dagua=?, itens_terreo=?, itens_cobertura=?, blocos_pavimentos=?, numeracao_apto=?, status=?
     WHERE id=?`,
     b.nome ?? atual.nome,
     b.endereco ?? atual.endereco,
+    b.cidade !== undefined ? ((b.cidade || '').trim() || null) : atual.cidade,
+    b.estado !== undefined ? ((b.estado || '').trim().toUpperCase() || null) : atual.estado,
     b.tem_transicao !== undefined ? (b.tem_transicao ? 1 : 0) : atual.tem_transicao,
     b.terreo_tipo ?? atual.terreo_tipo,
     b.terreo_qtd_apto ?? atual.terreo_qtd_apto,
