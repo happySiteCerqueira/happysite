@@ -123,6 +123,7 @@ function AbaDarAdvertencia({ onRegistrada }) {
 
   const colaboradorSelecionado = colaboradores.find(c => String(c.id) === String(colaboradorId));
   const modeloSelecionado = modelos.find(m => String(m.id) === String(modelo));
+  const obraSelecionada = obras.find(o => String(o.id) === String(obraId));
 
   // Dados usados na interpolação do texto-base.
   const dadosInterpolacao = {
@@ -256,7 +257,8 @@ function AbaDarAdvertencia({ onRegistrada }) {
         descricao: descricaoFinal,
         artigo_clt: artigoClt.trim() || null,
         dias_suspensao: tipo === 'SUSPENSAO' ? Number(diasSuspensao) : 0,
-        obra_nome: obras.find(o => String(o.id) === String(obraId))?.nome || null,
+        obra_nome: obraSelecionada?.nome || null,
+        obra_endereco: obraSelecionada?.endereco || null,
         colaborador_nome: colaboradorDados?.nome || colaboradorSelecionado?.nome || '',
         colaborador_funcao: colaboradorDados?.funcao || '',
         colaborador_documento: colaboradorDados?.documento || '',
@@ -320,6 +322,17 @@ function AbaDarAdvertencia({ onRegistrada }) {
           <option value="">Selecione a obra...</option>
           {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
+        {/* O "Local" do termo é o endereço cadastrado na obra — nada a digitar aqui. */}
+        {obraSelecionada && (
+          <div style={{ fontSize: 11, color: '#6b7280', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 8 }}>
+            📍 <strong>Local:</strong>{' '}
+            {obraSelecionada.endereco
+              ? obraSelecionada.endereco
+              : <span style={{ color: '#b45309' }}>
+                  esta obra está sem endereço no cadastro — o termo sairá com a linha em branco.
+                </span>}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-4" style={{ flexWrap: 'wrap', marginBottom: 12 }}>
@@ -695,7 +708,12 @@ function TabelaHistorico({ lista, ehAdm, onExcluir }) {
                   )}
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>{formatarData(item.data_ocorrencia)}</td>
-                <td style={{ color: '#6b7280', fontSize: 12 }}>{item.obra_nome || '-'}</td>
+                <td style={{ color: '#6b7280', fontSize: 12 }} title={item.obra_endereco || ''}>
+                  {item.obra_nome || '-'}
+                  {item.obra_endereco && (
+                    <div style={{ fontSize: 11, color: '#9ca3af' }}>📍 {item.obra_endereco}</div>
+                  )}
+                </td>
                 <td>
                   {item.motivo}
                   {item.descricao && (

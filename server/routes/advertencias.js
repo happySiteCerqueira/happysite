@@ -74,7 +74,8 @@ router.get('/', async (req, res) => {
   let sql = `
     SELECT a.id, a.colaborador_id, a.tipo, a.data_ocorrencia, a.motivo, a.descricao,
            a.dias_suspensao, a.criado_em,
-           a.modelo, a.artigo_clt, a.hora_ocorrencia, a.obra_id, a.obra_nome,
+           a.modelo, a.artigo_clt, a.hora_ocorrencia,
+           a.obra_id, a.obra_nome, a.obra_endereco,
            a.assinatura_colaborador, a.recusou_assinar,
            a.testemunha1_nome, a.testemunha1_cpf, a.testemunha1_assinatura,
            a.testemunha2_nome, a.testemunha2_cpf, a.testemunha2_assinatura,
@@ -168,11 +169,13 @@ router.post('/', async (req, res) => {
   // excluída depois — o documento disciplinar não pode mudar retroativamente.
   let obraId = null;
   let obraNome = null;
+  let obraEndereco = null;
   if (obra_id) {
-    const obra = await db.get('SELECT id, nome FROM obras WHERE id = ?', obra_id);
+    const obra = await db.get('SELECT id, nome, endereco FROM obras WHERE id = ?', obra_id);
     if (!obra) return res.status(400).json({ erro: 'Obra não encontrada.' });
     obraId = obra.id;
     obraNome = obra.nome;
+    obraEndereco = obra.endereco || null;
   }
 
   // APRENDIZADO: motivo digitado à mão vira um modelo reutilizável. ON CONFLICT DO NOTHING
@@ -194,15 +197,15 @@ router.post('/', async (req, res) => {
   const info = await db.run(
     `INSERT INTO advertencias
        (colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao, aplicada_por,
-        modelo, artigo_clt, hora_ocorrencia, obra_id, obra_nome,
+        modelo, artigo_clt, hora_ocorrencia, obra_id, obra_nome, obra_endereco,
         assinatura_colaborador, recusou_assinar,
         testemunha1_nome, testemunha1_cpf, testemunha1_assinatura,
         testemunha2_nome, testemunha2_cpf, testemunha2_assinatura)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     colaborador_id, tipoFinal, data_ocorrencia, motivo.trim(), (descricao || '').trim() || null,
     dias, req.usuario.id,
     texto(modelo) || null, texto(artigo_clt) || null, texto(hora_ocorrencia) || null,
-    obraId, obraNome,
+    obraId, obraNome, obraEndereco,
     assinaturaFinal, houveRecusa,
     houveRecusa ? texto(testemunha1_nome) : null,
     houveRecusa ? texto(testemunha1_cpf) : null,

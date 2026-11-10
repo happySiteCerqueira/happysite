@@ -100,7 +100,11 @@ export function gerarTermoAdvertenciaPdf(adv) {
   doc.text('IDENTIFICAÇÃO', margem, y);
   y += 6;
 
-  campo('OBRA / LOCAL:', adv.obra_nome || '_________________________________________');
+  campo('OBRA:', adv.obra_nome || '_________________________________________');
+  y += 5;
+  // "Local" é o endereço cadastrado na obra. Se a obra não tiver endereço preenchido, cai para
+  // uma linha em branco, que é preenchida à mão na via impressa.
+  campo('LOCAL:', adv.obra_endereco || '_________________________________________');
   y += 5;
   campo('COLABORADOR:', adv.colaborador_nome || '');
   y += 5;

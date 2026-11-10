@@ -669,6 +669,12 @@ async function migrate() {
   if (!(await colunaExiste('advertencias', 'obra_nome'))) {
     await pool.query('ALTER TABLE advertencias ADD COLUMN obra_nome TEXT');
   }
+  // O endereço da obra é o "Local" do termo. Copiado junto com o nome, pelo mesmo motivo:
+  // se a obra for editada depois, o documento já emitido continua reproduzindo o endereço
+  // que valia na data do fato.
+  if (!(await colunaExiste('advertencias', 'obra_endereco'))) {
+    await pool.query('ALTER TABLE advertencias ADD COLUMN obra_endereco TEXT');
+  }
 
   // ---- Catálogo de modelos de advertência (o sistema "aprende" motivos novos) ----
   //
