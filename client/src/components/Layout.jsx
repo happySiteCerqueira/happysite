@@ -19,6 +19,7 @@ const TITULOS_ROTA = [
   { prefixo: '/financeiro', titulo: '💵 Financeiro' },
   { prefixo: '/aso', titulo: '🩺 Controle de ASO' },
   { prefixo: '/agenda', titulo: '🗓️ Agenda' },
+  { prefixo: '/auditoria', titulo: '🔍 Auditoria' },
 
 
   { prefixo: '/configuracoes', titulo: '⚙️ Configurações' }
@@ -92,6 +93,9 @@ export default function Layout() {
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
           {temPermissao('RH') && <NavLink to="/aso" style={linkStyle}>🩺 Controle de ASO</NavLink>}
           {temPermissao('RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR') && <NavLink to="/agenda" style={linkStyle}>🗓️ Agenda</NavLink>}
+          {/* Auditoria: exclusiva do ADM master. temPermissao('ADM') só é verdadeiro para o
+              próprio ADM — os demais perfis nem veem o item no menu. */}
+          {temPermissao('ADM') && <NavLink to="/auditoria" style={linkStyle}>🔍 Auditoria</NavLink>}
 
 
 

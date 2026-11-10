@@ -3,7 +3,7 @@ const XLSX = require('xlsx');
 const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
-const { registrar } = require('../utils/auditoria');
+const { registrar, registrarSnapshot } = require('../utils/auditoria');
 
 const router = express.Router();
 
@@ -71,20 +71,22 @@ router.get('/obras-sugestoes', async (req, res) => {
 
 // ---- Nomes de obras distintos já usados em receitas (usado no filtro do dashboard Resumo) ----
 router.get('/receitas/obras-distintas', permitir('ADM'), async (req, res) => {
-  const linhas = await db.all('SELECT DISTINCT obra_nome FROM financeiro_receitas ORDER BY obra_nome');
+  const linhas = await db.all('SELECT DISTINCT obra_nome FROM financeiro_receitas WHERE excluido = 0 ORDER BY obra_nome');
 
   res.json(linhas.map(l => l.obra_nome));
 });
 
 
 // ---- Listagem ----
+// Lançamentos excluídos logicamente (excluido = 1) nunca aparecem aqui — ficam disponíveis
+// apenas em /receitas-excluidas (lixeira) e na trilha de auditoria.
 router.get('/receitas', async (req, res) => {
   const { obra, status } = req.query;
   // meses: aceita múltiplos valores via ?meses=2026-01&meses=2026-03 (ou string única)
   let meses = req.query.meses;
   if (meses && !Array.isArray(meses)) meses = [meses];
 
-  let sql = `SELECT * FROM financeiro_receitas WHERE 1=1`;
+  let sql = `SELECT * FROM financeiro_receitas WHERE excluido = 0`;
   const params = [];
   if (meses && meses.length > 0) {
     const placeholders = meses.map(() => `to_char(data_medicao, 'YYYY-MM') = ?`).join(' OR ');
@@ -251,6 +253,16 @@ router.put('/receitas/:id', permitir('ADM'), async (req, res) => {
   const comNotaFinal = paraBooleano(com_nota, receita.com_nota);
   const valorLiquido = calcularValorLiquido(comNotaFinal, valorBrutoFinal);
 
+  // Snapshot ANTES do UPDATE: guarda o estado atual + o que está sendo enviado, para que
+  // qualquer alteração indevida possa ser identificada e revertida manualmente.
+  await registrarSnapshot(req, 'EDITAR', 'financeiro_receitas', req.params.id, receita, {
+    ...req.body,
+    servico: servicoFinal,
+    valor_bruto: valorBrutoFinal,
+    valor_liquido: valorLiquido,
+    com_nota: comNotaFinal
+  });
+
   await db.run(
     `UPDATE financeiro_receitas SET
        data_medicao = ?, obra_nome = ?, servico = ?, valor_bruto = ?, valor_liquido = ?, com_nota = ?,
@@ -284,20 +296,52 @@ router.put('/receitas/:id/status', async (req, res) => {
     dataPagamento = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
   }
 
+  await registrarSnapshot(req, 'MUDAR_STATUS', 'financeiro_receitas', req.params.id, receita, {
+    status, data_pagamento: dataPagamento
+  });
+
   await db.run(
     'UPDATE financeiro_receitas SET status = ?, data_pagamento = ?, atualizado_em = NOW() WHERE id = ?',
     status, dataPagamento, req.params.id
   );
 
-  await registrar(req.usuario.id, 'MUDAR_STATUS', 'financeiro_receitas', req.params.id, { status });
   res.json({ ok: true, data_pagamento: dataPagamento });
 });
 
 // ---- Excluir (só ADM) ----
+// Exclusão LÓGICA: marca excluido = 1 em vez de apagar. O lançamento some das listagens e dos
+// relatórios, mas continua no banco — recuperável via auditoria (que guarda o estado completo)
+// ou por um UPDATE direto revertendo a marca.
 router.delete('/receitas/:id', permitir('ADM'), async (req, res) => {
-  await db.run('DELETE FROM financeiro_receitas WHERE id = ?', req.params.id);
-  await registrar(req.usuario.id, 'EXCLUIR', 'financeiro_receitas', req.params.id, {});
+  const atual = await db.get('SELECT * FROM financeiro_receitas WHERE id = ?', req.params.id);
+  if (!atual) return res.status(404).json({ erro: 'Receita não encontrada' });
+  if (atual.excluido) return res.status(400).json({ erro: 'Esta receita já está excluída.' });
+
+  // Snapshot ANTES de alterar: é o que permite reconstruir o lançamento depois.
+  await registrarSnapshot(req, 'EXCLUIR', 'financeiro_receitas', req.params.id, atual, { excluido: 1 });
+
+  await db.run('UPDATE financeiro_receitas SET excluido = 1, atualizado_em = NOW() WHERE id = ?', req.params.id);
   res.json({ ok: true });
+});
+
+// ---- Restaurar um lançamento excluído (só ADM) ----
+router.put('/receitas/:id/restaurar', permitir('ADM'), async (req, res) => {
+  const atual = await db.get('SELECT * FROM financeiro_receitas WHERE id = ?', req.params.id);
+  if (!atual) return res.status(404).json({ erro: 'Receita não encontrada' });
+  if (!atual.excluido) return res.status(400).json({ erro: 'Esta receita não está excluída.' });
+
+  await registrarSnapshot(req, 'RESTAURAR', 'financeiro_receitas', req.params.id, atual, { excluido: 0 });
+
+  await db.run('UPDATE financeiro_receitas SET excluido = 0, atualizado_em = NOW() WHERE id = ?', req.params.id);
+  res.json({ ok: true });
+});
+
+// ---- Lixeira: lançamentos excluídos (só ADM) ----
+router.get('/receitas-excluidas', permitir('ADM'), async (req, res) => {
+  const linhas = await db.all(
+    'SELECT * FROM financeiro_receitas WHERE excluido = 1 ORDER BY atualizado_em DESC, id DESC'
+  );
+  res.json(linhas.map(parseReceita));
 });
 
 // ---- Resumo: totais por ano/mês (gráfico principal, todo o histórico) - só ADM ----
@@ -306,6 +350,7 @@ router.get('/resumo/por-mes-ano', permitir('ADM'), async (req, res) => {
     SELECT to_char(data_medicao, 'YYYY') as ano, to_char(data_medicao, 'MM') as mes,
            SUM(valor_liquido) as valor_liquido, SUM(valor_bruto) as valor_bruto, COUNT(*)::int as qtd
     FROM financeiro_receitas
+    WHERE excluido = 0
     GROUP BY 1, 2
     ORDER BY 1, 2
   `);
@@ -340,7 +385,7 @@ router.get('/resumo/configuravel', permitir('ADM'), async (req, res) => {
   let sql = `
     SELECT ${camposSelect.join(', ')},
            SUM(valor_liquido) as valor_liquido, SUM(valor_bruto) as valor_bruto, COUNT(*)::int as qtd
-    FROM financeiro_receitas WHERE 1=1
+    FROM financeiro_receitas WHERE excluido = 0
   `;
   const params = [];
   if (data_inicio) { sql += ' AND data_medicao >= ?'; params.push(data_inicio); }

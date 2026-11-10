@@ -18,6 +18,7 @@ import Epi from './pages/Epi';
 import Financeiro from './pages/Financeiro';
 import Aso from './pages/Aso';
 import Agenda from './pages/Agenda';
+import Auditoria from './pages/Auditoria';
 
 
 
@@ -58,6 +59,9 @@ export default function App() {
         <Route path="financeiro" element={<Financeiro />} />
         <Route path="aso" element={<Aso />} />
         <Route path="agenda" element={<Agenda />} />
+        {/* Trilha de auditoria: o backend já exige ADM (permitir('ADM')); aqui a rota existe
+            para todos, mas sem o menu e sem permissão a API responde 403. */}
+        <Route path="auditoria" element={<Auditoria />} />
 
 
       </Route>

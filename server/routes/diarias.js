@@ -2,7 +2,7 @@ const express = require('express');
 const db = require('../db/database');
 const { autenticar } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
-const { registrar } = require('../utils/auditoria');
+const { registrar, registrarSnapshot } = require('../utils/auditoria');
 const { recalcularDiariasEmSegundoPlano } = require('../utils/recalculoAutomatico');
 
 const router = express.Router();
@@ -18,8 +18,10 @@ async function recalcularResumoDiaria(colaboradorId, mesCiclo, usuarioId) {
   const pessoa = await db.get('SELECT valor_diaria FROM colaboradores WHERE id = ?', colaboradorId);
   const valorUnitario = pessoa ? (pessoa.valor_diaria || 0) : 0;
 
+  // excluido = 0: lançamentos removidos logicamente não entram na soma — é isto que faz a
+  // exclusão lógica ter efeito real no valor a pagar.
   const soma = await db.get(
-    'SELECT COALESCE(SUM(quantidade), 0) as total_qtd FROM diaria_obras WHERE colaborador_id = ? AND mes_ciclo = ?',
+    'SELECT COALESCE(SUM(quantidade), 0) as total_qtd FROM diaria_obras WHERE colaborador_id = ? AND mes_ciclo = ? AND excluido = 0',
     colaboradorId, mesCiclo
   );
   const qtdTotal = soma.total_qtd || 0;
@@ -56,7 +58,7 @@ router.get('/planilha', async (req, res) => {
   const obrasLancadas = await db.all(
     `SELECT dobra.colaborador_id, dobra.obra_id, o.nome as obra_nome, dobra.quantidade
      FROM diaria_obras dobra JOIN obras o ON o.id = dobra.obra_id
-     WHERE dobra.mes_ciclo = ? ORDER BY o.nome`, mes
+     WHERE dobra.mes_ciclo = ? AND dobra.excluido = 0 ORDER BY o.nome`, mes
   );
   const obrasPorPessoa = {};
   obrasLancadas.forEach(o => {
@@ -91,13 +93,30 @@ router.get('/planilha', async (req, res) => {
   res.json(resultado);
 });
 
-// Verifica se a medição do mês desta pessoa já foi paga (bloqueia edição de diárias)
+// Verifica se a medição do mês desta pessoa já foi paga (bloqueia edição de diárias).
+//
+// Checa QUALQUER medição do mês com status PAGO — não só a geral (obra_id IS NULL). Se a pessoa
+// recebeu por uma obra específica naquele mês, o ciclo também está fechado para ela: mexer nas
+// diárias mudaria o total de um mês já liquidado.
 async function medicaoJaPaga(colaboradorId, mesCiclo) {
   const medicao = await db.get(
-    'SELECT * FROM medicoes WHERE colaborador_id = ? AND mes_ciclo = ? AND obra_id IS NULL',
+    "SELECT status FROM medicoes WHERE colaborador_id = ? AND mes_ciclo = ? AND status = 'PAGO' LIMIT 1",
     colaboradorId, mesCiclo
   );
-  return !!(medicao && medicao.status === 'PAGO');
+  return !!medicao;
+}
+
+// Trava definitiva de ciclo pago. Devolve true quando JÁ respondeu 403 — nesse caso a rota
+// precisa encerrar imediatamente, sem tocar no banco e sem disparar recálculo.
+async function bloquearSeCicloPago(req, res, colaboradorId, mesCiclo) {
+  if (await medicaoJaPaga(colaboradorId, mesCiclo)) {
+    res.status(403).json({
+      erro: 'Ciclo fechado: a medição deste colaborador neste mês já foi PAGA e não pode ser alterada.',
+      codigo: 'CICLO_PAGO'
+    });
+    return true;
+  }
+  return false;
 }
 
 // Atualiza a quantidade de diárias de uma pessoa/mês numa ÚNICA obra (caso mais comum: a pessoa
@@ -111,9 +130,8 @@ router.put('/celula', async (req, res) => {
   const pessoa = await db.get('SELECT * FROM colaboradores WHERE id = ?', colaborador_id);
   if (!pessoa) return res.status(404).json({ erro: 'Colaborador não encontrado' });
 
-  if (await medicaoJaPaga(colaborador_id, mes_ciclo)) {
-    return res.status(400).json({ erro: 'Não é possível editar: a medição deste mês já foi paga.' });
-  }
+  // Trava de ciclo pago: rejeita ANTES de qualquer escrita e antes do recálculo.
+  if (await bloquearSeCicloPago(req, res, colaborador_id, mes_ciclo)) return;
 
   const qtdNum = Number(quantidade) || 0;
 
@@ -123,17 +141,21 @@ router.put('/celula', async (req, res) => {
       colaborador_id, mes_ciclo, obra_id
     );
     if (existenteObra) {
-      await db.run('UPDATE diaria_obras SET quantidade = ?, atualizado_em = NOW() WHERE id = ?', qtdNum, existenteObra.id);
+      await registrarSnapshot(req, 'EDITAR_DIARIA', 'diaria_obras', existenteObra.id, existenteObra,
+        { quantidade: qtdNum, excluido: 0 });
+      await db.run('UPDATE diaria_obras SET quantidade = ?, excluido = 0, atualizado_em = NOW() WHERE id = ?', qtdNum, existenteObra.id);
     } else {
-      await db.run(
+      const info = await db.run(
         'INSERT INTO diaria_obras (colaborador_id, mes_ciclo, obra_id, quantidade) VALUES (?,?,?,?)',
         colaborador_id, mes_ciclo, obra_id, qtdNum
       );
+      await registrarSnapshot(req, 'CRIAR_DIARIA', 'diaria_obras', info.lastInsertRowid, null,
+        { colaborador_id, mes_ciclo, obra_id, quantidade: qtdNum });
     }
   } else {
     // Sem obra_id informado: só é permitido quando a pessoa já tem exatamente 1 obra lançada
     // (edição rápida direto na planilha); caso contrário, é preciso escolher a obra.
-    const obrasAtuais = await db.all('SELECT * FROM diaria_obras WHERE colaborador_id = ? AND mes_ciclo = ?', colaborador_id, mes_ciclo);
+    const obrasAtuais = await db.all('SELECT * FROM diaria_obras WHERE colaborador_id = ? AND mes_ciclo = ? AND excluido = 0', colaborador_id, mes_ciclo);
     if (obrasAtuais.length === 1) {
       await db.run('UPDATE diaria_obras SET quantidade = ?, atualizado_em = NOW() WHERE id = ?', qtdNum, obrasAtuais[0].id);
     } else if (obrasAtuais.length === 0 && qtdNum > 0) {
@@ -166,7 +188,7 @@ router.get('/obras', async (req, res) => {
   const linhas = await db.all(
     `SELECT dobra.id, dobra.obra_id, o.nome as obra_nome, dobra.quantidade
      FROM diaria_obras dobra JOIN obras o ON o.id = dobra.obra_id
-     WHERE dobra.colaborador_id = ? AND dobra.mes_ciclo = ? ORDER BY o.nome`,
+     WHERE dobra.colaborador_id = ? AND dobra.mes_ciclo = ? AND dobra.excluido = 0 ORDER BY o.nome`,
     colaborador_id, mes_ciclo
   );
   res.json(linhas);
@@ -179,9 +201,7 @@ router.put('/obras', async (req, res) => {
   if (!colaborador_id || !mes_ciclo || !obra_id) {
     return res.status(400).json({ erro: 'colaborador_id, mes_ciclo e obra_id são obrigatórios' });
   }
-  if (await medicaoJaPaga(colaborador_id, mes_ciclo)) {
-    return res.status(400).json({ erro: 'Não é possível editar: a medição deste mês já foi paga.' });
-  }
+  if (await bloquearSeCicloPago(req, res, colaborador_id, mes_ciclo)) return;
 
   const qtdNum = Number(quantidade) || 0;
   const existente = await db.get(
@@ -189,16 +209,21 @@ router.put('/obras', async (req, res) => {
     colaborador_id, mes_ciclo, obra_id
   );
   if (existente) {
-    await db.run('UPDATE diaria_obras SET quantidade = ?, atualizado_em = NOW() WHERE id = ?', qtdNum, existente.id);
+    await registrarSnapshot(req, 'EDITAR_DIARIA_OBRA', 'diaria_obras', existente.id, existente,
+      { quantidade: qtdNum, excluido: 0 });
+    // excluido = 0: relançar uma obra que havia sido removida reaproveita a linha existente
+    // (a chave única impede duplicar) e a traz de volta.
+    await db.run('UPDATE diaria_obras SET quantidade = ?, excluido = 0, atualizado_em = NOW() WHERE id = ?', qtdNum, existente.id);
   } else {
-    await db.run(
+    const info = await db.run(
       'INSERT INTO diaria_obras (colaborador_id, mes_ciclo, obra_id, quantidade) VALUES (?,?,?,?)',
       colaborador_id, mes_ciclo, obra_id, qtdNum
     );
+    await registrarSnapshot(req, 'CRIAR_DIARIA_OBRA', 'diaria_obras', info.lastInsertRowid, null,
+      { colaborador_id, mes_ciclo, obra_id, quantidade: qtdNum });
   }
 
   const total = await recalcularResumoDiaria(colaborador_id, mes_ciclo, req.usuario.id);
-  await registrar(req.usuario.id, 'EDITAR_DIARIA_OBRA', 'diaria_obras', colaborador_id, { colaborador_id, mes_ciclo, obra_id, quantidade: qtdNum });
   res.json({ ok: true, total });
 });
 
@@ -208,12 +233,21 @@ router.delete('/obras', async (req, res) => {
   if (!colaborador_id || !mes_ciclo || !obra_id) {
     return res.status(400).json({ erro: 'colaborador_id, mes_ciclo e obra_id são obrigatórios' });
   }
-  if (await medicaoJaPaga(colaborador_id, mes_ciclo)) {
-    return res.status(400).json({ erro: 'Não é possível editar: a medição deste mês já foi paga.' });
-  }
-  await db.run('DELETE FROM diaria_obras WHERE colaborador_id = ? AND mes_ciclo = ? AND obra_id = ?', colaborador_id, mes_ciclo, obra_id);
+  if (await bloquearSeCicloPago(req, res, colaborador_id, mes_ciclo)) return;
+
+  const atual = await db.get(
+    'SELECT * FROM diaria_obras WHERE colaborador_id = ? AND mes_ciclo = ? AND obra_id = ? AND excluido = 0',
+    colaborador_id, mes_ciclo, obra_id
+  );
+  if (!atual) return res.status(404).json({ erro: 'Lançamento não encontrado' });
+
+  // Snapshot com o estado completo ANTES de remover — permite refazer o lançamento igual.
+  await registrarSnapshot(req, 'REMOVER_DIARIA_OBRA', 'diaria_obras', atual.id, atual, { excluido: 1 });
+
+  // Exclusão lógica: a linha permanece no banco, apenas deixa de ser somada/listada.
+  await db.run('UPDATE diaria_obras SET excluido = 1, atualizado_em = NOW() WHERE id = ?', atual.id);
+
   const total = await recalcularResumoDiaria(colaborador_id, mes_ciclo, req.usuario.id);
-  await registrar(req.usuario.id, 'REMOVER_DIARIA_OBRA', 'diaria_obras', colaborador_id, { colaborador_id, mes_ciclo, obra_id });
   res.json({ ok: true, total });
 });
 

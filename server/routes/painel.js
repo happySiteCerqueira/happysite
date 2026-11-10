@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
              COALESCE(SUM(c.valor), 0) as valor_total
       FROM obra_servicos os
       LEFT JOIN obra_servico_celulas c ON c.obra_servico_id = os.id AND c.mes_ciclo = ?
-      WHERE os.obra_id = ? AND os.ativo = 1
+      WHERE os.obra_id = ? AND os.ativo = 1 AND os.excluido = 0
       GROUP BY os.id, os.nome, os.ordem
       ORDER BY os.ordem
     `, mes, o.id);

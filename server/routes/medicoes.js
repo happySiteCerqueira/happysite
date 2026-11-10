@@ -348,7 +348,7 @@ router.post('/atualizar-tudo', async (req, res) => {
 
   await db.transaction(async (trx) => {
     // ---- 1) Serviços de obra: recalcula célula por célula (individual e grupo) ----
-    const servicos = await trx.all('SELECT * FROM obra_servicos WHERE ativo = 1');
+    const servicos = await trx.all('SELECT * FROM obra_servicos WHERE ativo = 1 AND excluido = 0');
     for (const servico of servicos) {
       const celulas = await trx.all('SELECT * FROM obra_servico_celulas WHERE obra_servico_id = ?', servico.id);
       if (celulas.length === 0) continue;

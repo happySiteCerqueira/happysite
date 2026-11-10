@@ -2,13 +2,74 @@ const express = require('express');
 const db = require('../db/database');
 const XLSX = require('xlsx');
 const { autenticar, permitir } = require('../utils/auth');
-const { registrar } = require('../utils/auditoria');
+const { registrar, registrarSnapshot } = require('../utils/auditoria');
 const { recalcularServicoEmSegundoPlano } = require('../utils/recalculoAutomatico');
 
 const router = express.Router();
 
 
 router.use(autenticar);
+
+// ---- Trava definitiva de ciclo pago ----
+//
+// Regra de negócio: um mês cujo pagamento já foi liquidado (medicoes.status = 'PAGO') não pode
+// mais ser alterado. Antes isso era garantido só pelo recálculo automático, que preservava os
+// meses pagos — mas a marcação/desmarcação em si ainda passava, e o valor da célula mudava.
+// Agora a API rejeita a requisição logo na entrada, com 403, sem tocar no banco.
+
+// Descobre TODOS os colaboradores afetados por uma operação de célula: tanto os que estão sendo
+// marcados agora (individual, grupo ou equipe avulsa) quanto os que já estavam gravados naquela
+// célula/mês — porque desmarcar ou substituir também altera o que essas pessoas receberiam.
+async function colaboradoresEnvolvidos(servicoId, celulaKey, mesCiclo, payload) {
+  const ids = new Set();
+
+  const jaMarcados = await db.all(
+    'SELECT colaborador_id FROM obra_servico_celulas WHERE obra_servico_id = ? AND celula_key = ? AND mes_ciclo = ?',
+    servicoId, celulaKey, mesCiclo
+  );
+  jaMarcados.forEach(l => { if (l.colaborador_id) ids.add(l.colaborador_id); });
+
+  if (payload.colaborador_id) ids.add(Number(payload.colaborador_id));
+
+  if (Array.isArray(payload.colaboradores)) {
+    payload.colaboradores.forEach(c => {
+      const id = typeof c === 'object' ? c.colaborador_id : c;
+      if (id) ids.add(Number(id));
+    });
+  }
+
+  if (payload.grupo_id) {
+    const membros = await db.all('SELECT colaborador_id FROM obra_servico_grupo_membros WHERE grupo_id = ?', payload.grupo_id);
+    membros.forEach(m => ids.add(m.colaborador_id));
+  }
+
+  return [...ids];
+}
+
+// Responde 403 e devolve true se QUALQUER um dos colaboradores já tem medição paga no mês.
+// A rota que chama precisa encerrar imediatamente com `return`.
+async function bloquearSeCicloPago(res, colaboradorIds, mesCiclo) {
+  if (!colaboradorIds || colaboradorIds.length === 0) return false;
+
+  const marcadores = colaboradorIds.map(() => '?').join(',');
+  const pago = await db.get(
+    `SELECT m.colaborador_id, c.nome
+     FROM medicoes m JOIN colaboradores c ON c.id = m.colaborador_id
+     WHERE m.colaborador_id IN (${marcadores}) AND m.mes_ciclo = ? AND m.status = 'PAGO'
+     LIMIT 1`,
+    ...colaboradorIds, mesCiclo
+  );
+
+  if (pago) {
+    res.status(403).json({
+      erro: `Ciclo fechado: a medição de ${pago.nome} em ${mesCiclo} já foi PAGA e não pode ser alterada.`,
+      codigo: 'CICLO_PAGO',
+      colaborador_id: pago.colaborador_id
+    });
+    return true;
+  }
+  return false;
+}
 
 // ---- Serviços padrão (globais, usados como template ao criar novas obras) ----
 router.get('/servicos-padrao', async (req, res) => {
@@ -66,7 +127,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const obra = await db.get('SELECT * FROM obras WHERE id = ?', req.params.id);
   if (!obra) return res.status(404).json({ erro: 'Obra não encontrada' });
-  const servicos = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? ORDER BY ordem, id', req.params.id);
+  const servicos = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? AND excluido = 0 ORDER BY ordem, id', req.params.id);
   res.json({ ...parseObra(obra), servicos });
 });
 
@@ -208,7 +269,8 @@ router.delete('/:id/permanente', permitir('ADM'), async (req, res) => {
 // ---- Serviços da obra (abas) ----
 
 router.get('/:id/servicos', async (req, res) => {
-  const servicos = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? ORDER BY ordem, id', req.params.id);
+  // excluido = 0: serviços removidos logicamente não aparecem como aba da obra.
+  const servicos = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? AND excluido = 0 ORDER BY ordem, id', req.params.id);
   res.json(servicos);
 });
 
@@ -428,13 +490,33 @@ router.put('/grupos/:grupoId/obras-vinculadas', permitir('RH', 'ADM', 'ENGENHEIR
   res.json({ ok: true });
 });
 
+// Exclusão LÓGICA do serviço: marca excluido = 1. A aba some da obra, mas o registro (e todo o
+// histórico ligado a ele) continua no banco e pode ser restaurado.
 router.delete('/servicos/:servicoId', permitir('ADM', 'RH'), async (req, res) => {
+  const servico = await db.get('SELECT * FROM obra_servicos WHERE id = ?', req.params.servicoId);
+  if (!servico) return res.status(404).json({ erro: 'Serviço não encontrado' });
+  if (servico.excluido) return res.status(400).json({ erro: 'Este serviço já está excluído.' });
+
   const row = await db.get('SELECT COUNT(*)::int c FROM obra_servico_celulas WHERE obra_servico_id = ?', req.params.servicoId);
   if (row.c > 0) {
     return res.status(400).json({ erro: 'Este serviço já possui marcações/medições lançadas e não pode ser removido da obra. Você pode desativá-lo em vez de excluir.' });
   }
-  await db.run('DELETE FROM obra_servicos WHERE id = ?', req.params.servicoId);
-  await registrar(req.usuario.id, 'EXCLUIR', 'obra_servicos', req.params.servicoId, {});
+
+  await registrarSnapshot(req, 'EXCLUIR', 'obra_servicos', req.params.servicoId, servico, { excluido: 1 });
+
+  await db.run('UPDATE obra_servicos SET excluido = 1 WHERE id = ?', req.params.servicoId);
+  res.json({ ok: true });
+});
+
+// Restaura um serviço excluído logicamente.
+router.put('/servicos/:servicoId/restaurar', permitir('ADM', 'RH'), async (req, res) => {
+  const servico = await db.get('SELECT * FROM obra_servicos WHERE id = ?', req.params.servicoId);
+  if (!servico) return res.status(404).json({ erro: 'Serviço não encontrado' });
+  if (!servico.excluido) return res.status(400).json({ erro: 'Este serviço não está excluído.' });
+
+  await registrarSnapshot(req, 'RESTAURAR', 'obra_servicos', req.params.servicoId, servico, { excluido: 0 });
+
+  await db.run('UPDATE obra_servicos SET excluido = 0 WHERE id = ?', req.params.servicoId);
   res.json({ ok: true });
 });
 
@@ -446,7 +528,7 @@ router.put('/:id/servicos-em-lote', permitir('RH', 'ADM'), async (req, res) => {
   if (!Array.isArray(nomes)) return res.status(400).json({ erro: 'Lista de nomes é obrigatória' });
 
   const obraId = req.params.id;
-  const existentes = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ?', obraId);
+  const existentes = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? AND excluido = 0', obraId);
   const nomesDesejados = new Set(nomes.map(n => n.trim()).filter(Boolean));
 
   let criados = 0, removidos = 0;
@@ -468,7 +550,9 @@ router.put('/:id/servicos-em-lote', permitir('RH', 'ADM'), async (req, res) => {
       if (row.c > 0) {
         bloqueados.push(e.nome);
       } else {
-        await db.run('DELETE FROM obra_servicos WHERE id = ?', e.id);
+        // Exclusão lógica também aqui (desmarcar a aba na tela de configuração).
+        await registrarSnapshot(req, 'EXCLUIR_EM_LOTE', 'obra_servicos', e.id, e, { excluido: 1 });
+        await db.run('UPDATE obra_servicos SET excluido = 1 WHERE id = ?', e.id);
         removidos++;
       }
     }
@@ -484,7 +568,7 @@ router.put('/:id/servicos-em-lote', permitir('RH', 'ADM'), async (req, res) => {
 router.get('/:id/precos/exportar', permitir('RH', 'ADM', 'FINANCEIRO'), async (req, res) => {
   const obra = await db.get('SELECT * FROM obras WHERE id = ?', req.params.id);
   if (!obra) return res.status(404).json({ erro: 'Obra não encontrada' });
-  const servicos = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? ORDER BY id', req.params.id);
+  const servicos = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? AND excluido = 0 ORDER BY id', req.params.id);
 
   const dados = servicos.map(s => ({
     'ID (não alterar)': s.id,
@@ -653,6 +737,15 @@ router.post('/servicos/:servicoId/celulas', permitir('ENGENHEIRO', 'MESTRE', 'AD
 
   const servico = await db.get('SELECT * FROM obra_servicos WHERE id = ?', req.params.servicoId);
   if (!servico) return res.status(404).json({ erro: 'Serviço não encontrado' });
+
+  // ---- TRAVA DEFINITIVA DE CICLO PAGO ----
+  // Rejeita ANTES de qualquer escrita: nem grava, nem apaga, nem dispara recálculo.
+  // Considera todo mundo envolvido na operação — quem está sendo marcado agora E quem já
+  // estava marcado nesta célula (uma desmarcação também altera o valor de quem já recebeu).
+  const envolvidos = await colaboradoresEnvolvidos(req.params.servicoId, celula_key, mes_ciclo, {
+    colaborador_id, grupo_id, colaboradores
+  });
+  if (await bloquearSeCicloPago(res, envolvidos, mes_ciclo)) return;
 
   // Quando o front não envia "quantidade" explícita, busca a quantidade cadastrada nesta
   // célula (tela "Quantidades"). Se ainda não houver nenhuma cadastrada, usa 1 como padrão.
@@ -1011,7 +1104,7 @@ const COLUNAS_SERVICO = ['ID (deixe vazio para criar novo)', 'Nome do Serviço',
 router.get('/:id/servicos/exportar', permitir('RH', 'ADM'), async (req, res) => {
   const obra = await db.get('SELECT * FROM obras WHERE id = ?', req.params.id);
   if (!obra) return res.status(404).json({ erro: 'Obra não encontrada' });
-  const servicos = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? ORDER BY id', req.params.id);
+  const servicos = await db.all('SELECT * FROM obra_servicos WHERE obra_id = ? AND excluido = 0 ORDER BY id', req.params.id);
 
   const dados = servicos.map(s => ({
     [COLUNAS_SERVICO[0]]: s.id,

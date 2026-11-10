@@ -715,6 +715,41 @@ async function migrate() {
     console.log('[migracao] ENCARREGADO agora tem acesso somente ao modulo EPI.');
   }
 
+  // ---- Exclusão lógica (soft delete) nas tabelas críticas ----
+  //
+  // Motivo: até aqui um DELETE apagava o dado fisicamente e não havia como desfazer um clique
+  // errado. Agora a exclusão apenas marca excluido = 1; o registro continua no banco (e no
+  // backup), some das listagens e pode ser restaurado.
+  //
+  // Escopo proposital:
+  //   - obra_servicos       : abas de serviço de uma obra
+  //   - financeiro_receitas : lançamentos de entrada
+  //   - diaria_obras        : lançamento de diária por obra (é aqui que o DELETE real acontece;
+  //                           a tabela "diarias" é apenas um cache agregado, recalculado a
+  //                           partir desta, por isso não recebe a coluna)
+  //
+  // "obras" NÃO entra aqui: já possui exclusão lógica própria e mais rica via status='EXCLUIDA'
+  // (lixeira com restaurar/excluir permanente). Criar uma segunda coluna para o mesmo conceito
+  // deixaria duas fontes de verdade concorrentes.
+  const CHAVE_SOFT_DELETE = 'soft_delete_tabelas_criticas';
+  const softDeleteAplicado = await pool.query('SELECT 1 FROM migracoes_aplicadas WHERE chave = $1', [CHAVE_SOFT_DELETE]);
+  if (softDeleteAplicado.rows.length === 0) {
+    for (const tabela of ['obra_servicos', 'financeiro_receitas', 'diaria_obras']) {
+      if (!(await colunaExiste(tabela, 'excluido'))) {
+        await pool.query(`ALTER TABLE ${tabela} ADD COLUMN excluido INTEGER NOT NULL DEFAULT 0`);
+        console.log(`[migracao] Coluna "excluido" adicionada em ${tabela}.`);
+      }
+    }
+    await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_SOFT_DELETE]);
+    console.log('[migracao] Exclusao logica (soft delete) habilitada nas tabelas criticas.');
+  }
+
+  // Índices parciais: as listagens passam a filtrar sempre por excluido = 0, então vale ter o
+  // índice já restrito a esse recorte (menor e mais rápido que um índice cheio).
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_obra_servicos_ativos ON obra_servicos (obra_id) WHERE excluido = 0');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_financeiro_receitas_ativas ON financeiro_receitas (data_medicao) WHERE excluido = 0');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_diaria_obras_ativas ON diaria_obras (colaborador_id, mes_ciclo) WHERE excluido = 0');
+
   // Seed: permissões padrão por perfil x módulo (equivalente ao que hoje está fixo no código via temPermissao)
   const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
   if (permCountRes.rows[0].c === 0) {
