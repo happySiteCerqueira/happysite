@@ -45,7 +45,12 @@ router.get('/', async (req, res) => {
   let sql = `
     SELECT a.id, a.colaborador_id, a.tipo, a.data_ocorrencia, a.motivo, a.descricao,
            a.dias_suspensao, a.criado_em,
+           a.modelo, a.artigo_clt, a.hora_ocorrencia,
+           a.assinatura_colaborador, a.recusou_assinar,
+           a.testemunha1_nome, a.testemunha1_cpf, a.testemunha1_assinatura,
+           a.testemunha2_nome, a.testemunha2_cpf, a.testemunha2_assinatura,
            c.nome AS colaborador_nome, c.funcao AS colaborador_funcao, c.cor AS colaborador_cor,
+           c.documento AS colaborador_documento, c.data_admissao AS colaborador_admissao,
            c.ativo AS colaborador_ativo,
            u.nome AS aplicada_por_nome
     FROM advertencias a
@@ -77,11 +82,38 @@ router.post('/', async (req, res) => {
     }
   }
 
-  const { colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao } = req.body;
+  const {
+    colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao,
+    modelo, artigo_clt, hora_ocorrencia,
+    assinatura_colaborador, recusou_assinar,
+    testemunha1_nome, testemunha1_cpf, testemunha1_assinatura,
+    testemunha2_nome, testemunha2_cpf, testemunha2_assinatura
+  } = req.body;
 
   if (!colaborador_id) return res.status(400).json({ erro: 'Selecione o colaborador.' });
   if (!data_ocorrencia) return res.status(400).json({ erro: 'Informe a data da ocorrência.' });
   if (!motivo || !motivo.trim()) return res.status(400).json({ erro: 'Informe o motivo da advertência.' });
+
+  // Recusa de assinatura: a validade do termo depende de DUAS testemunhas devidamente
+  // identificadas (nome, CPF e assinatura). Validamos no servidor, e não só na tela, porque é
+  // esse conjunto que dá sustentação ao documento caso ele seja questionado depois.
+  const houveRecusa = recusou_assinar ? 1 : 0;
+  const texto = v => (v || '').toString().trim();
+
+  if (houveRecusa) {
+    const testemunhas = [
+      { n: texto(testemunha1_nome), c: texto(testemunha1_cpf), a: testemunha1_assinatura, ordem: '1ª' },
+      { n: texto(testemunha2_nome), c: texto(testemunha2_cpf), a: testemunha2_assinatura, ordem: '2ª' }
+    ];
+    for (const t of testemunhas) {
+      if (!t.n) return res.status(400).json({ erro: `Informe o nome completo da ${t.ordem} testemunha.` });
+      // Só conta dígitos: o CPF pode vir com ou sem máscara dependendo de quem digita.
+      if (t.c.replace(/\D/g, '').length !== 11) {
+        return res.status(400).json({ erro: `Informe um CPF válido (11 dígitos) para a ${t.ordem} testemunha.` });
+      }
+      if (!t.a) return res.status(400).json({ erro: `Falta a assinatura da ${t.ordem} testemunha.` });
+    }
+  }
 
   const tipoFinal = TIPOS.includes(tipo) ? tipo : 'ADVERTENCIA';
 
@@ -98,16 +130,37 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ erro: 'Informe quantos dias de suspensão.' });
   }
 
+  // Havendo recusa, a assinatura do colaborador é descartada por coerência: as duas situações
+  // são mutuamente exclusivas e guardar as duas deixaria o termo ambíguo.
+  const assinaturaFinal = houveRecusa ? null : (assinatura_colaborador || null);
+
   const info = await db.run(
     `INSERT INTO advertencias
-       (colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao, aplicada_por)
-     VALUES (?,?,?,?,?,?,?)`,
+       (colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao, aplicada_por,
+        modelo, artigo_clt, hora_ocorrencia,
+        assinatura_colaborador, recusou_assinar,
+        testemunha1_nome, testemunha1_cpf, testemunha1_assinatura,
+        testemunha2_nome, testemunha2_cpf, testemunha2_assinatura)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     colaborador_id, tipoFinal, data_ocorrencia, motivo.trim(), (descricao || '').trim() || null,
-    dias, req.usuario.id
+    dias, req.usuario.id,
+    texto(modelo) || null, texto(artigo_clt) || null, texto(hora_ocorrencia) || null,
+    assinaturaFinal, houveRecusa,
+    houveRecusa ? texto(testemunha1_nome) : null,
+    houveRecusa ? texto(testemunha1_cpf) : null,
+    houveRecusa ? (testemunha1_assinatura || null) : null,
+    houveRecusa ? texto(testemunha2_nome) : null,
+    houveRecusa ? texto(testemunha2_cpf) : null,
+    houveRecusa ? (testemunha2_assinatura || null) : null
   );
 
+  // As imagens de assinatura não vão para o log (o utils/auditoria já corta valores gigantes,
+  // mas aqui nem chegamos a enviá-las: o que importa registrar é o ato, não o desenho).
   await registrar(req.usuario.id, 'CRIAR', 'advertencias', info.lastInsertRowid, {
-    colaborador_id, colaborador_nome: colaborador.nome, tipo: tipoFinal, data_ocorrencia, motivo, dias_suspensao: dias
+    colaborador_id, colaborador_nome: colaborador.nome, tipo: tipoFinal, data_ocorrencia,
+    motivo, dias_suspensao: dias, modelo: texto(modelo) || null,
+    recusou_assinar: houveRecusa,
+    assinado: assinaturaFinal ? true : false
   });
 
   res.json({ id: info.lastInsertRowid });

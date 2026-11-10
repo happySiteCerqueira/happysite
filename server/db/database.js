@@ -624,6 +624,40 @@ async function migrate() {
     'CREATE INDEX IF NOT EXISTS idx_advertencias_colaborador ON advertencias (colaborador_id, data_ocorrencia DESC) WHERE excluido = 0'
   );
 
+  // ---- Advertência: modelo pré-cadastrado, assinaturas e testemunhas ----
+  //
+  // Migrações idempotentes (colunas adicionadas uma a uma, verificando antes se já existem) para
+  // que bancos criados na versão anterior do módulo recebam os campos novos sem perder dados.
+  //
+  // Assinaturas seguem exatamente o mesmo padrão já usado em epi_retiradas: imagem PNG em
+  // base64 (data URL) guardada numa coluna TEXT, desenhada no canvas pelo próprio colaborador.
+  //
+  // Testemunhas: a CLT admite que, havendo RECUSA de assinatura pelo empregado, duas testemunhas
+  // atestem a entrega/ciência do documento. Por isso os campos ficam nesta mesma linha (não em
+  // tabela separada): são sempre exatamente duas e só existem no contexto desta advertência.
+  const COLUNAS_ADVERTENCIA = {
+    // Código do modelo escolhido (ex: 'FALTA_INJUSTIFICADA') ou 'OUTRO' para texto livre.
+    modelo: 'TEXT',
+    // Enquadramento legal correspondente ao modelo, gravado junto para o histórico preservar a
+    // base legal vigente na data do fato (mesmo que o texto do modelo mude depois no sistema).
+    artigo_clt: 'TEXT',
+    // Hora aproximada da ocorrência (o termo impresso pede "às __:__ horas").
+    hora_ocorrencia: 'TEXT',
+    assinatura_colaborador: 'TEXT',
+    recusou_assinar: 'INTEGER NOT NULL DEFAULT 0',
+    testemunha1_nome: 'TEXT',
+    testemunha1_cpf: 'TEXT',
+    testemunha1_assinatura: 'TEXT',
+    testemunha2_nome: 'TEXT',
+    testemunha2_cpf: 'TEXT',
+    testemunha2_assinatura: 'TEXT'
+  };
+  for (const [coluna, tipo] of Object.entries(COLUNAS_ADVERTENCIA)) {
+    if (!(await colunaExiste('advertencias', coluna))) {
+      await pool.query(`ALTER TABLE advertencias ADD COLUMN ${coluna} ${tipo}`);
+    }
+  }
+
   // Migração idempotente: status do período de experiência (usado no Painel: quadro "Colaboradores em
   // Experiência"). Todo colaborador nasce como 'EFETIVADO' por padrão (coluna DEFAULT); no momento em que
   // esta coluna é criada, fazemos um backfill único: quem foi admitido há menos de 90 dias entra como
