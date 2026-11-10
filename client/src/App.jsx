@@ -19,6 +19,7 @@ import Financeiro from './pages/Financeiro';
 import Aso from './pages/Aso';
 import Agenda from './pages/Agenda';
 import Auditoria from './pages/Auditoria';
+import Advertencia from './pages/Advertencia';
 
 
 
@@ -59,6 +60,9 @@ export default function App() {
         <Route path="financeiro" element={<Financeiro />} />
         <Route path="aso" element={<Aso />} />
         <Route path="agenda" element={<Agenda />} />
+        {/* Advertência: o backend exige o módulo "advertencia" (permissaoModulo). Assim como
+            nas demais telas, a rota existe para todos — sem permissão a API responde 403. */}
+        <Route path="advertencia" element={<Advertencia />} />
         {/* Trilha de auditoria: o backend já exige ADM (permitir('ADM')); aqui a rota existe
             para todos, mas sem o menu e sem permissão a API responde 403. */}
         <Route path="auditoria" element={<Auditoria />} />

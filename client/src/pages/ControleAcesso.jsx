@@ -9,7 +9,8 @@ const NOMES_MODULOS = {
   epi: '🦺 EPI',
   financeiro: '💵 Financeiro',
   aso: '🩺 Controle de ASO',
-  agenda: '🗓️ Agenda'
+  agenda: '🗓️ Agenda',
+  advertencia: '⚠️ Advertência'
 };
 
 // Sub-abas granulares, agrupadas visualmente sob o módulo pai correspondente.
@@ -27,11 +28,15 @@ const SUBABAS_POR_MODULO = {
   ],
   epi: [
     { chave: 'epi.cadastrar', rotulo: '➕ Cadastrar / Entrada' }
+  ],
+  // Quem tem só o módulo pai consulta o Histórico; aplicar exige esta sub-permissão.
+  advertencia: [
+    { chave: 'advertencia.aplicar', rotulo: '✚ Dar advertência' }
   ]
 };
 
 // Ordem em que os módulos (com suas sub-abas) devem aparecer na tabela
-const ORDEM_MODULOS = ['obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda'];
+const ORDEM_MODULOS = ['obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda', 'advertencia'];
 
 export default function ControleAcesso() {
   const [modulos, setModulos] = useState([]);

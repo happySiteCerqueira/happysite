@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
@@ -1801,6 +1801,67 @@ function nomeCurto(nomeCompleto) {
   return `${partes[0]} ${partes[1].charAt(0).toUpperCase()}.`;
 }
 
+// Mostra o nome COMPLETO sempre que ele couber no espaço disponível; só quando não cabe é que
+// cai para a versão abreviada (primeiro nome + inicial do sobrenome).
+//
+// Por que medir em vez de encurtar sempre: a largura útil muda conforme a tela (o modal é
+// responsivo) e conforme a linha estar ou não marcada (quando marcada, os campos de Qtd/Unit./
+// Total roubam espaço). Antes abreviávamos incondicionalmente, e nomes curtos como "Ana Silva" —
+// que caberiam inteiros — apareciam desnecessariamente como "Ana S.".
+//
+// Como funciona: ao lado do texto visível existe uma cópia OCULTA do nome completo, usada só
+// como régua. Comparamos a largura dessa régua com o espaço disponível no container; se não
+// couber, exibimos o nome curto. A régua é sempre o nome completo — por isso a decisão pode ser
+// revertida quando o espaço aumentar (se medíssemos o texto já abreviado, ele sempre caberia e
+// o nome ficaria preso na versão curta para sempre).
+//
+// A medição NÃO é feita escrevendo no DOM do texto visível: esse nó é controlado pelo React e
+// qualquer alteração manual seria desfeita (ou não) de forma imprevisível no próximo render.
+function NomeAdaptavel({ nome, style }) {
+  const containerRef = useRef(null);
+  const reguaRef = useRef(null);
+  const [abreviar, setAbreviar] = useState(false);
+
+  // useLayoutEffect (e não useEffect): a medição precisa acontecer antes da pintura, senão o
+  // usuário chega a ver o nome completo "piscar" e ser trocado pelo abreviado.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const regua = reguaRef.current;
+    if (!container || !regua) return;
+
+    function medir() {
+      const disponivel = container.clientWidth;
+      if (!disponivel) return; // elemento ainda não medido/invisível: não decide nada ainda
+      // +1 absorve o arredondamento sub-pixel do navegador (evita abreviar por 0,3px).
+      setAbreviar(regua.scrollWidth > disponivel + 1);
+    }
+
+    medir();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observador = new ResizeObserver(medir);
+    observador.observe(container);
+    return () => observador.disconnect();
+  }, [nome]);
+
+  return (
+    <span ref={containerRef} title={nome} style={style}>
+      {abreviar ? nomeCurto(nome) : nome}
+      {/* Régua invisível: fora do fluxo (position absolute) para não ocupar espaço nem
+          influenciar a largura do container que estamos medindo. */}
+      <span
+        ref={reguaRef}
+        aria-hidden="true"
+        style={{
+          position: 'absolute', visibility: 'hidden', pointerEvents: 'none',
+          whiteSpace: 'nowrap', left: 0, top: 0
+        }}
+      >
+        {nome}
+      </span>
+    </span>
+  );
+}
+
 // Seleção de VÁRIAS pessoas para um mesmo serviço/célula, dividindo o trabalho entre elas.
 //
 // Por padrão a quantidade do serviço é dividida igualmente e todos recebem o mesmo valor
@@ -1897,13 +1958,16 @@ function ListaEquipe({ pessoas, selecionados, setSelecionados, ajustes, setAjust
               }}
             >
               <input type="checkbox" checked={marcado} onChange={() => alternar(p.id)} />
-              {/* minWidth garante espaço para o nome curto; o title mostra o nome completo */}
-              <span
-                title={p.nome}
-                style={{ flex: 1, fontSize: 12, minWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-              >
-                {nomeCurto(p.nome)}
-              </span>
+              {/* Nome inteiro tem prioridade: só abrevia quando realmente não couber no espaço.
+                  minWidth garante o mínimo para o nome curto; o title mostra o nome completo.
+                  position relative ancora a "régua" invisível usada na medição. */}
+              <NomeAdaptavel
+                nome={p.nome}
+                style={{
+                  flex: 1, fontSize: 12, minWidth: 110, overflow: 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap', position: 'relative'
+                }}
+              />
               {marcado && (
                 <>
                   <input

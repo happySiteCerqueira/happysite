@@ -600,7 +600,29 @@ async function migrate() {
       perfil TEXT NOT NULL,
       UNIQUE(evento_id, perfil)
     );
+
+    -- Advertências disciplinares aplicadas a colaboradores (módulo "Advertência").
+    -- Sem ON DELETE CASCADE no colaborador de propósito: o desligamento do colaborador é uma
+    -- desativação lógica (ativo = 0), e o histórico disciplinar precisa sobreviver a ela.
+    CREATE TABLE IF NOT EXISTS advertencias (
+      id SERIAL PRIMARY KEY,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id),
+      tipo TEXT NOT NULL DEFAULT 'ADVERTENCIA' CHECK(tipo IN ('ORIENTACAO','ADVERTENCIA','SUSPENSAO')),
+      data_ocorrencia DATE NOT NULL,
+      motivo TEXT NOT NULL,
+      descricao TEXT,
+      dias_suspensao INTEGER NOT NULL DEFAULT 0,
+      aplicada_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      excluido INTEGER NOT NULL DEFAULT 0
+    );
   `);
+
+  // Índice para o histórico: a consulta mais comum é "advertências de um colaborador, da mais
+  // recente para a mais antiga", sempre descartando as excluídas logicamente.
+  await pool.query(
+    'CREATE INDEX IF NOT EXISTS idx_advertencias_colaborador ON advertencias (colaborador_id, data_ocorrencia DESC) WHERE excluido = 0'
+  );
 
   // Migração idempotente: status do período de experiência (usado no Painel: quadro "Colaboradores em
   // Experiência"). Todo colaborador nasce como 'EFETIVADO' por padrão (coluna DEFAULT); no momento em que
@@ -754,11 +776,12 @@ async function migrate() {
   const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
   if (permCountRes.rows[0].c === 0) {
     const MODULOS = [
-      'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda',
+      'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda', 'advertencia',
       // Sub-abas granulares (dentro de módulos que já foram liberados para o perfil)
       'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
       'prestadores.cadastro',
-      'epi.cadastrar'
+      'epi.cadastrar',
+      'advertencia.aplicar'
     ];
     const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
     // Espelha as regras atuais do Layout.jsx/telas (temPermissao(...)):
@@ -772,6 +795,10 @@ async function migrate() {
       financeiro: ['FINANCEIRO', 'RH'],
       aso: ['RH'],
       agenda: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR'],
+      // Advertência é assunto disciplinar: o RH gerencia; Engenheiro e Mestre consultam o
+      // histórico da equipe. Quem pode efetivamente APLICAR fica na sub-aba abaixo.
+      advertencia: ['RH', 'ENGENHEIRO', 'MESTRE'],
+      'advertencia.aplicar': ['RH'],
       // Sub-abas: mesmo padrão que hoje está fixo em Financeiro.jsx/Prestadores.jsx/Epi.jsx
       'financeiro.receita': ['FINANCEIRO'],
       'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
@@ -806,7 +833,13 @@ async function migrate() {
       'aso': ['RH'],
       // Módulo novo (Agenda): mesma ideia — nasce liberado para todos os perfis operacionais,
       // já que é uma agenda de compromissos compartilhada da empresa.
-      'agenda': ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR']
+      'agenda': ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR'],
+      // Módulo novo (Advertência): assunto disciplinar — o RH gerencia; Engenheiro e Mestre
+      // consultam o histórico da própria equipe. Sem estas linhas, permissaoModulo() negaria
+      // o acesso a todo mundo em bancos que já passaram pelo seed inicial.
+      'advertencia': ['RH', 'ENGENHEIRO', 'MESTRE'],
+      // Aplicar a medida (aba "Dar advertência") é mais restrito que apenas consultar.
+      'advertencia.aplicar': ['RH']
     };
     const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
     for (const perfil of PERFIS) {

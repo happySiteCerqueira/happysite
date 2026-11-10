@@ -19,6 +19,7 @@ const TITULOS_ROTA = [
   { prefixo: '/financeiro', titulo: '💵 Financeiro' },
   { prefixo: '/aso', titulo: '🩺 Controle de ASO' },
   { prefixo: '/agenda', titulo: '🗓️ Agenda' },
+  { prefixo: '/advertencia', titulo: '⚠️ Advertência' },
   { prefixo: '/auditoria', titulo: '🔍 Auditoria' },
 
 
@@ -33,7 +34,10 @@ function tituloDaRota(pathname) {
 }
 
 export default function Layout() {
-  const { usuario, logout, temPermissao } = useAuth();
+  // temAcessoSubaba consulta a lista real de módulos liberados (GET /permissoes/minhas), usada
+  // pelo item "Advertência" — módulo novo, cujo acesso é definido só no Controle de Acesso e
+  // não por uma lista fixa de perfis no código.
+  const { usuario, logout, temPermissao, temAcessoSubaba } = useAuth();
   // ENCARREGADO é um perfil restrito: acessa somente o módulo EPI.
   const ehEncarregado = usuario?.perfil === 'ENCARREGADO';
   const { mes, setMes, mesVigente } = useApuracao();
@@ -93,6 +97,9 @@ export default function Layout() {
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
           {temPermissao('RH') && <NavLink to="/aso" style={linkStyle}>🩺 Controle de ASO</NavLink>}
           {temPermissao('RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR') && <NavLink to="/agenda" style={linkStyle}>🗓️ Agenda</NavLink>}
+          {/* Advertência: quem vê o item é definido na tela Controle de Acesso (módulo
+              "advertencia"), e não por uma lista fixa de perfis — por isso usa temAcessoSubaba. */}
+          {temAcessoSubaba('advertencia') && <NavLink to="/advertencia" style={linkStyle}>⚠️ Advertência</NavLink>}
           {/* Auditoria: exclusiva do ADM master. temPermissao('ADM') só é verdadeiro para o
               próprio ADM — os demais perfis nem veem o item no menu. */}
           {temPermissao('ADM') && <NavLink to="/auditoria" style={linkStyle}>🔍 Auditoria</NavLink>}

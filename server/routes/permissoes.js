@@ -6,11 +6,14 @@ const { registrar } = require('../utils/auditoria');
 const router = express.Router();
 
 const MODULOS = [
-  'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda',
+  'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda', 'advertencia',
   // Sub-abas granulares (só têm efeito prático se o módulo pai também estiver permitido)
   'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
   'prestadores.cadastro',
-  'epi.cadastrar'
+  'epi.cadastrar',
+  // Dentro de Advertência: "Dar advertência" é a ação de registrar; o Histórico (consulta) fica
+  // disponível para todo perfil que tenha o módulo pai liberado.
+  'advertencia.aplicar'
 ];
 
 const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];

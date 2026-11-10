@@ -23,6 +23,18 @@ const VERDE_SALDO_A_FAVOR = '#16a34a';
 const VERDE_SALDO_A_FAVOR_RGB = [22, 163, 74];
 const VERDE_SALDO_A_FAVOR_ARGB = 'FF16A34A';
 
+// Nome da pessoa/empresa seguido da sua função/cargo, usado em TODAS as exportações de Medição
+// (Excel, Excel com detalhe, PDF e PDF com detalhe). Ex: "João da Silva (Pedreiro)".
+//
+// O backend já entrega o campo "funcao" pronto em cada linha (ver server/routes/medicoes.js):
+// para pessoa física é a função cadastrada; para empreiteiro (PJ), que não tem função, é o
+// contato responsável. Quem não tiver nada preenchido continua saindo só com o nome, sem
+// parênteses vazios pendurados.
+function nomeComFuncao(item) {
+  const funcao = (item.funcao || '').trim();
+  return funcao ? `${item.nome} (${funcao})` : item.nome;
+}
+
 const ROTULOS_PAGAMENTO = {
   vale: 'Vale',
   fgts: 'INSS',
@@ -36,7 +48,7 @@ const ROTULOS_PAGAMENTO = {
 // Gera e baixa a planilha de Medição (dados já exibidos na tela) em formato Excel (.xlsx).
 export function exportarMedicaoExcel(linhas, mes) {
   const dados = linhas.map(item => ({
-    'Pessoa/Empresa': item.nome,
+    'Pessoa/Empresa': nomeComFuncao(item),
     'Tipo': item.tipo,
     'Valor Bruto': formatarValorBR(item.valor_bruto),
     'Pagto. Antecipado': formatarValorBR(item.valor_vale),
@@ -46,7 +58,9 @@ export function exportarMedicaoExcel(linhas, mes) {
   }));
 
   const ws = XLSX.utils.json_to_sheet(dados);
-  ws['!cols'] = [{ wch: 28 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 24 }];
+  // Coluna do nome mais larga que antes (28 -> 38): agora ela carrega também a função entre
+  // parênteses e, com a largura antiga, o texto ficaria cortado visualmente na planilha.
+  ws['!cols'] = [{ wch: 38 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 24 }];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Medição');
@@ -72,7 +86,7 @@ export function exportarMedicaoPdf(linhas, mes) {
   doc.text(`Medição Mensal - ${mes}`, 14, 15);
 
   const corpo = linhas.map(item => [
-    item.nome,
+    nomeComFuncao(item),
     item.tipo,
     `R$ ${formatarValorBR(item.valor_bruto)}`,
     `R$ ${formatarValorBR(item.valor_vale)}`,
@@ -128,7 +142,8 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
 
   montarPlanilha('Resumo',
     [
-      { header: 'Pessoa/Empresa', key: 'nome', width: 28 },
+      // 38 (e não 28): a coluna passou a incluir a função entre parênteses junto do nome.
+      { header: 'Pessoa/Empresa', key: 'nome', width: 38 },
       { header: 'Tipo', key: 'tipo', width: 8 },
       { header: 'Valor Bruto', key: 'valor_bruto', width: 14 },
       { header: 'Pagto. Antecipado', key: 'valor_vale', width: 16 },
@@ -137,7 +152,7 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
       { header: 'Pix', key: 'pix', width: 24 }
     ],
     linhas.map(item => ({
-      nome: item.nome,
+      nome: nomeComFuncao(item),
       tipo: item.tipo,
       valor_bruto: formatarMoeda(item.valor_bruto),
       valor_vale: formatarMoeda(item.valor_vale),
@@ -151,7 +166,7 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
   linhas.forEach(item => {
     (item.itens || []).forEach(it => {
       detalheBruto.push({
-        nome: item.nome,
+        nome: nomeComFuncao(item),
         obra: it.obra,
         servico: it.servico,
         local: it.celula_label || it.celula || '-',
@@ -162,7 +177,7 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
   });
   montarPlanilha('Detalhe Valor Bruto',
     [
-      { header: 'Pessoa/Empresa', key: 'nome', width: 28 },
+      { header: 'Pessoa/Empresa', key: 'nome', width: 38 },
       { header: 'Obra', key: 'obra', width: 22 },
       { header: 'Serviço', key: 'servico', width: 18 },
       { header: 'Local', key: 'local', width: 24 },
@@ -173,7 +188,7 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
   );
 
   const colunasPagamento = [
-    { header: 'Pessoa/Empresa', key: 'nome', width: 28 },
+    { header: 'Pessoa/Empresa', key: 'nome', width: 38 },
     { header: 'Vale', key: 'vale', width: 12 },
     { header: 'INSS', key: 'fgts', width: 12 },
     { header: 'Taxa', key: 'taxa', width: 12 },
@@ -188,7 +203,7 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
     .map(item => {
       const dp = item.detalhe_pagamento;
       const linha = {
-        nome: item.nome,
+        nome: nomeComFuncao(item),
         vale: formatarMoeda(dp.vale),
         fgts: formatarMoeda(dp.fgts),
         taxa: formatarMoeda(dp.taxa),
@@ -230,7 +245,7 @@ export function exportarMedicaoDetalhadoPdf(linhas, mes) {
   doc.text(`Medição Mensal (Detalhada) - ${mes}`, margem, 12);
 
   const corpoResumo = linhas.map(item => [
-    item.nome,
+    nomeComFuncao(item),
     item.tipo,
     `R$ ${formatarValorBR(item.valor_bruto)}`,
     `R$ ${formatarValorBR(item.valor_vale)}`,
@@ -258,7 +273,7 @@ export function exportarMedicaoDetalhadoPdf(linhas, mes) {
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text(item.nome, margem, y);
+    doc.text(nomeComFuncao(item), margem, y);
     y += 4;
 
     if (item.itens && item.itens.length > 0) {
