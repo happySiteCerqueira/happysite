@@ -8,6 +8,7 @@ if (fs.existsSync(envPath)) {
 }
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+const { MODELOS_ADVERTENCIA_PADRAO } = require('./modelosAdvertenciaPadrao');
 
 // Remove espaços/quebras de linha acidentais no início/fim (comum ao colar em painéis de hospedagem)
 const databaseUrl = (process.env.DATABASE_URL || '').trim();
@@ -658,6 +659,40 @@ async function migrate() {
     }
   }
 
+  // Vínculo com a obra onde o fato ocorreu. ON DELETE SET NULL (e não CASCADE) de propósito:
+  // excluir uma obra não pode apagar o histórico disciplinar de ninguém — o registro permanece,
+  // apenas sem o vínculo. O nome da obra também é copiado para obra_nome no momento do
+  // lançamento, de modo que o termo já emitido continue reproduzível mesmo se a obra sumir.
+  if (!(await colunaExiste('advertencias', 'obra_id'))) {
+    await pool.query('ALTER TABLE advertencias ADD COLUMN obra_id INTEGER REFERENCES obras(id) ON DELETE SET NULL');
+  }
+  if (!(await colunaExiste('advertencias', 'obra_nome'))) {
+    await pool.query('ALTER TABLE advertencias ADD COLUMN obra_nome TEXT');
+  }
+
+  // ---- Catálogo de modelos de advertência (o sistema "aprende" motivos novos) ----
+  //
+  // Antes os 10 modelos viviam fixos num arquivo do frontend. Movidos para o banco, a lista
+  // passa a ser editável em tempo de execução: quando alguém aplica uma advertência usando o
+  // motivo "Outro", o texto digitado vira um modelo novo e aparece para todos na próxima vez.
+  //
+  // "motivo" é UNIQUE para que o mesmo título não seja cadastrado duas vezes (o INSERT do
+  // aprendizado usa ON CONFLICT DO NOTHING apoiado nessa restrição).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS advertencia_modelos (
+      id SERIAL PRIMARY KEY,
+      motivo TEXT NOT NULL UNIQUE,
+      texto_base TEXT NOT NULL,
+      artigo_clt TEXT,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      excluido INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
+  // OBS: o seed dos 10 modelos padrão fica mais abaixo, junto das demais migrações controladas,
+  // porque depende da tabela "migracoes_aplicadas" — que só é criada adiante neste mesmo arquivo.
+
   // Migração idempotente: status do período de experiência (usado no Painel: quadro "Colaboradores em
   // Experiência"). Todo colaborador nasce como 'EFETIVADO' por padrão (coluna DEFAULT); no momento em que
   // esta coluna é criada, fazemos um backfill único: quem foi admitido há menos de 90 dias entra como
@@ -769,6 +804,24 @@ async function migrate() {
     }
     await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_ENC_SO_EPI]);
     console.log('[migracao] ENCARREGADO agora tem acesso somente ao modulo EPI.');
+  }
+
+  // ---- Seed dos modelos padrão de advertência ----
+  //
+  // Roda uma única vez (controlado por migracoes_aplicadas). Se o usuário depois renomear ou
+  // excluir um modelo, ele NÃO volta no próximo restart — a lista passa a ser do usuário.
+  const CHAVE_SEED_MODELOS = 'seed_advertencia_modelos';
+  const seedModelos = await pool.query('SELECT 1 FROM migracoes_aplicadas WHERE chave = $1', [CHAVE_SEED_MODELOS]);
+  if (seedModelos.rows.length === 0) {
+    for (const m of MODELOS_ADVERTENCIA_PADRAO) {
+      await pool.query(
+        `INSERT INTO advertencia_modelos (motivo, texto_base, artigo_clt)
+         VALUES ($1,$2,$3) ON CONFLICT (motivo) DO NOTHING`,
+        [m.motivo, m.texto_base, m.artigo_clt]
+      );
+    }
+    await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_SEED_MODELOS]);
+    console.log('[migracao] Modelos padrao de advertencia cadastrados.');
   }
 
   // ---- Exclusão lógica (soft delete) nas tabelas críticas ----

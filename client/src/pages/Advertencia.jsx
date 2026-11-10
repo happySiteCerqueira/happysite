@@ -2,7 +2,20 @@ import { useEffect, useState } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import AssinaturaCanvas from '../components/AssinaturaCanvas';
-import { MODELOS_ADVERTENCIA, MODELO_OUTRO, buscarModelo, lacunasPendentes } from '../utils/modelosAdvertencia';
+import { gerarTermoAdvertenciaPdf } from '../utils/termoAdvertenciaPdf';
+
+// Código reservado no seletor para "nenhum modelo existente serve": libera a digitação de um
+// motivo novo, que o sistema passa a oferecer nas próximas vezes.
+const MODELO_OUTRO = 'OUTRO';
+
+// Substitui os marcadores do texto-base pelos dados reais do formulário, em tempo real.
+// Marcadores desconhecidos ficam como estão — melhor um {x} visível do que texto sumindo.
+function interpolarTexto(textoBase, { colaborador, data, hora }) {
+  return String(textoBase || '')
+    .replace(/\{colaborador\}/g, colaborador || '')
+    .replace(/\{data\}/g, data || '')
+    .replace(/\{hora\}/g, hora || 'horário não informado');
+}
 
 // Formata uma data (Date, string ISO ou 'YYYY-MM-DD') como dd/mm/aaaa, ignorando timezone
 // (usa os componentes UTC para evitar que colunas DATE do Postgres "voltem" um dia por fuso).
@@ -82,9 +95,21 @@ function AbaDarAdvertencia({ onRegistrada }) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
-  // Modelo pré-cadastrado escolhido ('' = nenhum ainda, MODELO_OUTRO = escrita livre).
+  // Modelo escolhido: id numérico (como texto) vindo do banco, ou MODELO_OUTRO.
+  const [modelos, setModelos] = useState([]);
   const [modelo, setModelo] = useState('');
   const [horaOcorrencia, setHoraOcorrencia] = useState('');
+  const [artigoClt, setArtigoClt] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+
+  // Obra onde o fato ocorreu e dados completos do colaborador selecionado (CPF, admissão),
+  // buscados sob demanda para compor o termo.
+  const [obras, setObras] = useState([]);
+  const [obraId, setObraId] = useState('');
+  const [colaboradorDados, setColaboradorDados] = useState(null);
+
+  // Modal de sucesso exibido após salvar, com a opção de imprimir o PDF na hora.
+  const [registroSalvo, setRegistroSalvo] = useState(null);
 
   // Assinaturas (mesmo padrão do EPI: PNG em base64 vindo do canvas).
   const [assinaturaColaborador, setAssinaturaColaborador] = useState(null);
@@ -96,30 +121,48 @@ function AbaDarAdvertencia({ onRegistrada }) {
   const [t2Cpf, setT2Cpf] = useState('');
   const [t2Assinatura, setT2Assinatura] = useState(null);
 
-  // Lacunas [assim] que ainda restam no texto do modelo escolhido.
-  const pendencias = lacunasPendentes(descricao);
+  const colaboradorSelecionado = colaboradores.find(c => String(c.id) === String(colaboradorId));
+  const modeloSelecionado = modelos.find(m => String(m.id) === String(modelo));
 
-  // Ao escolher um modelo, preenche motivo e texto-base automaticamente. "Outro" limpa tudo e
-  // deixa o usuário escrever livremente. Trocar de modelo sobrescreve o texto de propósito —
-  // por isso só fazemos isso na troca explícita, nunca durante a digitação.
-  function escolherModelo(codigo) {
-    setModelo(codigo);
-    if (codigo === MODELO_OUTRO || !codigo) {
+  // Dados usados na interpolação do texto-base.
+  const dadosInterpolacao = {
+    colaborador: colaboradorSelecionado?.nome || '',
+    data: formatarData(dataOcorrencia),
+    hora: horaOcorrencia
+  };
+
+  // Reinterpola o texto sempre que o modelo, o colaborador, a data ou a hora mudarem — é isto
+  // que dispensa o usuário de preencher lacunas à mão. Só atua quando há um modelo escolhido:
+  // no modo "Outro" o texto é inteiramente do usuário e não pode ser sobrescrito.
+  useEffect(() => {
+    if (!modeloSelecionado) return;
+    setDescricao(interpolarTexto(modeloSelecionado.texto_base, dadosInterpolacao));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelo, colaboradorId, dataOcorrencia, horaOcorrencia]);
+
+  // Ao escolher um modelo, preenche motivo, texto-base e artigo automaticamente.
+  // "Outro" limpa os campos para o usuário escrever um motivo novo — que será aprendido.
+  function escolherModelo(valor) {
+    setModelo(valor);
+    if (valor === MODELO_OUTRO || !valor) {
       setMotivo('');
       setDescricao('');
+      setArtigoClt('');
       return;
     }
-    const m = buscarModelo(codigo);
+    const m = modelos.find(x => String(x.id) === String(valor));
     if (m) {
-      setMotivo(m.rotulo);
-      setDescricao(m.texto);
+      setMotivo(m.motivo);
+      setArtigoClt(m.artigo_clt || '');
+      setDescricao(interpolarTexto(m.texto_base, dadosInterpolacao));
     }
   }
 
   function limparFormulario() {
     setColaboradorId(''); setTipo('ADVERTENCIA'); setDataOcorrencia(hoje());
     setMotivo(''); setDescricao(''); setDiasSuspensao(''); setConfirmado(false);
-    setModelo(''); setHoraOcorrencia('');
+    setModelo(''); setHoraOcorrencia(''); setArtigoClt(''); setObservacoes('');
+    setObraId(''); setColaboradorDados(null);
     setAssinaturaColaborador(null); setRecusouAssinar(false);
     setT1Nome(''); setT1Cpf(''); setT1Assinatura(null);
     setT2Nome(''); setT2Cpf(''); setT2Assinatura(null);
@@ -132,8 +175,24 @@ function AbaDarAdvertencia({ onRegistrada }) {
     api.get('/advertencias/colaboradores')
       .then(res => setColaboradores(res.data))
       .catch(() => setErro('Erro ao carregar a lista de colaboradores'));
+    // Modelos vêm do banco: os 10 padrão mais os que o sistema aprendeu com o motivo "Outro".
+    api.get('/advertencias/modelos')
+      .then(res => setModelos(res.data))
+      .catch(() => setErro('Erro ao carregar os modelos de advertência'));
+    api.get('/advertencias/obras')
+      .then(res => setObras(res.data))
+      .catch(() => setErro('Erro ao carregar as obras'));
   }
   useEffect(carregar, []);
+
+  // Busca CPF, função e data de admissão da pessoa escolhida — dados que só o termo usa e que
+  // não valeria a pena trazer na listagem inteira.
+  useEffect(() => {
+    if (!colaboradorId) { setColaboradorDados(null); return; }
+    api.get(`/advertencias/colaboradores/${colaboradorId}`)
+      .then(res => setColaboradorDados(res.data))
+      .catch(() => setColaboradorDados(null));
+  }, [colaboradorId]);
 
   async function salvar() {
     setErro('');
@@ -141,13 +200,6 @@ function AbaDarAdvertencia({ onRegistrada }) {
     if (!dataOcorrencia) { setErro('Informe a data da ocorrência.'); return; }
     if (!motivo.trim()) { setErro('Informe o motivo.'); return; }
     if (tipo === 'SUSPENSAO' && !(Number(diasSuspensao) > 0)) { setErro('Informe quantos dias de suspensão.'); return; }
-
-    // Bloqueia lacunas [assim] esquecidas no texto: o termo é entregue ao colaborador e pode ser
-    // usado como prova depois — não pode sair com "[data]" literal no lugar do fato real.
-    if (pendencias.length > 0) {
-      setErro(`Complete os campos entre colchetes no texto: ${pendencias.join(', ')}`);
-      return;
-    }
 
     if (recusouAssinar) {
       const faltas = [];
@@ -164,18 +216,25 @@ function AbaDarAdvertencia({ onRegistrada }) {
 
     if (!confirmado) { setErro('Confirme que o colaborador foi comunicado desta medida.'); return; }
 
+    // As observações adicionais são concatenadas ao texto-base, formando a discriminação
+    // definitiva dos fatos — é esse texto único que vai para o banco e para o PDF.
+    const descricaoFinal = [descricao.trim(), observacoes.trim()].filter(Boolean).join('\n\n');
+
     setSalvando(true);
     try {
-      await api.post('/advertencias', {
+      const resposta = await api.post('/advertencias', {
         colaborador_id: Number(colaboradorId),
+        obra_id: obraId ? Number(obraId) : null,
         tipo,
         data_ocorrencia: dataOcorrencia,
         hora_ocorrencia: horaOcorrencia || null,
         motivo: motivo.trim(),
-        descricao: descricao.trim(),
+        descricao: descricaoFinal,
         dias_suspensao: tipo === 'SUSPENSAO' ? Number(diasSuspensao) : 0,
-        modelo: modelo || MODELO_OUTRO,
-        artigo_clt: buscarModelo(modelo)?.artigo || null,
+        modelo: modeloSelecionado ? String(modeloSelecionado.id) : MODELO_OUTRO,
+        artigo_clt: artigoClt.trim() || null,
+        // Só aprende quando o motivo foi digitado à mão (opção "Outro").
+        salvar_como_modelo: modelo === MODELO_OUTRO,
         assinatura_colaborador: recusouAssinar ? null : assinaturaColaborador,
         recusou_assinar: recusouAssinar ? 1 : 0,
         testemunha1_nome: t1Nome.trim(),
@@ -185,9 +244,35 @@ function AbaDarAdvertencia({ onRegistrada }) {
         testemunha2_cpf: t2Cpf.trim(),
         testemunha2_assinatura: t2Assinatura
       });
+
+      // Monta a versão "impressa" do registro recém-criado a partir do que já temos em tela,
+      // evitando uma segunda ida ao servidor só para poder gerar o PDF imediatamente.
+      setRegistroSalvo({
+        id: resposta.data?.id,
+        tipo,
+        data_ocorrencia: dataOcorrencia,
+        hora_ocorrencia: horaOcorrencia || null,
+        motivo: motivo.trim(),
+        descricao: descricaoFinal,
+        artigo_clt: artigoClt.trim() || null,
+        dias_suspensao: tipo === 'SUSPENSAO' ? Number(diasSuspensao) : 0,
+        obra_nome: obras.find(o => String(o.id) === String(obraId))?.nome || null,
+        colaborador_nome: colaboradorDados?.nome || colaboradorSelecionado?.nome || '',
+        colaborador_funcao: colaboradorDados?.funcao || '',
+        colaborador_documento: colaboradorDados?.documento || '',
+        colaborador_admissao: colaboradorDados?.data_admissao || null,
+        assinatura_colaborador: recusouAssinar ? null : assinaturaColaborador,
+        recusou_assinar: recusouAssinar ? 1 : 0,
+        testemunha1_nome: t1Nome.trim(), testemunha1_cpf: t1Cpf.trim(), testemunha1_assinatura: t1Assinatura,
+        testemunha2_nome: t2Nome.trim(), testemunha2_cpf: t2Cpf.trim(), testemunha2_assinatura: t2Assinatura
+      });
+
       // Limpa o formulário para evitar que um segundo registro saia duplicado por engano.
+      // (A navegação para o Histórico acontece pelo modal de sucesso, não aqui.)
       limparFormulario();
-      onRegistrada();
+
+      // Modelos são recarregados: se o motivo foi digitado à mão, ele já estará na lista.
+      api.get('/advertencias/modelos').then(res => setModelos(res.data)).catch(() => {});
     } catch (err) {
       setErro(err.response?.data?.erro || 'Erro ao registrar a advertência');
     }
@@ -216,6 +301,24 @@ function AbaDarAdvertencia({ onRegistrada }) {
           {colaboradores.map(c => (
             <option key={c.id} value={c.id}>{c.nome}{c.funcao ? ` — ${c.funcao}` : ''}</option>
           ))}
+        </select>
+        {/* Confirmação visual dos dados que irão para o termo, puxados do cadastro. */}
+        {colaboradorDados && (
+          <div style={{ fontSize: 11, color: '#6b7280', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 8 }}>
+            <strong>CPF:</strong> {colaboradorDados.documento || '—'}
+            {'  ·  '}
+            <strong>Função:</strong> {colaboradorDados.funcao || '—'}
+            {'  ·  '}
+            <strong>Admissão:</strong> {colaboradorDados.data_admissao ? formatarData(colaboradorDados.data_admissao) : '—'}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 12 }}>Obra / Local</label>
+        <select value={obraId} onChange={e => setObraId(e.target.value)}>
+          <option value="">Selecione a obra...</option>
+          {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
         </select>
       </div>
 
@@ -249,20 +352,28 @@ function AbaDarAdvertencia({ onRegistrada }) {
         <label style={{ fontSize: 12 }}>Modelo de enquadramento</label>
         <select value={modelo} onChange={e => escolherModelo(e.target.value)}>
           <option value="">Selecione o motivo...</option>
-          {MODELOS_ADVERTENCIA.map(m => (
-            <option key={m.codigo} value={m.codigo}>{m.numero}. {m.rotulo}</option>
+          {modelos.map(m => (
+            <option key={m.id} value={m.id}>{m.motivo}</option>
           ))}
-          <option value={MODELO_OUTRO}>✏️ Outro (escrever manualmente)</option>
+          <option value={MODELO_OUTRO}>✏️ Outro (cadastrar novo motivo)</option>
         </select>
-        {buscarModelo(modelo) && (
+        {modeloSelecionado?.artigo_clt && (
           <div style={{ fontSize: 11, color: '#6b7280' }}>
-            Enquadramento legal: <strong>{buscarModelo(modelo).artigo}</strong>
+            Enquadramento legal: <strong>{modeloSelecionado.artigo_clt}</strong>
+          </div>
+        )}
+        {modelo === MODELO_OUTRO && (
+          <div style={{ fontSize: 11, color: '#1d4ed8', background: '#dbeafe', borderRadius: 6, padding: 8 }}>
+            💡 Este motivo será <strong>salvo automaticamente</strong> e ficará disponível na lista
+            para todos os usuários nas próximas advertências.
           </div>
         )}
       </div>
 
       <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
-        <label style={{ fontSize: 12 }}>Motivo (resumo)</label>
+        <label style={{ fontSize: 12 }}>
+          {modelo === MODELO_OUTRO ? 'Título do novo motivo' : 'Motivo (resumo)'}
+        </label>
         <input
           placeholder="Ex: Falta sem justificativa"
           value={motivo}
@@ -270,6 +381,20 @@ function AbaDarAdvertencia({ onRegistrada }) {
           maxLength={200}
         />
       </div>
+
+      {/* Artigo da CLT só é editável ao cadastrar um motivo novo; nos modelos existentes ele
+          vem do catálogo e é exibido logo acima, junto ao seletor. */}
+      {modelo === MODELO_OUTRO && (
+        <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12 }}>Artigo da CLT (opcional)</label>
+          <input
+            placeholder='Ex: Art. 482, "e" (desídia) da CLT'
+            value={artigoClt}
+            onChange={e => setArtigoClt(e.target.value)}
+            maxLength={200}
+          />
+        </div>
+      )}
 
       <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 12 }}>Discriminação dos fatos</label>
@@ -280,12 +405,24 @@ function AbaDarAdvertencia({ onRegistrada }) {
           onChange={e => setDescricao(e.target.value)}
           style={{ resize: 'vertical' }}
         />
-        {/* Aviso visível enquanto restarem lacunas do modelo por completar. */}
-        {pendencias.length > 0 && (
-          <div style={{ background: '#fef3c7', color: '#92400e', padding: 8, borderRadius: 6, fontSize: 12 }}>
-            ⚠️ Substitua pelos dados reais antes de salvar: <strong>{pendencias.join(', ')}</strong>
+        {modeloSelecionado && (
+          <div style={{ fontSize: 11, color: '#6b7280' }}>
+            Preenchido automaticamente com o nome do colaborador, a data e a hora informados acima.
+            Pode editar livremente.
           </div>
         )}
+      </div>
+
+      {/* Texto livre acrescentado ao final da discriminação dos fatos no momento de salvar. */}
+      <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 12 }}>Observações Adicionais (Opcional)</label>
+        <textarea
+          rows={3}
+          placeholder="Detalhes complementares: local exato, testemunhas presentes, consequências do ato..."
+          value={observacoes}
+          onChange={e => setObservacoes(e.target.value)}
+          style={{ resize: 'vertical' }}
+        />
       </div>
 
       {/* ---- CIÊNCIA DO COLABORADOR ----
@@ -353,6 +490,38 @@ function AbaDarAdvertencia({ onRegistrada }) {
       <button className="btn-success" onClick={salvar} disabled={salvando} style={{ fontWeight: 700 }}>
         {salvando ? 'Registrando...' : '✔ Registrar advertência'}
       </button>
+
+      {registroSalvo && (
+        <ModalSucesso
+          registro={registroSalvo}
+          onImprimir={() => gerarTermoAdvertenciaPdf(registroSalvo)}
+          onFechar={() => { setRegistroSalvo(null); onRegistrada(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal exibido logo após o registro: o documento já está salvo e imutável no banco, então aqui
+// só resta decidir se imprime agora ou segue para o histórico (onde pode imprimir depois).
+function ModalSucesso({ registro, onImprimir, onFechar }) {
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ width: 'min(420px, 95vw)' }} onClick={e => e.stopPropagation()}>
+        <h4 style={{ marginTop: 0 }}>✅ Advertência registrada</h4>
+        <p style={{ fontSize: 13, color: '#6b7280' }}>
+          O registro de <strong>{registro.colaborador_nome}</strong> foi salvo e já está disponível
+          no histórico. Você pode imprimir o termo agora ou a qualquer momento depois.
+        </p>
+        <div className="flex gap-2" style={{ marginTop: 16 }}>
+          <button className="btn-primary" style={{ flex: 1 }} onClick={onImprimir}>
+            🖨️ Imprimir PDF agora
+          </button>
+          <button className="btn-secondary" style={{ flex: 1 }} onClick={onFechar}>
+            Voltar ao Histórico
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -486,9 +655,11 @@ function TabelaHistorico({ lista, ehAdm, onExcluir }) {
             <th>Colaborador</th>
             <th>Tipo</th>
             <th>Data</th>
+            <th>Obra</th>
             <th>Motivo</th>
             <th>Ciência</th>
             <th>Aplicada por</th>
+            <th>Termo</th>
             {ehAdm && <th>Ações</th>}
           </tr>
         </thead>
@@ -524,6 +695,7 @@ function TabelaHistorico({ lista, ehAdm, onExcluir }) {
                   )}
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>{formatarData(item.data_ocorrencia)}</td>
+                <td style={{ color: '#6b7280', fontSize: 12 }}>{item.obra_nome || '-'}</td>
                 <td>
                   {item.motivo}
                   {item.descricao && (
@@ -551,6 +723,17 @@ function TabelaHistorico({ lista, ehAdm, onExcluir }) {
                   )}
                 </td>
                 <td style={{ color: '#6b7280' }}>{item.aplicada_por_nome || '-'}</td>
+                {/* O termo é sempre reconstruído a partir do que está gravado, de modo que o
+                    documento baixado hoje é idêntico ao emitido no dia do lançamento. */}
+                <td>
+                  <button
+                    className="btn-secondary btn-sm"
+                    title="Imprimir / baixar o termo de advertência em PDF"
+                    onClick={() => gerarTermoAdvertenciaPdf(item)}
+                  >
+                    🖨️ PDF
+                  </button>
+                </td>
                 {ehAdm && (
                   <td>
                     <button className="btn-danger btn-sm" onClick={() => onExcluir(item)}>Excluir</button>

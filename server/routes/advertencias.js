@@ -34,6 +34,35 @@ router.get('/colaboradores', async (req, res) => {
   res.json(await db.all(sql));
 });
 
+// Dados completos de um colaborador para preencher o termo (CPF, função, admissão).
+// A tela chama isto ao selecionar a pessoa, em vez de carregar tudo na lista inicial.
+router.get('/colaboradores/:id', async (req, res) => {
+  const c = await db.get(
+    `SELECT id, nome, documento, funcao, data_admissao, cor, ativo
+     FROM colaboradores WHERE id = ? AND tipo = 'CPF'`,
+    req.params.id
+  );
+  if (!c) return res.status(404).json({ erro: 'Colaborador não encontrado.' });
+  res.json(c);
+});
+
+// Obras disponíveis para vincular à advertência. Mesmo recorte usado na listagem de obras
+// ativas: fora as finalizadas e as que estão na lixeira.
+router.get('/obras', async (req, res) => {
+  res.json(await db.all(
+    `SELECT id, nome, endereco FROM obras
+     WHERE status NOT IN ('FINALIZADA', 'EXCLUIDA') ORDER BY nome`
+  ));
+});
+
+// Catálogo de modelos (os 10 do seed + os que o sistema aprendeu com o motivo "Outro").
+router.get('/modelos', async (req, res) => {
+  res.json(await db.all(
+    `SELECT id, motivo, texto_base, artigo_clt FROM advertencia_modelos
+     WHERE excluido = 0 ORDER BY motivo`
+  ));
+});
+
 // Histórico de advertências. Sem filtro, devolve tudo (da mais recente para a mais antiga);
 // com ?colaborador_id=, restringe a uma pessoa. Também aceita ?tipo= para filtrar a gravidade.
 //
@@ -45,7 +74,7 @@ router.get('/', async (req, res) => {
   let sql = `
     SELECT a.id, a.colaborador_id, a.tipo, a.data_ocorrencia, a.motivo, a.descricao,
            a.dias_suspensao, a.criado_em,
-           a.modelo, a.artigo_clt, a.hora_ocorrencia,
+           a.modelo, a.artigo_clt, a.hora_ocorrencia, a.obra_id, a.obra_nome,
            a.assinatura_colaborador, a.recusou_assinar,
            a.testemunha1_nome, a.testemunha1_cpf, a.testemunha1_assinatura,
            a.testemunha2_nome, a.testemunha2_cpf, a.testemunha2_assinatura,
@@ -84,7 +113,7 @@ router.post('/', async (req, res) => {
 
   const {
     colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao,
-    modelo, artigo_clt, hora_ocorrencia,
+    modelo, artigo_clt, hora_ocorrencia, obra_id, salvar_como_modelo,
     assinatura_colaborador, recusou_assinar,
     testemunha1_nome, testemunha1_cpf, testemunha1_assinatura,
     testemunha2_nome, testemunha2_cpf, testemunha2_assinatura
@@ -134,17 +163,46 @@ router.post('/', async (req, res) => {
   // são mutuamente exclusivas e guardar as duas deixaria o termo ambíguo.
   const assinaturaFinal = houveRecusa ? null : (assinatura_colaborador || null);
 
+  // Nome da obra é COPIADO para a linha da advertência (além do obra_id). Assim o termo
+  // continua reproduzível exatamente como foi emitido, mesmo que a obra seja renomeada ou
+  // excluída depois — o documento disciplinar não pode mudar retroativamente.
+  let obraId = null;
+  let obraNome = null;
+  if (obra_id) {
+    const obra = await db.get('SELECT id, nome FROM obras WHERE id = ?', obra_id);
+    if (!obra) return res.status(400).json({ erro: 'Obra não encontrada.' });
+    obraId = obra.id;
+    obraNome = obra.nome;
+  }
+
+  // APRENDIZADO: motivo digitado à mão vira um modelo reutilizável. ON CONFLICT DO NOTHING
+  // porque "motivo" é UNIQUE — repetir um título já existente apenas não cria duplicata, sem
+  // derrubar o registro da advertência (que é o que realmente importa nesta requisição).
+  if (salvar_como_modelo && texto(motivo) && texto(descricao)) {
+    try {
+      await db.run(
+        `INSERT INTO advertencia_modelos (motivo, texto_base, artigo_clt, criado_por)
+         VALUES (?,?,?,?) ON CONFLICT (motivo) DO NOTHING`,
+        texto(motivo), texto(descricao), texto(artigo_clt) || null, req.usuario.id
+      );
+    } catch (e) {
+      // Falha ao aprender o modelo não pode impedir a aplicação da advertência.
+      console.error('Nao foi possivel salvar o novo modelo de advertencia:', e.message);
+    }
+  }
+
   const info = await db.run(
     `INSERT INTO advertencias
        (colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao, aplicada_por,
-        modelo, artigo_clt, hora_ocorrencia,
+        modelo, artigo_clt, hora_ocorrencia, obra_id, obra_nome,
         assinatura_colaborador, recusou_assinar,
         testemunha1_nome, testemunha1_cpf, testemunha1_assinatura,
         testemunha2_nome, testemunha2_cpf, testemunha2_assinatura)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     colaborador_id, tipoFinal, data_ocorrencia, motivo.trim(), (descricao || '').trim() || null,
     dias, req.usuario.id,
     texto(modelo) || null, texto(artigo_clt) || null, texto(hora_ocorrencia) || null,
+    obraId, obraNome,
     assinaturaFinal, houveRecusa,
     houveRecusa ? texto(testemunha1_nome) : null,
     houveRecusa ? texto(testemunha1_cpf) : null,
