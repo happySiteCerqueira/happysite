@@ -82,8 +82,18 @@ export default function Advertencia() {
 
 // ---- ABA DAR ADVERTÊNCIA ----
 function AbaDarAdvertencia({ onRegistrada }) {
-  const { temAcessoSubaba } = useAuth();
+  const { temAcessoSubaba, usuario } = useAuth();
   const podeAplicar = temAcessoSubaba('advertencia.aplicar');
+
+  // Assinatura cadastrada no perfil de quem está aplicando. Serve para dois fins:
+  //   1) avisar na tela, ANTES de salvar, que o termo sairá sem assinatura do empregador;
+  //   2) montar o PDF emitido logo após salvar (o servidor grava a mesma imagem no registro).
+  const [assinaturaPerfil, setAssinaturaPerfil] = useState(null);
+  useEffect(() => {
+    api.get('/auth/minha-assinatura')
+      .then(res => setAssinaturaPerfil(res.data?.assinatura || null))
+      .catch(() => setAssinaturaPerfil(null));
+  }, []);
 
   const [colaboradores, setColaboradores] = useState([]);
   const [colaboradorId, setColaboradorId] = useState('');
@@ -268,6 +278,11 @@ function AbaDarAdvertencia({ onRegistrada }) {
         colaborador_admissao: colaboradorDados?.data_admissao || null,
         assinatura_colaborador: recusouAssinar ? null : assinaturaColaborador,
         recusou_assinar: recusouAssinar ? 1 : 0,
+        // Quem emitiu + a assinatura dele, para o termo baixado AGORA já sair assinado.
+        // O servidor gravou a mesma assinatura dentro da advertência, então o PDF emitido
+        // aqui e o baixado depois pelo Histórico são idênticos.
+        aplicada_por_nome: usuario?.nome || null,
+        assinatura_aplicador: assinaturaPerfil,
         testemunha1_nome: t1Nome.trim(), testemunha1_cpf: t1Cpf.trim(), testemunha1_assinatura: t1Assinatura,
         testemunha2_nome: t2Nome.trim(), testemunha2_cpf: t2Cpf.trim(), testemunha2_assinatura: t2Assinatura
       });
@@ -448,6 +463,38 @@ function AbaDarAdvertencia({ onRegistrada }) {
           onChange={e => setObservacoes(e.target.value)}
           style={{ resize: 'vertical' }}
         />
+      </div>
+
+      {/* ---- EMPREGADOR / RESPONSÁVEL PELA OBRA ----
+          Quem está emitindo não assina a cada advertência: o termo usa a assinatura gravada
+          no perfil dele. Mostramos aqui para deixar claro o que vai sair impresso. */}
+      <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 14, marginBottom: 14 }}>
+        <h5 style={{ margin: '0 0 4px' }}>Empregador / Responsável pela obra</h5>
+        <p style={{ fontSize: 12, color: '#6b7280', marginTop: 0 }}>
+          Emitida por <strong>{usuario?.nome}</strong>. A assinatura é a cadastrada no seu perfil.
+        </p>
+
+        {assinaturaPerfil ? (
+          <div style={{
+            border: '1px solid #e5e7eb', borderRadius: 6, padding: 8,
+            background: '#fff', display: 'inline-block'
+          }}>
+            <img
+              src={assinaturaPerfil}
+              alt="Sua assinatura"
+              style={{ maxWidth: 240, maxHeight: 80, objectFit: 'contain', display: 'block' }}
+            />
+          </div>
+        ) : (
+          <div style={{
+            background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 6,
+            padding: 10, fontSize: 12, color: '#92400e'
+          }}>
+            Você ainda não tem assinatura cadastrada — o termo sairá com a linha em branco para
+            assinar à mão. Cadastre em <strong>Configurações → Minha assinatura</strong> para que
+            as próximas advertências já saiam assinadas.
+          </div>
+        )}
       </div>
 
       {/* ---- CIÊNCIA DO COLABORADOR ----

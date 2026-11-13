@@ -200,12 +200,16 @@ export function gerarTermoAdvertenciaPdf(adv) {
   }
   doc.line(margem, y, margem + 85, y);
   y += 4;
+  // Nome de quem emitiu logo abaixo da linha, em negrito: é a identificação de quem assina.
+  if (adv.aplicada_por_nome) {
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'bold');
+    doc.text(adv.aplicada_por_nome, margem, y);
+    doc.setFont(undefined, 'normal');
+    y += 4;
+  }
   doc.setFontSize(8);
   doc.text('Assinatura do Empregador / Responsável pela Obra', margem, y);
-  if (adv.aplicada_por_nome) {
-    y += 4;
-    doc.text(`Aplicada por: ${adv.aplicada_por_nome}`, margem, y);
-  }
   y += 10;
 
   // ---- Ciência do colaborador OU recusa com testemunhas ----
