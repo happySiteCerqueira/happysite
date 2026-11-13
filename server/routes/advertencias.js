@@ -77,6 +77,9 @@ router.get('/', async (req, res) => {
            a.modelo, a.artigo_clt, a.hora_ocorrencia,
            a.obra_id, a.obra_nome, a.obra_endereco, a.obra_cidade, a.obra_estado,
            a.assinatura_colaborador, a.recusou_assinar,
+           -- Cópia congelada da assinatura de quem aplicou: é ela que vai para o termo em PDF,
+           -- e não a assinatura atual do perfil (que pode ter sido trocada depois).
+           a.assinatura_aplicador,
            a.testemunha1_nome, a.testemunha1_cpf, a.testemunha1_assinatura,
            a.testemunha2_nome, a.testemunha2_cpf, a.testemunha2_assinatura,
            c.nome AS colaborador_nome, c.funcao AS colaborador_funcao, c.cor AS colaborador_cor,
@@ -198,20 +201,26 @@ router.post('/', async (req, res) => {
     }
   }
 
+  // Assinatura de quem está aplicando: copiada AGORA do perfil do usuário para dentro da
+  // advertência. É essa cópia que o termo usa — assim, se a pessoa trocar a assinatura dela
+  // amanhã, este documento continua exibindo exatamente a que foi usada hoje.
+  const aplicador = await db.get('SELECT assinatura FROM usuarios WHERE id = ?', req.usuario.id);
+  const assinaturaAplicador = (aplicador && aplicador.assinatura) || null;
+
   const info = await db.run(
     `INSERT INTO advertencias
        (colaborador_id, tipo, data_ocorrencia, motivo, descricao, dias_suspensao, aplicada_por,
         modelo, artigo_clt, hora_ocorrencia,
         obra_id, obra_nome, obra_endereco, obra_cidade, obra_estado,
-        assinatura_colaborador, recusou_assinar,
+        assinatura_colaborador, recusou_assinar, assinatura_aplicador,
         testemunha1_nome, testemunha1_cpf, testemunha1_assinatura,
         testemunha2_nome, testemunha2_cpf, testemunha2_assinatura)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     colaborador_id, tipoFinal, data_ocorrencia, motivo.trim(), (descricao || '').trim() || null,
     dias, req.usuario.id,
     texto(modelo) || null, texto(artigo_clt) || null, texto(hora_ocorrencia) || null,
     obraId, obraNome, obraEndereco, obraCidade, obraEstado,
-    assinaturaFinal, houveRecusa,
+    assinaturaFinal, houveRecusa, assinaturaAplicador,
     houveRecusa ? texto(testemunha1_nome) : null,
     houveRecusa ? texto(testemunha1_cpf) : null,
     houveRecusa ? (testemunha1_assinatura || null) : null,

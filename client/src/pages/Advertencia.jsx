@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import AssinaturaCanvas from '../components/AssinaturaCanvas';
+import Modal from '../components/Modal';
 import { gerarTermoAdvertenciaPdf } from '../utils/termoAdvertenciaPdf';
 
 // Código reservado no seletor para "nenhum modelo existente serve": libera a digitação de um
@@ -602,6 +603,8 @@ function AbaHistorico() {
   const [filtroTipo, setFiltroTipo] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
+  // Advertência aberta no modal de texto completo (null = modal fechado).
+  const [detalhe, setDetalhe] = useState(null);
 
   // Sem "return" antes do api.get: ver a nota na aba anterior (cleanup do useEffect).
   function carregar() {
@@ -664,13 +667,53 @@ function AbaHistorico() {
         <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhuma advertência registrada para este filtro.</p>
       )}
 
-      {!carregando && lista.length > 0 && <TabelaHistorico lista={lista} ehAdm={ehAdm} onExcluir={excluir} />}
+      {!carregando && lista.length > 0 && (
+        <TabelaHistorico lista={lista} ehAdm={ehAdm} onExcluir={excluir} onVerDetalhe={setDetalhe} />
+      )}
+
+      {/* Texto completo da advertência, fora da tabela (ver comentário na coluna "Motivo"). */}
+      {detalhe && (
+        <Modal
+          titulo={`${detalhe.motivo} — ${detalhe.colaborador_nome}`}
+          onFechar={() => setDetalhe(null)}
+          largura="min(680px, 96vw)"
+        >
+          <div style={{ fontSize: 13 }}>
+            <div style={{ background: '#f8fafc', padding: 10, borderRadius: 6, marginBottom: 12, lineHeight: 1.7 }}>
+              <div><strong>Tipo:</strong> {tipoInfo(detalhe.tipo).rotulo}
+                {detalhe.tipo === 'SUSPENSAO' && detalhe.dias_suspensao > 0 && ` — ${detalhe.dias_suspensao} dia(s)`}
+              </div>
+              <div><strong>Data:</strong> {formatarData(detalhe.data_ocorrencia)}
+                {detalhe.hora_ocorrencia ? ` às ${detalhe.hora_ocorrencia}` : ''}
+              </div>
+              {detalhe.obra_nome && <div><strong>Obra:</strong> {detalhe.obra_nome}</div>}
+              {detalhe.artigo_clt && <div><strong>Enquadramento:</strong> {detalhe.artigo_clt}</div>}
+              <div><strong>Aplicada por:</strong> {detalhe.aplicada_por_nome || '-'}</div>
+            </div>
+
+            <h4 style={{ margin: '0 0 6px' }}>Descrição dos fatos</h4>
+            {/* whiteSpace pre-wrap: o texto é gravado com quebras de linha e parágrafos. */}
+            <div style={{
+              whiteSpace: 'pre-wrap', background: '#fff', border: '1px solid #e5e7eb',
+              borderRadius: 6, padding: 12, lineHeight: 1.6, maxHeight: '50vh', overflowY: 'auto'
+            }}>
+              {detalhe.descricao || '(sem descrição registrada)'}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="btn-secondary" onClick={() => gerarTermoAdvertenciaPdf(detalhe)}>
+                🖨️ Baixar termo em PDF
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
 // Tabela do histórico, extraída em um componente próprio só para manter a aba legível.
-function TabelaHistorico({ lista, ehAdm, onExcluir }) {
+function TabelaHistorico({ lista, ehAdm, onExcluir, onVerDetalhe }) {
   return (
     <div style={{ overflowX: 'auto' }}>
       <table>
@@ -725,10 +768,21 @@ function TabelaHistorico({ lista, ehAdm, onExcluir }) {
                     <div style={{ fontSize: 11, color: '#9ca3af' }}>📍 {item.obra_endereco}</div>
                   )}
                 </td>
-                <td>
-                  {item.motivo}
+                {/* Só o TÍTULO do motivo. O texto completo costuma ter vários parágrafos e,
+                    impresso aqui, esticava a linha da tabela a ponto de separar demais um
+                    colaborador do outro. Quem quiser ler o texto abre em "Ver". */}
+                <td style={{ maxWidth: 260 }}>
+                  <div style={{ fontWeight: 600 }}>{item.motivo}</div>
                   {item.descricao && (
-                    <div style={{ color: '#6b7280', fontSize: 12, marginTop: 2 }}>{item.descricao}</div>
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      style={{ marginTop: 4, fontSize: 11, padding: '2px 8px' }}
+                      onClick={() => onVerDetalhe(item)}
+                      title="Ver o texto completo da advertência"
+                    >
+                      📄 Ver texto
+                    </button>
                   )}
                 </td>
                 {/* Estado da ciência: assinada pelo colaborador, recusada (com testemunhas) ou

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApuracao } from '../context/ApuracaoContext';
+import Modal from './Modal';
+import MinhaAssinatura from './MinhaAssinatura';
 
 function rotuloMesApuracao(mes) {
   const [ano, m] = mes.split('-');
@@ -170,6 +172,43 @@ export default function Layout() {
         </div>
         <Outlet />
       </main>
+
+      {/* Primeiro acesso sem assinatura cadastrada: pede para criar. Não é bloqueante — dá
+          para adiar e cadastrar depois em Configurações — mas aparece a cada login enquanto
+          não existir, porque sem ela os documentos emitidos saem com a linha em branco. */}
+      <AvisoAssinatura />
     </div>
+  );
+}
+
+// Convite para cadastrar a assinatura pessoal, exibido uma vez por sessão.
+function AvisoAssinatura() {
+  const { usuario } = useAuth();
+  const [adiado, setAdiado] = useState(() => sessionStorage.getItem('hs_assinatura_adiada') === '1');
+
+  // usuario.tem_assinatura vem do GET /auth/me. Enquanto o perfil não carregou (undefined),
+  // nada é mostrado — evita o aviso piscar na tela durante o carregamento inicial.
+  const precisaCriar = usuario && usuario.tem_assinatura === false && !adiado;
+  if (!precisaCriar) return null;
+
+  function adiar() {
+    sessionStorage.setItem('hs_assinatura_adiada', '1');
+    setAdiado(true);
+  }
+
+  return (
+    <Modal titulo="✍️ Crie a sua assinatura" onFechar={adiar} largura="min(600px, 96vw)">
+      <p style={{ fontSize: 13, color: '#374151', marginTop: 0 }}>
+        Você ainda não tem uma assinatura cadastrada. Ela é usada automaticamente nos documentos
+        que você emitir — como o <strong>termo de advertência</strong> — no lugar da linha em branco.
+      </p>
+      <p style={{ fontSize: 12, color: '#6b7280' }}>
+        É só desenhar uma vez. Depois pode alterá-la quando quiser em <strong>Configurações</strong>.
+      </p>
+      <MinhaAssinatura compacto onSalva={() => sessionStorage.removeItem('hs_assinatura_adiada')} />
+      <div style={{ marginTop: 12, textAlign: 'right' }}>
+        <button className="btn-secondary btn-sm" onClick={adiar}>Agora não</button>
+      </div>
+    </Modal>
   );
 }

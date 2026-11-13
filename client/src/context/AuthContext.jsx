@@ -57,6 +57,14 @@ export function AuthProvider({ children }) {
     localStorage.setItem('hs_usuario', JSON.stringify(novo));
   }
 
+  // Chamado logo após o usuário salvar a assinatura dele. O /auth/me devolve apenas o
+  // indicador "tem_assinatura" (a imagem é pesada demais para vir em toda carga do app);
+  // atualizar esse sinalizador aqui faz o aviso de "cadastre sua assinatura" desaparecer
+  // na hora, sem precisar recarregar a página.
+  function marcarAssinaturaCriada() {
+    atualizarUsuario({ tem_assinatura: true });
+  }
+
   const podeTudo = usuario?.perfil === 'ADM';
 
   // Comportamento original, inalterado: checa se o PERFIL do usuário está entre os informados.
@@ -75,7 +83,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ usuario, login, logout, carregando, atualizarUsuario, temPermissao, temAcessoSubaba, podeTudo }}>
+    <AuthContext.Provider value={{ usuario, login, logout, carregando, atualizarUsuario, marcarAssinaturaCriada, temPermissao, temAcessoSubaba, podeTudo }}>
       {children}
     </AuthContext.Provider>
   );

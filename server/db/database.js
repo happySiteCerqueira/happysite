@@ -849,6 +849,28 @@ async function migrate() {
     console.log('[migracao] Modelos padrao de advertencia cadastrados.');
   }
 
+  // ---- Assinatura própria do usuário do sistema ----
+  //
+  // Cada usuário desenha a sua assinatura UMA vez (PNG base64, mesmo padrão de epi_retiradas e
+  // das assinaturas de advertência). A partir daí, todo documento que ele emitir sai assinado
+  // automaticamente, em vez de deixar a linha em branco para assinar à mão.
+  if (!(await colunaExiste('usuarios', 'assinatura'))) {
+    await pool.query('ALTER TABLE usuarios ADD COLUMN assinatura TEXT');
+  }
+  if (!(await colunaExiste('usuarios', 'assinatura_atualizada_em'))) {
+    await pool.query('ALTER TABLE usuarios ADD COLUMN assinatura_atualizada_em TIMESTAMP');
+  }
+
+  // Cópia da assinatura de quem APLICOU a advertência, congelada no momento do lançamento.
+  //
+  // Por que copiar em vez de ler de usuarios.assinatura na hora de gerar o PDF: um documento
+  // assinado não pode mudar depois. Se a pessoa trocar a assinatura dela no futuro, os termos
+  // já emitidos precisam continuar exibindo exatamente a assinatura usada naquele dia — é o
+  // mesmo princípio que já se aplica a epi_retirada_itens (descrição e CA copiados).
+  if (!(await colunaExiste('advertencias', 'assinatura_aplicador'))) {
+    await pool.query('ALTER TABLE advertencias ADD COLUMN assinatura_aplicador TEXT');
+  }
+
   // ---- Exclusão lógica (soft delete) nas tabelas críticas ----
   //
   // Motivo: até aqui um DELETE apagava o dado fisicamente e não havia como desfazer um clique

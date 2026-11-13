@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Usuarios from './Usuarios';
 import Backup from './Backup';
 import ControleAcesso from './ControleAcesso';
+import MinhaAssinatura from '../components/MinhaAssinatura';
 
 export default function Configuracoes() {
   const { usuario, atualizarUsuario } = useAuth();
@@ -116,6 +117,12 @@ export default function Configuracoes() {
             <div>Login: {usuario?.login}</div>
             <div>Perfil: {usuario?.perfil}</div>
             <a href="/trocar-senha" className="btn-secondary" style={{ display: 'inline-block', marginTop: 10 }}>Alterar minha senha</a>
+          </div>
+
+          {/* Assinatura pessoal: fica ao lado da troca de senha por ser, como ela, um dado
+              do próprio usuário. É usada automaticamente nos documentos que ele emitir. */}
+          <div className="card">
+            <MinhaAssinatura />
           </div>
         </div>
       )}

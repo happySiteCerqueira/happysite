@@ -179,8 +179,25 @@ export function gerarTermoAdvertenciaPdf(adv) {
   doc.text(`${localFecho}, ${dataPorExtenso(adv.data_ocorrencia)}.`, margem, y);
   y += 12;
 
-  // ---- Assinatura do empregador (sempre manuscrita na via impressa) ----
-  garantirEspaco(20);
+  // ---- Assinatura do empregador ----
+  //
+  // Quando quem aplicou a advertência já tinha uma assinatura cadastrada no perfil, ela foi
+  // COPIADA para dentro desta advertência no momento do lançamento (assinatura_aplicador) e é
+  // impressa aqui. Como é uma cópia congelada, trocar a assinatura no perfil depois não altera
+  // este documento. Sem assinatura cadastrada, mantém-se a linha em branco para assinar à mão.
+  garantirEspaco(adv.assinatura_aplicador ? 36 : 20);
+  if (adv.assinatura_aplicador) {
+    try {
+      doc.addImage(adv.assinatura_aplicador, 'PNG', margem, y, 70, 25);
+      y += 25;
+    } catch (e) {
+      // Mesma proteção usada nas demais assinaturas: imagem corrompida não impede a emissão
+      // do documento — apenas cai na linha em branco.
+      y += 10;
+    }
+  } else {
+    y += 10;
+  }
   doc.line(margem, y, margem + 85, y);
   y += 4;
   doc.setFontSize(8);
