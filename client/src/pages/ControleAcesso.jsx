@@ -10,7 +10,8 @@ const NOMES_MODULOS = {
   financeiro: '💵 Financeiro',
   aso: '🩺 Controle de ASO',
   agenda: '🗓️ Agenda',
-  advertencia: '⚠️ Advertência'
+  advertencia: '⚠️ Advertência',
+  conciliacao: '🧮 Conciliação'
 };
 
 // Sub-abas granulares, agrupadas visualmente sob o módulo pai correspondente.
@@ -36,7 +37,7 @@ const SUBABAS_POR_MODULO = {
 };
 
 // Ordem em que os módulos (com suas sub-abas) devem aparecer na tabela
-const ORDEM_MODULOS = ['obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda', 'advertencia'];
+const ORDEM_MODULOS = ['obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'conciliacao', 'aso', 'agenda', 'advertencia'];
 
 export default function ControleAcesso() {
   const [modulos, setModulos] = useState([]);

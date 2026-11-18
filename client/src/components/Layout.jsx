@@ -19,6 +19,7 @@ const TITULOS_ROTA = [
   { prefixo: '/prestadores', titulo: '📇 Prestadores' },
   { prefixo: '/epi', titulo: '🦺 EPI' },
   { prefixo: '/financeiro', titulo: '💵 Financeiro' },
+  { prefixo: '/conciliacao', titulo: '🧮 Conciliação' },
   { prefixo: '/aso', titulo: '🩺 Controle de ASO' },
   { prefixo: '/agenda', titulo: '🗓️ Agenda' },
   { prefixo: '/advertencia', titulo: '⚠️ Advertência' },
@@ -97,6 +98,9 @@ export default function Layout() {
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}
           {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
           {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
+          {/* Conciliação: confere o PDF de Holerites da contabilidade contra os lançamentos do
+              mês. Mesmos perfis do Financeiro/Pagamentos Antecipados, que é o dado conferido. */}
+          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/conciliacao" style={linkStyle}>🧮 Conciliação</NavLink>}
           {temPermissao('RH') && <NavLink to="/aso" style={linkStyle}>🩺 Controle de ASO</NavLink>}
           {temPermissao('RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR') && <NavLink to="/agenda" style={linkStyle}>🗓️ Agenda</NavLink>}
           {/* Advertência: quem vê o item é definido na tela Controle de Acesso (módulo

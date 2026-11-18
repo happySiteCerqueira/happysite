@@ -62,6 +62,7 @@ app.use('/api/agenda', require('./routes/agenda'));
 app.use('/api/push', require('./routes/push'));
 app.use('/api/auditoria', require('./routes/auditoria'));
 app.use('/api/advertencias', require('./routes/advertencias'));
+app.use('/api/conciliacao', require('./routes/conciliacao'));
 
 
 

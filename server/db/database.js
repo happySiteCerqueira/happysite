@@ -911,6 +911,7 @@ async function migrate() {
   if (permCountRes.rows[0].c === 0) {
     const MODULOS = [
       'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda', 'advertencia',
+      'conciliacao',
       // Sub-abas granulares (dentro de módulos que já foram liberados para o perfil)
       'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
       'prestadores.cadastro',
@@ -933,6 +934,10 @@ async function migrate() {
       // histórico da equipe. Quem pode efetivamente APLICAR fica na sub-aba abaixo.
       advertencia: ['RH', 'ENGENHEIRO', 'MESTRE'],
       'advertencia.aplicar': ['RH'],
+      // Conciliação (Holerites x lançamentos do sistema): é conferência de folha, por isso
+      // nasce liberada para FINANCEIRO e RH — os mesmos perfis que lançam os pagamentos
+      // antecipados confrontados aqui. O ADM sempre passa (permissaoModulo).
+      conciliacao: ['FINANCEIRO', 'RH'],
       // Sub-abas: mesmo padrão que hoje está fixo em Financeiro.jsx/Prestadores.jsx/Epi.jsx
       'financeiro.receita': ['FINANCEIRO'],
       'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
@@ -973,7 +978,11 @@ async function migrate() {
       // o acesso a todo mundo em bancos que já passaram pelo seed inicial.
       'advertencia': ['RH', 'ENGENHEIRO', 'MESTRE'],
       // Aplicar a medida (aba "Dar advertência") é mais restrito que apenas consultar.
-      'advertencia.aplicar': ['RH']
+      'advertencia.aplicar': ['RH'],
+      // Módulo novo (Conciliação): confronta o PDF dos Holerites da contabilidade com os
+      // lançamentos de pagamento antecipado do mês. Sem esta linha, permissaoModulo() negaria
+      // o acesso a todo mundo em bancos que já passaram pelo seed inicial (caso da produção).
+      'conciliacao': ['FINANCEIRO', 'RH']
     };
     const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
     for (const perfil of PERFIS) {

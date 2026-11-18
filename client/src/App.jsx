@@ -20,6 +20,7 @@ import Aso from './pages/Aso';
 import Agenda from './pages/Agenda';
 import Auditoria from './pages/Auditoria';
 import Advertencia from './pages/Advertencia';
+import Conciliacao from './pages/Conciliacao';
 
 
 
@@ -58,6 +59,9 @@ export default function App() {
         <Route path="prestadores" element={<Prestadores />} />
         <Route path="epi" element={<Epi />} />
         <Route path="financeiro" element={<Financeiro />} />
+        {/* Conciliação: o backend exige o módulo "conciliacao" (permissaoModulo). Como nas
+            demais telas, a rota existe para todos — sem permissão a API responde 403. */}
+        <Route path="conciliacao" element={<Conciliacao />} />
         <Route path="aso" element={<Aso />} />
         <Route path="agenda" element={<Agenda />} />
         {/* Advertência: o backend exige o módulo "advertencia" (permissaoModulo). Assim como

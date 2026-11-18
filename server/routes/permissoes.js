@@ -7,6 +7,8 @@ const router = express.Router();
 
 const MODULOS = [
   'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda', 'advertencia',
+  // Conciliação: confronto do PDF de Holerites da contabilidade com os lançamentos do sistema.
+  'conciliacao',
   // Sub-abas granulares (só têm efeito prático se o módulo pai também estiver permitido)
   'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
   'prestadores.cadastro',
