@@ -193,10 +193,83 @@ function obterObra(mapa, chave, nome) {
       total_saida: 0,
       // Receita lançada com um nome de obra que não existe no cadastro de Obras: entra no
       // relatório mesmo assim (para o valor não sumir), mas sinalizada.
-      sem_obra_cadastrada: false
+      sem_obra_cadastrada: false,
+      // Linha coringa "Sem obra definida": agrupa o custo de folha de quem ainda não tem obra
+      // no cadastro. Não é uma obra real, por isso a tela a destaca e não cobra margem dela.
+      sem_obra_definida: false
     });
   }
   return mapa.get(chave);
+}
+
+// ===========================================================================================
+// CUSTO DE FOLHA (holerite) — quem recebe sem ter produção marcada
+// ===========================================================================================
+//
+// O PROBLEMA: ajudantes e quem é pago pelo salário da carteira recebem todo mês pelo holerite,
+// mas muitas vezes não têm NENHUMA produção marcada no desenho do prédio. Esse dinheiro saiu
+// de verdade e pertence a uma obra — se ficasse de fora, o lucro apareceria inflado.
+//
+// A REGRA (por pessoa e por MÊS, nunca no acumulado — senão um mês compensaria o outro):
+//   produzido = produção marcada nas obras + diárias do mês
+//   folha     = total do pagamento antecipado do mês (vem do holerite)
+//
+//   • produzido >= folha → não acrescenta nada. A folha é ADIANTAMENTO do que a pessoa
+//     produziu; o custo já está contado na produção. Somar de novo contaria duas vezes.
+//   • produzido <  folha → a diferença (folha − produzido) é custo real ainda não alocado.
+//     Vai para a OBRA ATUAL do cadastro (colaboradores.obra_id); sem obra definida, entra
+//     na linha "Sem obra definida" para o valor ficar visível em vez de sumir.
+//
+// ⚠️ SINAL: pagamentos antecipados podem ser NEGATIVOS (vale extra/vale ex RH a favor da
+// pessoa). Um total negativo não é custo — é saldo a receber. Por isso só entra aqui a
+// diferença POSITIVA (GREATEST(... , 0)), evitando que um valor negativo vire "crédito" e
+// reduza indevidamente o custo da obra.
+const SQL_TOTAL_FOLHA = `(pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento + pa.vale_ex_rh)`;
+
+async function buscarCustoFolha(mesInicio, mesFim) {
+  // Produção e diárias são somadas POR PESSOA/MÊS para serem comparadas com a folha do mesmo
+  // mês. O LEFT JOIN garante que quem não tem produção nenhuma continue aparecendo.
+  let sql = `
+    WITH folha AS (
+      SELECT pa.colaborador_id, pa.mes_ciclo, ${SQL_TOTAL_FOLHA} AS total
+      FROM pagamentos_antecipados pa
+      WHERE ${SQL_TOTAL_FOLHA} > 0
+        {FILTRO_FOLHA}
+    ),
+    producao_pessoa AS (
+      SELECT cel.colaborador_id, cel.mes_ciclo, SUM(cel.valor) AS total
+      FROM obra_servico_celulas cel
+      JOIN obra_servicos os ON os.id = cel.obra_servico_id
+      WHERE os.excluido = 0
+      GROUP BY cel.colaborador_id, cel.mes_ciclo
+    ),
+    diaria_pessoa AS (
+      SELECT d.colaborador_id, d.mes_ciclo, d.total
+      FROM diarias d
+    )
+    SELECT c.id AS colaborador_id, c.nome, c.funcao, c.obra_id,
+           o.nome AS obra_nome,
+           f.mes_ciclo,
+           f.total AS folha,
+           COALESCE(p.total, 0) + COALESCE(di.total, 0) AS produzido,
+           GREATEST(f.total - COALESCE(p.total, 0) - COALESCE(di.total, 0), 0) AS diferenca
+    FROM folha f
+    JOIN colaboradores c ON c.id = f.colaborador_id
+    LEFT JOIN obras o ON o.id = c.obra_id
+    LEFT JOIN producao_pessoa p ON p.colaborador_id = f.colaborador_id AND p.mes_ciclo = f.mes_ciclo
+    LEFT JOIN diaria_pessoa di ON di.colaborador_id = f.colaborador_id AND di.mes_ciclo = f.mes_ciclo
+    ORDER BY c.nome, f.mes_ciclo
+  `;
+
+  const params = [];
+  let filtroFolha = '';
+  if (mesInicio) { filtroFolha += ' AND pa.mes_ciclo >= ?'; params.push(mesInicio); }
+  if (mesFim) { filtroFolha += ' AND pa.mes_ciclo <= ?'; params.push(mesFim); }
+  sql = sql.replace('{FILTRO_FOLHA}', filtroFolha);
+
+  const linhas = await db.all(sql, ...params);
+  // Só interessa quem tem diferença a alocar; quem produziu mais do que recebeu já está contado.
+  return linhas.filter(l => Number(l.diferenca) > 0);
 }
 
 // Diárias lançadas SEM rateio por obra (existem em "diarias" mas não têm linha em
@@ -248,7 +321,12 @@ function montarResposta(mapa, periodo, diariasSemObra) {
   });
 
   // Maior saldo primeiro: as obras que mais contribuem (e, no fim, as que mais preocupam).
-  obras.sort((a, b) => b.saldo - a.saldo);
+  // A linha "Sem obra definida" vai SEMPRE para o fim: não é uma obra, é um pendente de
+  // cadastro — ficaria no topo da lista de prejuízo e confundiria a leitura.
+  obras.sort((a, b) => {
+    if (a.sem_obra_definida !== b.sem_obra_definida) return a.sem_obra_definida ? 1 : -1;
+    return b.saldo - a.saldo;
+  });
 
   const totais = obras.reduce((acc, o) => ({
     entrada_bruta: arredondar(acc.entrada_bruta + o.total_entrada_bruta),
@@ -269,9 +347,19 @@ function montarResposta(mapa, periodo, diariasSemObra) {
     // Avisos agregados, para a tela destacar sem precisar varrer a lista inteira.
     avisos: {
       receitas_sem_obra_cadastrada: obras.filter(o => o.sem_obra_cadastrada).map(o => o.obra),
-      obras_sem_custo: obras.filter(o => o.sem_custo_lancado && !o.sem_entrada_lancada).map(o => o.obra),
+      obras_sem_custo: obras.filter(o => o.sem_custo_lancado && !o.sem_entrada_lancada && !o.sem_obra_definida).map(o => o.obra),
       // Custo real que ficou de fora do rateio por obra (ver buscarDiariasSemObra).
-      diarias_sem_obra: diariasSemObra
+      diarias_sem_obra: diariasSemObra,
+      // Folha de quem ainda não tem "Obra atual" no cadastro: valor que saiu mas não tem onde
+      // ser alocado. A tela mostra o montante e quantas pessoas, para o usuário saber o que
+      // falta preencher em Cadastro.
+      folha_sem_obra: (() => {
+        const linha = obras.find(o => o.sem_obra_definida);
+        if (!linha) return { valor: 0, pessoas: 0 };
+        const bloco = linha.saidas.find(s => s.tipo === 'FOLHA');
+        const nomes = bloco ? [...new Set(bloco.pessoas.map(p => p.nome))] : [];
+        return { valor: linha.total_saida, pessoas: nomes.length };
+      })()
     }
   };
 }
@@ -287,11 +375,12 @@ function montarResposta(mapa, periodo, diariasSemObra) {
 router.get('/saude-obras', async (req, res) => {
   const { data_inicio, data_fim, mes_inicio, mes_fim } = req.query;
 
-  const [entradas, producao, diarias, diariasSemObra] = await Promise.all([
+  const [entradas, producao, diarias, diariasSemObra, folha] = await Promise.all([
     buscarEntradas(data_inicio, data_fim),
     buscarCustoProducao(mes_inicio, mes_fim),
     buscarCustoDiarias(mes_inicio, mes_fim),
-    buscarDiariasSemObra(mes_inicio, mes_fim)
+    buscarDiariasSemObra(mes_inicio, mes_fim),
+    buscarCustoFolha(mes_inicio, mes_fim)
   ]);
 
   // Índice de obras cadastradas por nome normalizado — é a ponte entre a receita (texto livre)
@@ -348,6 +437,46 @@ router.get('/saude-obras', async (req, res) => {
       quantidade: arredondar(linha.quantidade)
     });
     registro.total_saida = arredondar(registro.total_saida + valor);
+  }
+
+  // ---- Lado SAÍDA: folha (holerite) de quem recebeu mais do que produziu ----
+  //
+  // Agrupa por obra para virar UMA linha de custo por obra, mas guarda a lista de pessoas que
+  // a compõem, para a visão detalhada mostrar quem é e quanto de cada um.
+  const CHAVE_SEM_OBRA = '__SEM_OBRA__';
+  const folhaPorObra = new Map();
+  for (const linha of folha) {
+    // Sem obra no cadastro, o custo vai para um balde próprio e visível — nunca é descartado.
+    const chave = linha.obra_id ? normalizarNomeObra(linha.obra_nome) : CHAVE_SEM_OBRA;
+    if (!folhaPorObra.has(chave)) {
+      folhaPorObra.set(chave, { nome: linha.obra_nome || 'Sem obra definida', valor: 0, pessoas: [] });
+    }
+    const grupo = folhaPorObra.get(chave);
+    const valor = arredondar(linha.diferenca);
+    grupo.valor = arredondar(grupo.valor + valor);
+    grupo.pessoas.push({
+      nome: linha.nome,
+      funcao: linha.funcao || '',
+      mes_ciclo: linha.mes_ciclo,
+      folha: arredondar(linha.folha),
+      produzido: arredondar(linha.produzido),
+      valor
+    });
+  }
+
+  for (const [chave, grupo] of folhaPorObra) {
+    // A linha "Sem obra definida" não é uma obra de verdade: fica no mapa para aparecer no
+    // relatório, mas marcada, e por isso não tem entrada nenhuma (saldo sempre negativo).
+    const registro = obterObra(mapa, chave, grupo.nome);
+    if (chave === CHAVE_SEM_OBRA) registro.sem_obra_definida = true;
+    grupo.pessoas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    registro.saidas.push({
+      tipo: 'FOLHA',
+      servico: 'Folha (holerite sem produção)',
+      valor: grupo.valor,
+      pessoas: grupo.pessoas
+    });
+    registro.total_saida = arredondar(registro.total_saida + grupo.valor);
   }
 
   res.json(montarResposta(mapa, { data_inicio, data_fim }, diariasSemObra));

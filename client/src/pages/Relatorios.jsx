@@ -273,10 +273,26 @@ function AvisosSaude({ avisos }) {
   const semCusto = avisos.obras_sem_custo || [];
   const diariasSoltas = avisos.diarias_sem_obra || { qtd: 0, valor: 0 };
   const temDiariasSoltas = diariasSoltas.qtd > 0;
-  if (semObra.length === 0 && semCusto.length === 0 && !temDiariasSoltas) return null;
+  const folhaSolta = avisos.folha_sem_obra || { valor: 0, pessoas: 0 };
+  const temFolhaSolta = folhaSolta.valor > 0;
+  if (semObra.length === 0 && semCusto.length === 0 && !temDiariasSoltas && !temFolhaSolta) return null;
 
   return (
     <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #d97706', fontSize: 12 }}>
+      {/* Este é o aviso mais importante enquanto as obras não estiverem preenchidas nos
+          cadastros: mostra exatamente quanto dinheiro saiu sem ter obra onde ser alocado. */}
+      {temFolhaSolta && (
+        <div style={{ marginBottom: 8 }}>
+          💰 <strong>Pagamento sem obra definida:</strong> {formatarMoeda(folhaSolta.valor)} de{' '}
+          {folhaSolta.pessoas} pessoa(s).
+          <div style={{ color: '#6b7280', marginTop: 2 }}>
+            São pagamentos de folha (holerite) de quem não tem produção lançada e ainda está{' '}
+            <strong>sem “Obra atual”</strong> no cadastro. O valor aparece na última linha do
+            relatório, como <strong>“Sem obra definida”</strong>. Para distribuí-lo pelas obras,
+            abra <strong>Prestadores</strong>, edite cada pessoa e informe a obra.
+          </div>
+        </div>
+      )}
       {temDiariasSoltas && (
         <div style={{ marginBottom: (semObra.length > 0 || semCusto.length > 0) ? 8 : 0 }}>
           ⚠️ <strong>Diárias sem obra definida:</strong> {formatarMoeda(diariasSoltas.valor)} em{' '}
@@ -329,18 +345,25 @@ function TabelaGeralObras({ obras }) {
           {obras.map(obra => (
             <tr key={obra.chave}>
               <td>
-                {obra.obra}
-                {obra.sem_obra_cadastrada && (
+                {obra.sem_obra_definida ? <em>{obra.obra}</em> : obra.obra}
+                {obra.sem_obra_definida && (
+                  <span title="Pagamentos de quem ainda não tem Obra atual no cadastro" style={{ color: '#b45309' }}> 💰</span>
+                )}
+                {obra.sem_obra_cadastrada && !obra.sem_obra_definida && (
                   <span title="Nome não encontrado no cadastro de Obras" style={{ color: '#b45309' }}> ⚠️</span>
                 )}
-                {obra.sem_custo_lancado && !obra.sem_entrada_lancada && (
+                {obra.sem_custo_lancado && !obra.sem_entrada_lancada && !obra.sem_obra_definida && (
                   <span title="Sem custo de mão de obra lançado no período" style={{ color: '#b45309' }}> ⚠️</span>
                 )}
                 {/* Valor bruto e retenção ficam na segunda linha: são informação de apoio,
                     não o número que interessa para a saúde da obra. */}
                 <div style={{ fontSize: 11, color: '#9ca3af' }}>
-                  bruto {formatarMoeda(obra.total_entrada_bruta)}
-                  {obra.total_desconto_nota > 0 && ` · nota −${formatarMoeda(obra.total_desconto_nota)}`}
+                  {obra.sem_obra_definida
+                    ? 'pagamentos a alocar — defina a obra no cadastro'
+                    : <>
+                        bruto {formatarMoeda(obra.total_entrada_bruta)}
+                        {obra.total_desconto_nota > 0 && ` · nota −${formatarMoeda(obra.total_desconto_nota)}`}
+                      </>}
                 </div>
               </td>
               <td style={{ whiteSpace: 'nowrap' }}>{formatarMoeda(obra.total_entrada_liquida)}</td>
@@ -370,11 +393,16 @@ function ListaDetalhadaObras({ obras, expandida, onExpandir }) {
         return (
           <div key={obra.chave} className="card" style={{ borderLeft: `4px solid ${corDoSaldo(obra.saldo)}` }}>
             <div className="flex gap-4" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-              <strong style={{ fontSize: 15 }}>{obra.obra}</strong>
-              {obra.sem_obra_cadastrada && (
+              <strong style={{ fontSize: 15 }}>
+                {obra.sem_obra_definida ? <em>{obra.obra}</em> : obra.obra}
+              </strong>
+              {obra.sem_obra_definida && (
+                <span style={{ fontSize: 11, color: '#b45309' }}>💰 pagamentos a alocar</span>
+              )}
+              {obra.sem_obra_cadastrada && !obra.sem_obra_definida && (
                 <span style={{ fontSize: 11, color: '#b45309' }}>⚠️ obra não cadastrada</span>
               )}
-              {obra.sem_custo_lancado && !obra.sem_entrada_lancada && (
+              {obra.sem_custo_lancado && !obra.sem_entrada_lancada && !obra.sem_obra_definida && (
                 <span style={{ fontSize: 11, color: '#b45309' }}>⚠️ sem custo lançado</span>
               )}
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -477,10 +505,23 @@ function BlocoSaidas({ saidas, total }) {
                 <td>
                   {item.servico}
                   <div style={{ fontSize: 11, color: '#9ca3af' }}>
-                    {item.tipo === 'DIARIA'
-                      ? `${item.quantidade} diária(s) rateada(s)`
-                      : `${item.qtd} marcação(ões) de produção`}
+                    {item.tipo === 'DIARIA' && `${item.quantidade} diária(s) rateada(s)`}
+                    {item.tipo === 'PRODUCAO' && `${item.qtd} marcação(ões) de produção`}
+                    {/* A linha de folha é a única que vale a pena abrir por pessoa: é ela que
+                        responde "de quem é este custo que não veio de produção?". */}
+                    {item.tipo === 'FOLHA' && `${item.pessoas.length} pagamento(s) sem produção equivalente`}
                   </div>
+                  {item.tipo === 'FOLHA' && (
+                    <ul style={{ fontSize: 11, color: '#6b7280', margin: '4px 0 0', paddingLeft: 16 }}>
+                      {item.pessoas.map((pessoa, i) => (
+                        <li key={i}>
+                          {pessoa.nome}{pessoa.funcao ? ` (${pessoa.funcao})` : ''} · {pessoa.mes_ciclo} ·{' '}
+                          <strong>{formatarMoeda(pessoa.valor)}</strong>
+                          {pessoa.produzido > 0 && ` (folha ${formatarMoeda(pessoa.folha)} − produção ${formatarMoeda(pessoa.produzido)})`}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </td>
                 <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{formatarMoeda(item.valor)}</td>
               </tr>

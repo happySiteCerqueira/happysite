@@ -96,6 +96,13 @@ function ListaPrestadores() {
   const podeEditar = temPermissao('RH');
 
 
+  // Obras ativas, usadas no campo "Obra atual" do formulário de edição. Carregadas uma vez:
+  // a lista muda pouco e o campo só aparece dentro do modal.
+  const [obras, setObras] = useState([]);
+  useEffect(() => {
+    api.get('/obras').then(res => setObras(res.data)).catch(() => setObras([]));
+  }, []);
+
   function carregarLista() {
     api.get('/prestadores', { params: { busca, status: aba } }).then(res => setLista(res.data));
   }
@@ -192,7 +199,10 @@ function ListaPrestadores() {
       valor_diaria: p.valor_diaria ?? 0,
       data_nascimento: paraInputDate(p.data_nascimento),
       data_admissao: paraInputDate(p.data_admissao),
-      data_primeiro_aso: paraInputDate(p.data_primeiro_aso)
+      data_primeiro_aso: paraInputDate(p.data_primeiro_aso),
+      // Obra atual. Vem como número do banco e o <select> trabalha com string — por isso a
+      // conversão; sem ela o campo abriria sempre vazio, como se não houvesse obra definida.
+      obra_id: p.obra_id ? String(p.obra_id) : ''
     });
   }
 
@@ -401,6 +411,21 @@ function ListaPrestadores() {
               {editando.tipo !== 'PJ' &&
                 linhaCampo('Data do 1º ASO', editando.data_primeiro_aso, e => setEditando({ ...editando, data_primeiro_aso: e.target.value }), 'date')}
               {linhaCampo('Valor da Diária (R$)', editando.valor_diaria, e => setEditando({ ...editando, valor_diaria: e.target.value }), 'number')}
+              {/* Obra atual: é aqui que se registra a transferência quando a pessoa muda de
+                  obra. O relatório de saúde financeira usa este campo para saber a qual obra
+                  pertence o pagamento de quem não tem produção marcada (ajudantes, salário de
+                  carteira). Sem obra definida, o valor aparece à parte no relatório. */}
+              <div className="flex-col gap-2">
+                <label style={{ fontSize: 12 }}>Obra atual</label>
+                <select value={editando.obra_id}
+                  onChange={e => setEditando({ ...editando, obra_id: e.target.value })}>
+                  <option value="">— Sem obra definida —</option>
+                  {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                </select>
+                <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                  Altere sempre que a pessoa for transferida de obra.
+                </span>
+              </div>
             </div>
 
           </>

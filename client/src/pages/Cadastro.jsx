@@ -15,7 +15,10 @@ function baixarBlob(blob, nomeArquivo) {
 const COLABORADOR_VAZIO = {
   tipo: 'CPF', nome: '', documento: '', telefone: '', email: '', endereco: '',
   funcao: '', contato_responsavel: '', banco: '', agencia: '', conta: '', pix: '', valor_diaria: '',
-  data_nascimento: '', data_admissao: '', data_primeiro_aso: ''
+  data_nascimento: '', data_admissao: '', data_primeiro_aso: '',
+  // Obra atual: usada no relatório de saúde financeira para alocar o custo de folha de quem
+  // recebe pelo holerite sem ter produção marcada (ajudantes, salário de carteira).
+  obra_id: ''
 };
 
 
@@ -284,6 +287,22 @@ export default function Cadastro() {
                   <input type="number" step="0.01" value={novoColab.valor_diaria}
                     onChange={e => setNovoColab({ ...novoColab, valor_diaria: e.target.value })} />
                   <span style={{ fontSize: 11, color: '#9ca3af' }}>Não é obrigatório agora; pode ser definido/editado depois na aba Diárias.</span>
+                </div>
+                {/* Obra atual: onde a pessoa está alocada hoje. Serve para o relatório de saúde
+                    financeira saber a qual obra pertence o custo de quem recebe pelo holerite
+                    sem ter produção marcada (ajudantes, salário de carteira). Pode ser alterada
+                    depois, em Prestadores > editar, sempre que a pessoa mudar de obra. */}
+                <div className="flex-col gap-2">
+                  <label style={{ fontSize: 12 }}>Obra atual — opcional</label>
+                  <select value={novoColab.obra_id}
+                    onChange={e => setNovoColab({ ...novoColab, obra_id: e.target.value })}>
+                    <option value="">— Sem obra definida —</option>
+                    {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                  </select>
+                  <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                    Usada no relatório de saúde financeira para alocar o pagamento de quem não tem
+                    produção lançada. Pode ser alterada quando a pessoa mudar de obra.
+                  </span>
                 </div>
               </div>
 

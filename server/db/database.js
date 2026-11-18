@@ -906,6 +906,24 @@ async function migrate() {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_financeiro_receitas_ativas ON financeiro_receitas (data_medicao) WHERE excluido = 0');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_diaria_obras_ativas ON diaria_obras (colaborador_id, mes_ciclo) WHERE excluido = 0');
 
+  // Migração idempotente: "obra atual" do colaborador (colaboradores.obra_id).
+  //
+  // POR QUÊ: há gente — tipicamente ajudantes e quem é pago pelo salário da carteira — que NÃO
+  // tem produção marcada no desenho do prédio, mas recebe pelo holerite todo mês. Esse custo é
+  // real e pertence a alguma obra; sem este vínculo ele não tinha onde ser alocado e ficava de
+  // fora do relatório de saúde financeira, inflando o lucro das obras.
+  //
+  // É ON DELETE SET NULL (e não CASCADE): apagar uma obra jamais pode apagar o cadastro de uma
+  // pessoa — apenas desfaz o vínculo, e ela volta a aparecer como "sem obra definida".
+  //
+  // O vínculo é o ATUAL, e muda com o tempo quando a pessoa troca de obra. Por isso o relatório
+  // só o usa como destino do custo que não tem obra própria; o histórico de produção continua
+  // vindo das marcações, que já carregam a obra de cada mês.
+  if (!(await colunaExiste('colaboradores', 'obra_id'))) {
+    await pool.query('ALTER TABLE colaboradores ADD COLUMN obra_id INTEGER REFERENCES obras(id) ON DELETE SET NULL');
+    console.log('[migracao] Coluna "obra_id" (obra atual) adicionada em colaboradores.');
+  }
+
   // Seed: permissões padrão por perfil x módulo (equivalente ao que hoje está fixo no código via temPermissao)
   const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
   if (permCountRes.rows[0].c === 0) {
