@@ -319,7 +319,7 @@ export default function Cadastro() {
                     {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
                   </select>
                   <span style={{ fontSize: 11, color: '#9ca3af' }}>
-                    Usada no relatório de saúde financeira para alocar o pagamento de quem não tem
+                    Usada no Centro de Custo para alocar o pagamento de quem não tem
                     produção lançada. Pode ser alterada quando a pessoa mudar de obra.
                   </span>
                 </div>

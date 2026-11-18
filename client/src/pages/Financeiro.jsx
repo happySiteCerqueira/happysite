@@ -9,6 +9,7 @@ import PagamentosAntecipados from './PagamentosAntecipados';
 import Conciliacao from './Conciliacao';
 import GastosCustos from './gastos/GastosCustos';
 import Relatorios from './Relatorios';
+import CentroCusto from './CentroCusto';
 
 
 
@@ -84,12 +85,17 @@ export default function Financeiro() {
   const podeImportarHolerite = temAcessoSubaba('conciliacao');
   const mostrarGastos = temAcessoSubaba('financeiro.gastos');
   const mostrarRelatorios = temAcessoSubaba('financeiro.relatorios');
+  // O Centro de Custo (antiga Saúde financeira, que vivia dentro de Relatórios) reaproveita a
+  // permissão de Relatórios: quem já via a Saúde financeira continua vendo, sem reconfigurar
+  // o Controle de Acesso.
+  const mostrarCentroCusto = mostrarRelatorios;
   const mostrarResumo = temAcessoSubaba('financeiro.resumo');
 
   // Abre na primeira sub-aba à qual o usuário tem acesso.
   const primeiraDisponivel = mostrarReceita ? 'receita'
     : mostrarPagamentos ? 'pagamentos'
     : mostrarGastos ? 'gastos'
+    : mostrarCentroCusto ? 'centrocusto'
     : mostrarRelatorios ? 'relatorios'
     : mostrarResumo ? 'resumo' : null;
   const [subAba, setSubAba] = useState(primeiraDisponivel);
@@ -123,6 +129,11 @@ export default function Financeiro() {
             💸 Gastos
           </button>
         )}
+        {mostrarCentroCusto && (
+          <button className={subAba === 'centrocusto' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('centrocusto')}>
+            🏗️ Centro de Custo
+          </button>
+        )}
         {mostrarRelatorios && (
           <button className={subAba === 'relatorios' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('relatorios')}>
             📈 Relatórios
@@ -146,6 +157,7 @@ export default function Financeiro() {
       {subAba === 'gastos' && mostrarGastos && (
         <GastosCustos renderLancamentos={(mesLancamentos, aoAlterar) => <Gastos mesExterno={mesLancamentos} onAlterado={aoAlterar} />} />
       )}
+      {subAba === 'centrocusto' && mostrarCentroCusto && <CentroCusto />}
       {subAba === 'relatorios' && mostrarRelatorios && <Relatorios />}
       {subAba === 'resumo' && mostrarResumo && <Resumo />}
     </div>
@@ -254,7 +266,7 @@ function Gastos({ mesExterno, onAlterado }) {
 
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
           Gastos diretos da obra (Café e outros lançamentos manuais). Entram na{' '}
-          <strong>saúde financeira por obra</strong>, abatendo a receita da obra informada. VA, VT e holerite
+          <strong>Centro de Custo</strong>, abatendo a receita da obra informada. VA, VT e holerite
           dos colaboradores vêm das abas Dados e Detalhado.
         </div>
       </div>

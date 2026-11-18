@@ -50,6 +50,21 @@ git checkout v2.111
 
 ## Versões
 
+### 2.116 — Centro de Custo
+
+- A **Saúde financeira por obra** saiu de dentro de Relatórios e virou a aba própria
+  **Financeiro → 🏗️ Centro de Custo**, com o novo nome. A tela e a conta são as mesmas; Relatórios
+  ficou só com Produção × Pagamentos. A permissão continua a de Relatórios
+  (`financeiro.relatorios`), então ninguém perde acesso. O endereço da API não mudou.
+- Textos do sistema que citavam "saúde financeira" passaram a dizer Centro de Custo, e a
+  explicação da tela agora lista tudo o que entra no custo (produção, diárias, excedente do
+  holerite, VA, VT, Extras e Café).
+- **Manual de Conexão corrigido:** o banco de produção é o Postgres do Docker no servidor; o
+  `server/.env` de um PC pode apontar para o Neon antigo. Incluído como consultar/corrigir dados
+  reais via SSH (`psql` no container `db`).
+- Dado: lançamentos de Receita "V. DO SOL" padronizados para "VARANDAS DO SOL" (feito direto no
+  banco de produção, com auditoria).
+
 ### 2.115 — Importação de VT, Ponto e Caju + Saúde financeira com rateio
 
 - **Aba Dados** agora lê os PDFs. Cada card pede o **Mês/Ano de referência** (independente do

@@ -40,7 +40,7 @@ export default function GastosCustos({ renderLancamentos }) {
           </div>
         </div>
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
-          Custos de <strong>{rotuloMes(mes)}</strong> que abatem a receita das obras na saúde financeira.
+          Custos de <strong>{rotuloMes(mes)}</strong> que abatem a receita das obras no Centro de Custo.
         </div>
       </div>
 

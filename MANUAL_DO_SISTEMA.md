@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.115** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.116** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -30,7 +30,7 @@ MEDIÇÃO do mês: total por pessoa = produção + diárias − adiantamentos
         ↓
 Confere com o holerite da contabilidade (Conciliação)
         ↓
-Paga e acompanha a saúde financeira de cada obra
+Paga e acompanha o centro de custo de cada obra
 ```
 
 ### O conceito mais importante: **mês de apuração**
@@ -108,7 +108,8 @@ daquele mês (produção, diárias, antecipados).
 | **📄 Holerite** | Importa o PDF de holerites da contabilidade e mostra **Vale, INSS, Taxa e Pagto** por pessoa/mês (editável) |
 | **🧾 Pagtos. Antecipados** | Só lançamentos internos: **Vale Extra e Vale Ex RH** (PF) e **Adiantamento** (PJ) |
 | **💸 Gastos** | Custos por colaborador rateados por obra (VA, VT, Extras, Holerite) + Café direto da obra. Ver abaixo |
-| **📈 Relatórios** | Produção × Pagamentos · **Saúde financeira por obra** |
+| **🏗️ Centro de Custo** | O que entrou × o que saiu de cada obra: saldo e margem (antiga "Saúde financeira") |
+| **📈 Relatórios** | Produção × Pagamentos por colaborador |
 | **📊 Resumo** | Gráficos de receita por mês/obra/serviço (só ADM) |
 
 > Holerite e Pagamentos Antecipados são **a mesma planilha** (`pagamentos_antecipados`) vista por
@@ -155,26 +156,28 @@ Custo de holerite rateado = máx(H − P, 0)
 - Lançamento manual de VA/VT num mês que já tem lote importado dessa categoria **não é somado**
   até o usuário decidir (manter = soma junto; remover = exclusão lógica). A importação pede essa
   decisão; o aviso aparece no Resumo.
-- **Saúde financeira por obra** usa exatamente esta conta: excedente do holerite + VA + VT +
-  Extras, rateados pelo ponto, somados à produção, diárias e gastos diretos (Café).
+- **Centro de Custo** (antiga "Saúde financeira") usa exatamente esta conta: excedente do holerite
+  + VA + VT + Extras, rateados pelo ponto, somados à produção, diárias e gastos diretos (Café).
 
-#### Saúde financeira por obra — o relatório mais importante
+#### Centro de Custo — o relatório mais importante
 
-Cruza o que **entrou** com o que **saiu** em cada obra:
+Fica em **Financeiro → Centro de Custo** (antes era um botão dentro de Relatórios; usa a mesma
+permissão `financeiro.relatorios`). Cruza o que **entrou** com o que **saiu** em cada obra:
 
 ```
 Entrou = receita LÍQUIDA (já com a nota descontada)
-Pagou  = produção + diárias rateadas + folha não coberta + gastos
+Pagou  = produção + diárias rateadas + excedente do holerite + VA + VT + Extras + gastos diretos (Café)
 Saldo  = Entrou − Pagou
 Margem = Saldo ÷ Entrou × 100
 ```
 
-**"Folha não coberta"** merece explicação. Por pessoa e por mês:
+**Excedente do holerite** merece explicação. Por pessoa e por mês, com `P` = produção + diárias e
+`H` = Vale + INSS + Taxa + Pagto:
 
-- Se **produção + diárias ≥ folha** → não soma nada (a folha é adiantamento do que produziu;
-  somar contaria o mesmo dinheiro duas vezes)
-- Se **folha > produção** → a diferença é custo real e vai para a **obra atual** do cadastro
-- Sem obra no cadastro → entra na linha **"Sem obra definida"**, visível, nunca descartado
+- Se **H ≤ P** → não soma nada (o holerite é adiantamento do que produziu; somar contaria o
+  mesmo dinheiro duas vezes)
+- Se **H > P** → a diferença é custo real e é **rateada pelo ponto eletrônico** do mês
+- Sem ponto → obra atual do cadastro; sem obra → linha **"Sem obra definida"**, visível, nunca descartado
 
 Duas visões: **Geral** (uma linha por obra) e **Detalhada** (abre a composição dos dois lados
 por tipo de serviço).

@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.115**
+> **Versão do sistema: 2.116**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -37,14 +37,14 @@ todos os dias. Perder um dado ou uma ferramenta causa prejuízo real.
 ## 1. O que é o sistema
 
 Sistema de gestão para a **Cerqueira Engenharia** (construção civil). Controla obras, medição de
-produção por colaborador, pagamentos, folha e saúde financeira de cada obra.
+produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 
 | | |
 |---|---|
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.115** (tag `v2.115`) |
+| **Versão atual** | **2.116** (tag `v2.116`) |
 
 ### Stack
 
@@ -109,9 +109,13 @@ cd client
 npm run dev
 ```
 
-> ⚠️ **Atenção:** o `.env` aponta para o **banco de produção**. Rodar local **mexe nos dados
-> reais**. Para só ler, tudo bem; para testar escrita, use um mês inventado (ex: `2099-01`) e
-> apague os registros no fim — é o que os scripts de teste deste manual fazem.
+> ⚠️ **Atenção:** o banco de **produção** é o Postgres do Docker, **dentro do servidor**. O
+> `server/.env` de um PC pode apontar para outro banco — por exemplo o **Neon antigo**, de antes da
+> migração, com dados desatualizados. **Confira a `DATABASE_URL` antes de testar** e nunca
+> presuma que é produção: testes e correções feitos no banco errado não aparecem no site.
+> Para testar escrita use um mês inventado (ex: `2099-01`) e apague os registros no fim. Para
+> **consultar ou corrigir dados reais**, use o SSH da seção seguinte (`psql` no container `db`):
+> leitura primeiro, alterações dentro de uma transação e com registro na tabela `auditoria`.
 
 ### 2.5 Acesso SSH ao servidor
 
@@ -127,6 +131,7 @@ cd /opt/happysite
 | `sudo docker compose restart app` | Reinicia só a aplicação |
 | `sudo docker compose up -d --build` | Rebuild manual (o deploy automático já faz) |
 | `cat .env` | Ver as credenciais de produção |
+| `sudo docker compose exec -T db psql -U happysite -d happysite` | Consultar/corrigir o banco real (use transação e registre em `auditoria`) |
 
 > ⚠️ **NUNCA** rode `docker compose down -v`. O `-v` apaga os volumes — ou seja, **todos os
 > dados**.
@@ -175,6 +180,7 @@ HappySite/
 | ↳ Holerite | `Conciliacao.jsx` (`modoFixo="importar"`) + `PagamentosAntecipados.jsx` (`modo="holerite"`) | `conciliacao.js`, `pagamentos-antecipados.js` |
 | ↳ Pagtos. Antecipados | `PagamentosAntecipados.jsx` | `pagamentos-antecipados.js` |
 | ↳ Relatórios | `Relatorios.jsx` | `relatorios.js` |
+| ↳ Centro de Custo (antiga Saúde financeira) | `CentroCusto.jsx` | `relatorios.js` (`GET /relatorios/saude-obras`) |
 | Conciliação | `Conciliacao.jsx` | `conciliacao.js` |
 | Controle de ASO | `Aso.jsx` | `aso.js` |
 | Agenda | `Agenda.jsx` | `agenda.js` |
@@ -263,9 +269,9 @@ if (feito.rows.length === 0) {
 No módulo Financeiro → Gastos (`utils/gastosCustos.js`), o custo de holerite rateado por obra é
 `máx(H − P, 0)`, onde `P` = produção marcada + diárias e `H` = Vale + INSS + Taxa + Pagto. A produção
 já está nas obras pela marcação; somar o holerite inteiro contaria duas vezes. Vale Extra, Vale Ex
-RH e Adiantamento **não** fazem parte de `H`. **Não altere sem rever a saúde financeira**, que
+RH e Adiantamento **não** fazem parte de `H`. **Não altere sem rever o Centro de Custo**, que
 precisa usar a mesma regra — e usa: `routes/relatorios.js` chama `calcularCustosMes` de
-`utils/gastosCustos.js`, então Gastos e Saúde financeira nunca divergem.
+`utils/gastosCustos.js`, então Gastos e Centro de Custo nunca divergem.
 
 ### 5.12 Um lote ATIVO por tipo e mês
 `gastos_lotes` tem índice único parcial `(tipo, mes_referencia) WHERE status = 'ATIVO'`. Reimportar
@@ -464,7 +470,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.115).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.116).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -495,7 +501,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.115** |
+| Versão | **2.116** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |
