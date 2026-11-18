@@ -56,6 +56,8 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/painel', require('./routes/painel'));
 app.use('/api/epi', require('./routes/epi'));
 app.use('/api/financeiro', require('./routes/financeiro'));
+app.use('/api/gastos-custos', require('./routes/gastosCustos'));
+app.use('/api/gastos-importacao', require('./routes/gastosImportacao'));
 app.use('/api/permissoes', require('./routes/permissoes'));
 app.use('/api/aso', require('./routes/aso'));
 app.use('/api/agenda', require('./routes/agenda'));

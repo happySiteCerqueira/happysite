@@ -6,6 +6,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
 import PagamentosAntecipados from './PagamentosAntecipados';
+import Conciliacao from './Conciliacao';
+import GastosCustos from './gastos/GastosCustos';
 import Relatorios from './Relatorios';
 
 
@@ -76,6 +78,10 @@ export default function Financeiro() {
 
   const mostrarReceita = temAcessoSubaba('financeiro.receita');
   const mostrarPagamentos = temAcessoSubaba('financeiro.pagamentos');
+  // O Holerite usa a mesma permissão de Pagamentos Antecipados: são a mesma planilha, vista por
+  // colunas diferentes. Importar o PDF continua exigindo o módulo Conciliação.
+  const mostrarHolerite = mostrarPagamentos;
+  const podeImportarHolerite = temAcessoSubaba('conciliacao');
   const mostrarGastos = temAcessoSubaba('financeiro.gastos');
   const mostrarRelatorios = temAcessoSubaba('financeiro.relatorios');
   const mostrarResumo = temAcessoSubaba('financeiro.resumo');
@@ -87,6 +93,8 @@ export default function Financeiro() {
     : mostrarRelatorios ? 'relatorios'
     : mostrarResumo ? 'resumo' : null;
   const [subAba, setSubAba] = useState(primeiraDisponivel);
+  // Incrementado após importar o PDF do holerite para a tabela da aba recarregar os valores.
+  const [versaoHolerite, setVersaoHolerite] = useState(0);
 
 
 
@@ -98,6 +106,11 @@ export default function Financeiro() {
         {mostrarReceita && (
           <button className={subAba === 'receita' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('receita')}>
             📥 Receita
+          </button>
+        )}
+        {mostrarHolerite && (
+          <button className={subAba === 'holerite' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('holerite')}>
+            📄 Holerite
           </button>
         )}
         {mostrarPagamentos && (
@@ -123,8 +136,16 @@ export default function Financeiro() {
       </div>
 
       {subAba === 'receita' && mostrarReceita && <Receita />}
+      {subAba === 'holerite' && mostrarHolerite && (
+        <>
+          {podeImportarHolerite && <Conciliacao modoFixo="importar" onImportado={() => setVersaoHolerite(v => v + 1)} />}
+          <PagamentosAntecipados key={versaoHolerite} modo="holerite" />
+        </>
+      )}
       {subAba === 'pagamentos' && mostrarPagamentos && <PagamentosAntecipados />}
-      {subAba === 'gastos' && mostrarGastos && <Gastos />}
+      {subAba === 'gastos' && mostrarGastos && (
+        <GastosCustos renderLancamentos={(mesLancamentos, aoAlterar) => <Gastos mesExterno={mesLancamentos} onAlterado={aoAlterar} />} />
+      )}
       {subAba === 'relatorios' && mostrarRelatorios && <Relatorios />}
       {subAba === 'resumo' && mostrarResumo && <Resumo />}
     </div>
@@ -139,11 +160,15 @@ export default function Financeiro() {
 // valor continuar visível em vez de desaparecer.
 const GASTO_VAZIO = { mes_ciclo: '', obra_id: '', tipo: '', descricao: '', valor: '' };
 
-function Gastos() {
+// Lançamentos diretos por obra (Café e outros). Usado dentro de Gastos > Resumo: recebe o mês do
+// seletor global (mesExterno) e avisa o resumo (onAlterado) para recalcular após cada alteração.
+// Sem mesExterno, funciona sozinho com seletor de mês próprio.
+function Gastos({ mesExterno, onAlterado }) {
   const { usuario } = useAuth();
   const podeLancar = ['ADM', 'FINANCEIRO'].includes(usuario?.perfil);
 
-  const [mes, setMes] = useState(mesAtual());
+  const [mesInterno, setMes] = useState(mesAtual());
+  const mes = mesExterno || mesInterno;
   const [dados, setDados] = useState(null);
   const [obras, setObras] = useState([]);
   const [tipos, setTipos] = useState([]);
@@ -161,6 +186,7 @@ function Gastos() {
     api.get('/financeiro/gastos', { params: { mes } })
       .then(res => setDados(res.data))
       .catch(() => setDados(null));
+    if (onAlterado) onAlterado();
   }
   useEffect(carregar, [mes]);
 
@@ -212,10 +238,12 @@ function Gastos() {
     <div>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="flex gap-4" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="flex-col gap-2">
-            <label style={{ fontSize: 12 }}>Mês</label>
-            <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
-          </div>
+          {!mesExterno && (
+            <div className="flex-col gap-2">
+              <label style={{ fontSize: 12 }}>Mês</label>
+              <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
+            </div>
+          )}
           {dados && (
             <div style={{ fontSize: 13 }}>
               Total de <strong>{rotuloMes(mes)}</strong>:{' '}
@@ -225,8 +253,9 @@ function Gastos() {
         </div>
 
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
-          Gastos com funcionários (Café, VA, Vale Transporte...). Entram no relatório de{' '}
-          <strong>saúde financeira por obra</strong>, abatendo a receita da obra informada.
+          Gastos diretos da obra (Café e outros lançamentos manuais). Entram na{' '}
+          <strong>saúde financeira por obra</strong>, abatendo a receita da obra informada. VA, VT e holerite
+          dos colaboradores vêm das abas Dados e Detalhado.
         </div>
       </div>
 

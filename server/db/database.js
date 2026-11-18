@@ -1047,6 +1047,135 @@ async function migrate() {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_financeiro_gastos_ativos ON financeiro_gastos (mes_ciclo) WHERE excluido = 0');
 
+  // ---------------------------------------------------------------------------------------
+  // Gastos por colaborador (VA, VT, Extras, Holerite) rateados entre obras pelo ponto
+  // eletrônico. Tudo aditivo: nada aqui altera ou remove o que já existia.
+  //
+  // gastos_lotes: uma linha por importação de PDF (Caju, VT, Ponto e, no futuro, Café). O
+  //   índice único PARCIAL garante no próprio banco que só existe UM lote ATIVO por
+  //   (tipo, mês) — é isso que impede importar o mesmo relatório duas vezes e duplicar custo.
+  //   Reimportar marca o lote antigo como SUBSTITUIDO (nunca é apagado).
+  // gastos_colaborador_itens: cada valor extraído por colaborador/categoria/canal. O canal
+  //   (RECARGA PAY, PIX, CAJU...) é guardado para o detalhamento do VT não se perder.
+  // ponto_eventos: batidas cruas do ponto. Ficam guardadas para o rateio poder ser refeito
+  //   quando um vínculo De-Para novo for criado, sem pedir o PDF de novo.
+  // gastos_rateio_mensal: matriz colaborador x mês x obra. Precedência na leitura:
+  //   MANUAL > PONTO > obra padrão do cadastro (esta última é calculada, não gravada).
+  // colaborador_aliases / obra_enderecos_alias: De-Para persistente entre meses.
+  // ---------------------------------------------------------------------------------------
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gastos_lotes (
+      id SERIAL PRIMARY KEY,
+      tipo TEXT NOT NULL CHECK(tipo IN ('CAJU','VT','PONTO','CAFE')),
+      mes_referencia TEXT NOT NULL,
+      arquivo_nome TEXT,
+      arquivo_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'RASCUNHO' CHECK(status IN ('RASCUNHO','ATIVO','SUBSTITUIDO','DESCARTADO')),
+      total_valor DOUBLE PRECISION NOT NULL DEFAULT 0,
+      total_registros INTEGER NOT NULL DEFAULT 0,
+      payload TEXT,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      confirmado_em TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS gastos_colaborador_itens (
+      id SERIAL PRIMARY KEY,
+      lote_id INTEGER NOT NULL REFERENCES gastos_lotes(id) ON DELETE CASCADE,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      mes_referencia TEXT NOT NULL,
+      categoria TEXT NOT NULL CHECK(categoria IN ('VA','VT')),
+      canal TEXT,
+      valor DOUBLE PRECISION NOT NULL DEFAULT 0,
+      nome_origem TEXT,
+      detalhe TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS ponto_eventos (
+      id SERIAL PRIMARY KEY,
+      lote_id INTEGER NOT NULL REFERENCES gastos_lotes(id) ON DELETE CASCADE,
+      colaborador_id INTEGER REFERENCES colaboradores(id) ON DELETE SET NULL,
+      nome_origem TEXT,
+      nome_normalizado TEXT,
+      data_evento DATE NOT NULL,
+      evento_em TIMESTAMP,
+      nsr TEXT,
+      leitor TEXT,
+      rua_original TEXT,
+      rua_normalizada TEXT,
+      cidade_normalizada TEXT,
+      obra_id INTEGER REFERENCES obras(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS gastos_rateio_mensal (
+      id SERIAL PRIMARY KEY,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      mes_referencia TEXT NOT NULL,
+      obra_id INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
+      dias DOUBLE PRECISION NOT NULL DEFAULT 0,
+      percentual DOUBLE PRECISION NOT NULL DEFAULT 0,
+      origem TEXT NOT NULL DEFAULT 'PONTO' CHECK(origem IN ('PONTO','MANUAL')),
+      atualizado_por INTEGER REFERENCES usuarios(id),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      UNIQUE(colaborador_id, mes_referencia, obra_id, origem)
+    );
+
+    CREATE TABLE IF NOT EXISTS gastos_extras (
+      id SERIAL PRIMARY KEY,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      mes_referencia TEXT NOT NULL,
+      valor DOUBLE PRECISION NOT NULL DEFAULT 0,
+      descricao TEXT,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      excluido INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS colaborador_aliases (
+      id SERIAL PRIMARY KEY,
+      origem TEXT NOT NULL,
+      nome_normalizado TEXT NOT NULL,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      UNIQUE(origem, nome_normalizado)
+    );
+
+    CREATE TABLE IF NOT EXISTS obra_enderecos_alias (
+      id SERIAL PRIMARY KEY,
+      obra_id INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
+      rua_normalizada TEXT NOT NULL,
+      cidade_normalizada TEXT NOT NULL DEFAULT '',
+      rua_original TEXT,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      UNIQUE(rua_normalizada, cidade_normalizada)
+    );
+  `);
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS ux_gastos_lotes_ativo ON gastos_lotes (tipo, mes_referencia) WHERE status = \'ATIVO\'');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_gastos_itens_mes ON gastos_colaborador_itens (mes_referencia, colaborador_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_gastos_itens_lote ON gastos_colaborador_itens (lote_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_ponto_eventos_lote ON ponto_eventos (lote_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_ponto_eventos_colab_dia ON ponto_eventos (colaborador_id, data_evento)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_gastos_rateio_mes ON gastos_rateio_mensal (mes_referencia, colaborador_id)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_gastos_extras_mes ON gastos_extras (mes_referencia) WHERE excluido = 0');
+
+  // Origem do lançamento em financeiro_gastos: 'MANUAL' (digitado) ou 'PDF_CAFE' (futuro parser
+  // do Café). lote_id fica SEM chave estrangeira de propósito: o backup restaura tabelas em
+  // ordem fixa e um lançamento nunca pode falhar na restauração por causa do lote.
+  if (!(await colunaExiste('financeiro_gastos', 'origem'))) {
+    await pool.query("ALTER TABLE financeiro_gastos ADD COLUMN origem TEXT NOT NULL DEFAULT 'MANUAL'");
+  }
+  if (!(await colunaExiste('financeiro_gastos', 'lote_id'))) {
+    await pool.query('ALTER TABLE financeiro_gastos ADD COLUMN lote_id INTEGER');
+  }
+  // 1 = o usuário conferiu este lançamento manual de VA/VT, que coexiste com um lote importado
+  // da mesma categoria, e decidiu MANTER. Sem a marca ele é tratado como possível duplicidade.
+  if (!(await colunaExiste('financeiro_gastos', 'manter_com_lote'))) {
+    await pool.query('ALTER TABLE financeiro_gastos ADD COLUMN manter_com_lote INTEGER NOT NULL DEFAULT 0');
+  }
+
   // Migração idempotente: "obra atual" do colaborador (colaboradores.obra_id).
   //
   // POR QUÊ: há gente — tipicamente ajudantes e quem é pago pelo salário da carteira — que NÃO

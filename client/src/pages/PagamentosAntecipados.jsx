@@ -12,7 +12,19 @@ const ROTULOS = {
   vale_ex_rh: 'Vale Ex RH'
 };
 
-export default function PagamentosAntecipados() {
+// Mesma planilha (pagamentos_antecipados) vista por duas abas, para os nomes ficarem certos:
+//   modo "extras"   (padrão) → Pagamentos Antecipados: só Vale Extra e Vale Ex RH (PF) e
+//                              Adiantamento (PJ) — lançamentos internos;
+//   modo "holerite"          → Holerite: Vale, INSS, Taxa e Pagto, que vêm do PDF da contabilidade.
+// Os dois modos gravam nas mesmas colunas e o total de cada tabela soma só o que ela mostra.
+const COLUNAS_POR_MODO = {
+  extras: { PF: ['vale_extra', 'vale_ex_rh'], PJ: ['adiantamento'] },
+  holerite: { PF: ['vale', 'fgts', 'taxa', 'pagto'], PJ: [] }
+};
+
+export default function PagamentosAntecipados({ modo = 'extras' }) {
+  const colunasModo = COLUNAS_POR_MODO[modo] || COLUNAS_POR_MODO.extras;
+  const somaVisivel = (item, colunas) => colunas.reduce((s, c) => s + (Number(item[c]) || 0), 0);
   // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
   const { mes, setMes } = useApuracao();
   const [planilha, setPlanilha] = useState({ PJ: [], CPF: [], colunas: { PF: [], PJ: [] } });
@@ -124,7 +136,7 @@ export default function PagamentosAntecipados() {
                 {colunas.map(c => (
                   <td key={c}><CelulaEditavel item={item} coluna={c} /></td>
                 ))}
-                <td><strong>R$ {item.total.toFixed(2)}</strong>
+                <td><strong>R$ {somaVisivel(item, colunas).toFixed(2)}</strong>
                   {item.bloqueado && <div style={{ fontSize: 10, color: '#dc2626' }}>🔒 Pago</div>}
                 </td>
               </tr>
@@ -136,9 +148,11 @@ export default function PagamentosAntecipados() {
     );
   }
 
+  const ehHolerite = modo === 'holerite';
+
   return (
     <div>
-      <h2>🧾 Pagamentos Antecipados</h2>
+      <h2>{ehHolerite ? '📄 Holerite' : '🧾 Pagamentos Antecipados'}</h2>
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
           <label style={{ marginRight: 8 }}>Mês:</label>
@@ -147,11 +161,13 @@ export default function PagamentosAntecipados() {
 
         <span style={{ width: 1, height: 24, background: '#e5e7eb' }}></span>
 
-        <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ fontSize: 13 }}>
-          <option value="">Todos os tipos</option>
-          <option value="CPF">Colaborador (PF)</option>
-          <option value="PJ">Empreiteiro (PJ)</option>
-        </select>
+        {!ehHolerite && (
+          <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ fontSize: 13 }}>
+            <option value="">Todos os tipos</option>
+            <option value="CPF">Colaborador (PF)</option>
+            <option value="PJ">Empreiteiro (PJ)</option>
+          </select>
+        )}
 
         <select value={filtroFuncao} onChange={e => setFiltroFuncao(e.target.value)} style={{ fontSize: 13 }}>
           <option value="">Todas as funções</option>
@@ -165,13 +181,16 @@ export default function PagamentosAntecipados() {
         )}
       </div>
 
-      {filtroTipo !== 'CPF' && (
-        <Tabela titulo="Pessoa Jurídica (Empreiteiros)" itens={filtrarItens(planilha.PJ)} colunas={planilha.colunas?.PJ || ['adiantamento']} />
+      {!ehHolerite && filtroTipo !== 'CPF' && (
+        <Tabela titulo="Pessoa Jurídica (Empreiteiros)" itens={filtrarItens(planilha.PJ)} colunas={colunasModo.PJ} />
       )}
       {filtroTipo !== 'PJ' && (
-        <Tabela titulo="Pessoa Física (Colaboradores)" itens={filtrarItens(planilha.CPF)} colunas={planilha.colunas?.PF || ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra', 'vale_ex_rh']} />
+        <Tabela titulo="Pessoa Física (Colaboradores)" itens={filtrarItens(planilha.CPF)} colunas={colunasModo.PF} />
       )}
       <p style={{ color: '#6b7280', fontSize: 12 }}>
+        {ehHolerite
+          ? 'Vale, INSS, Taxa e Pagto vêm do PDF de holerites da contabilidade (importe acima) e também podem ser ajustados aqui. '
+          : 'Aqui ficam só os lançamentos internos: Vale Extra e Vale Ex RH (PF) e Adiantamento (PJ). Vale, INSS, Taxa e Pagto estão na aba Holerite. '}
         Edite os valores diretamente na tabela (clique, digite e saia do campo para salvar). O <strong>Total</strong> é calculado
         automaticamente e não pode ser editado. Valores de pessoas cuja medição do mês já foi paga ficam bloqueados (🔒).
       </p>

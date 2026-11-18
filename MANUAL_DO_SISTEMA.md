@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.113** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.115** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -105,10 +105,58 @@ daquele mês (produção, diárias, antecipados).
 | Sub-aba | Função |
 |---|---|
 | **📥 Receita** | O que a obra faturou. Campo **"com nota"** desconta 11% automaticamente |
-| **🧾 Pagtos. Antecipados** | Planilha por pessoa/mês: Vale, INSS, Taxa, Pagto, Vale Extra, Adiantamento, Vale Ex RH |
-| **💸 Gastos** | Café, VA, Vale Transporte e outros. Com obra (opcional) |
+| **📄 Holerite** | Importa o PDF de holerites da contabilidade e mostra **Vale, INSS, Taxa e Pagto** por pessoa/mês (editável) |
+| **🧾 Pagtos. Antecipados** | Só lançamentos internos: **Vale Extra e Vale Ex RH** (PF) e **Adiantamento** (PJ) |
+| **💸 Gastos** | Custos por colaborador rateados por obra (VA, VT, Extras, Holerite) + Café direto da obra. Ver abaixo |
 | **📈 Relatórios** | Produção × Pagamentos · **Saúde financeira por obra** |
 | **📊 Resumo** | Gráficos de receita por mês/obra/serviço (só ADM) |
+
+> Holerite e Pagamentos Antecipados são **a mesma planilha** (`pagamentos_antecipados`) vista por
+> duas abas. Nada mudou no banco — só os nomes na tela ficaram certos.
+
+#### Gastos — custo por colaborador rateado entre as obras
+
+Três sub-abas, sempre sobre o mês de apuração do topo:
+
+- **Resumo** — custo por obra: *Total geral* ou *Detalhado por categoria* (VA, VT, Café, Extras,
+  Holerite/Salário). Os lançamentos manuais de Café e outros ficam abaixo, como sempre foram.
+- **Detalhado** — uma linha por colaborador: regime, obras e % de rateio, VA, VT, Extras, custo de
+  holerite e total. Ações: **+ Extra** e **% Rateio** (ajuste manual, que vale só naquele mês).
+- **Dados** — cards de importação (Caju, VT, Ponto, Café), cada um com a sua competência e a
+  confirmação dela. Fluxo: **prévia** → **De-Para** dos vínculos pendentes → **confirmar**.
+  Reimportar o mesmo tipo/mês **substitui** o lote anterior (com confirmação; o antigo fica como
+  histórico). Detalhes por tipo:
+  - **VT** — só `Status = PAGO`; soma as linhas do mesmo colaborador (BILHETE + PIX…), guardando o canal.
+  - **Ponto** — batidas `Liberado`; cada dia vale 1, dividido entre as obras do dia (2 obras = 0,5
+    cada); o % do mês é dias da obra ÷ dias do colaborador. Rua → obra pelo **nome da rua**
+    (sem número, acento ou "Rua/Av"), comparação exata; ruas extras da obra ficam em
+    `obra_enderecos_alias`. Pendências podem ser resolvidas depois sem reenviar o PDF.
+  - **Caju** — o PDF é imagem: OCR no navegador, linhas editáveis, conferência de CPF e do total
+    do cabeçalho. Só o Auxílio Alimentação (Fixo + Flexível) é gravado; Mobilidade é descartada.
+  - **Café** — card e tabela prontos; *parser pendente de layout PDF*.
+
+**Regras de cálculo** (por pessoa, por mês):
+
+```
+P = produção marcada nas obras + diárias        (já está nas obras certas, pela marcação)
+H = holerite recebido = Vale + INSS + Taxa + Pagto
+Custo de holerite rateado = máx(H − P, 0)
+```
+
+- Produziu 5 mil e recebeu 2 mil → nada do holerite entra (a produção já cobre).
+- Produziu 2 mil e recebeu 3,5 mil → entram **1,5 mil** pelo % do ponto; o custo total é 3,5 mil.
+  A Medição dessa pessoa fica **negativa** (−1,5 mil), mas o custo da obra é o recebido.
+- Vale Extra, Vale Ex RH e Adiantamento **não** entram no H: são descontos da Medição.
+- **VA, VT e Extras** são sempre rateados pelo % do ponto.
+- **Regime** é derivado de `participa_producao`: marcado = Produção, desmarcado = Holerite.
+- **Rateio:** ajuste manual > ponto eletrônico > obra padrão do cadastro > "Sem obra definida".
+  Os centavos são distribuídos para a soma por obra bater exatamente com o total da pessoa.
+- **Café** é custo direto da obra, não passa pelo colaborador.
+- Lançamento manual de VA/VT num mês que já tem lote importado dessa categoria **não é somado**
+  até o usuário decidir (manter = soma junto; remover = exclusão lógica). A importação pede essa
+  decisão; o aviso aparece no Resumo.
+- **Saúde financeira por obra** usa exatamente esta conta: excedente do holerite + VA + VT +
+  Extras, rateados pelo ponto, somados à produção, diárias e gastos diretos (Café).
 
 #### Saúde financeira por obra — o relatório mais importante
 
@@ -143,8 +191,8 @@ Confere o PDF de holerites da contabilidade (layout *SCI*) contra o sistema, com
 | Taxa | código `441` |
 | Pagto | `SALÁRIO LÍQUIDO` |
 
-Tem duas abas: **Conferir** (compara) e **Importar** (preenche os Pagamentos Antecipados a
-partir do PDF, com revisão antes de gravar).
+Tem duas abas: **Conferir** (compara) e **Importar** (preenche o Holerite a partir do PDF, com
+revisão antes de gravar — a mesma importação está em **Financeiro → Holerite**).
 
 O cruzamento é pelo **nome normalizado** (sem acento, maiúsculas), com CPF como desempate e,
 por último, semelhança ≥ 92%.
@@ -233,10 +281,16 @@ PostgreSQL 16. Nomes de tabelas e colunas **em português**.
 | `colaborador_precos` | `(colaborador_id, obra_servico_id)` | Preço diferenciado por pessoa |
 | `diarias` | `(colaborador_id, mes_ciclo)` | Quantidade e total |
 | `diaria_obras` | `(colaborador_id, mes_ciclo, obra_id)` | Rateio das diárias por obra |
-| `pagamentos_antecipados` | `(colaborador_id, mes_ciclo)` | Vale, **fgts (=INSS)**, taxa, pagto, vale_extra, adiantamento, vale_ex_rh |
+| `pagamentos_antecipados` | `(colaborador_id, mes_ciclo)` | Aba **Holerite**: vale, **fgts (=INSS)**, taxa, pagto. Aba **Pagtos. Antecipados**: vale_extra, vale_ex_rh, adiantamento |
 | `medicoes` | `(colaborador_id, mes_ciclo, obra_id)` | Bruto, descontos, líquido, `status`, comprovante |
 | `financeiro_receitas` | — | Receita. `obra_nome` (texto), `valor_bruto`, `valor_liquido`, `com_nota` |
-| `financeiro_gastos` | — | Café, VA, VT... `mes_ciclo`, `obra_id` (opcional), `tipo`, `valor` |
+| `financeiro_gastos` | — | Gastos diretos da obra (Café...). `mes_ciclo`, `obra_id` (opcional), `tipo`, `valor`, `origem`, `lote_id` |
+| `gastos_lotes` | índice único `(tipo, mes_referencia)` quando `ATIVO` | Uma linha por PDF importado (`CAJU`, `VT`, `PONTO`, `CAFE`). Status `RASCUNHO`/`ATIVO`/`SUBSTITUIDO` |
+| `gastos_colaborador_itens` | — | Valores de VA/VT extraídos por colaborador, com o canal de pagamento |
+| `ponto_eventos` | — | Batidas do ponto eletrônico (base do rateio) |
+| `gastos_rateio_mensal` | `(colaborador_id, mes_referencia, obra_id, origem)` | % por obra; `origem` = `PONTO` ou `MANUAL` |
+| `gastos_extras` | — | Extras manuais por colaborador/mês (exclusão lógica) |
+| `colaborador_aliases` / `obra_enderecos_alias` | — | De-Para persistente de nomes e de ruas |
 | `perfil_permissoes` | `(perfil, modulo)` | O que cada perfil acessa |
 | `auditoria` | — | Trilha de alterações (`entidade`, `entidade_id`, `acao`, `detalhes`) |
 | `migracoes_aplicadas` | `chave` | Controle das migrações que rodam uma vez só |
@@ -299,7 +353,8 @@ permitir('ADM', 'RH')          // lista fixa de perfis, direto no código
 permissaoModulo('financeiro')  // consulta a tabela perfil_permissoes (configurável na tela)
 ```
 
-Há também **sub-abas** com permissão própria: `financeiro.receita`, `financeiro.pagamentos`,
+Há também **sub-abas** com permissão própria (`financeiro.pagamentos` vale também para a aba
+Holerite): `financeiro.receita`, `financeiro.pagamentos`,
 `financeiro.gastos`, `financeiro.relatorios`, `financeiro.resumo`, `prestadores.cadastro`,
 `epi.cadastrar`, `advertencia.aplicar`.
 

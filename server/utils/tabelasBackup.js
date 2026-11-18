@@ -13,6 +13,10 @@ const TABELAS_BACKUP = [
   // custo sumia do relatório de saúde financeira. Fica logo após 'diarias', que é a sua origem.
   'pagamentos_antecipados', 'diarias', 'diaria_obras', 'medicoes',
   'financeiro_receitas', 'financeiro_gastos',
+  // Gastos por colaborador rateados por obra (VA, VT, Extras, Ponto). 'gastos_lotes' vem antes
+  // das tabelas que o referenciam. Sem isto o backup ignoraria o rateio e os De-Para em silêncio.
+  'gastos_lotes', 'gastos_colaborador_itens', 'ponto_eventos', 'gastos_rateio_mensal',
+  'gastos_extras', 'colaborador_aliases', 'obra_enderecos_alias',
   'epi_itens', 'epi_retiradas', 'epi_retirada_itens', 'epi_movimentos',
   'aso_historico',
   'advertencia_modelos', 'advertencias',

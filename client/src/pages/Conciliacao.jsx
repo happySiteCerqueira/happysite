@@ -47,7 +47,9 @@ const COLUNAS_IMPORT = [
   { coluna: 'pagto', rotulo: 'Pagto (Líquido)' }
 ];
 
-export default function Conciliacao() {
+// modoFixo="importar" é usado pela aba Financeiro > Holerite: mostra só a importação do PDF,
+// sem o título e o seletor de modo. Sem a prop, a tela é a Conciliação completa de sempre.
+export default function Conciliacao({ modoFixo = null, onImportado = null }) {
   // Usa a Data de Apuração global (seletor no topo), como as demais telas do ciclo mensal.
   const { mes } = useApuracao();
   const [previa, setPrevia] = useState(null);
@@ -65,7 +67,7 @@ export default function Conciliacao() {
   // --- Modo de trabalho da tela -----------------------------------------------------------
   // 'conferir' = compara o PDF com o que já está lançado (comportamento original);
   // 'importar' = lê o PDF e preenche os Pagamentos Antecipados automaticamente.
-  const [modo, setModo] = useState('conferir');
+  const [modo, setModo] = useState(modoFixo || 'conferir');
   const [arquivoImport, setArquivoImport] = useState(null);
   const [propostaImport, setPropostaImport] = useState(null);
   const [selecionados, setSelecionados] = useState({});
@@ -141,6 +143,7 @@ export default function Conciliacao() {
       setArquivoImport(null);
       const atualizada = await api.get('/conciliacao/previa', { params: { mes } });
       setPrevia(atualizada.data);
+      if (onImportado) onImportado();
     } catch (e) {
       setErro(e.response?.data?.erro || 'Não foi possível gravar a importação.');
     } finally {
@@ -204,6 +207,8 @@ export default function Conciliacao() {
 
   return (
     <div>
+      {!modoFixo && (
+        <>
       <h2>🧮 Conciliação de Folha</h2>
       <p style={{ fontSize: 13, color: '#6b7280', marginTop: -6 }}>
         Confronta o PDF dos <strong>Holerites</strong> da contabilidade com os lançamentos de
@@ -228,7 +233,8 @@ export default function Conciliacao() {
           </button>
         ))}
       </div>
-
+        </>
+      )}
       {modo === 'conferir' && (
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="flex gap-4" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -412,9 +418,9 @@ function PainelImportacao({
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
           Lê o PDF dos Holerites e preenche automaticamente <strong>Vale</strong>,{' '}
-          <strong>INSS</strong>, <strong>Taxa</strong> e <strong>Pagto</strong> em Pagamentos
-          Antecipados de <strong>{rotuloMes(mes)}</strong>. Você confere tudo antes de gravar, e o
-          lançamento manual continua disponível normalmente.
+          <strong>INSS</strong>, <strong>Taxa</strong> e <strong>Pagto</strong> do Holerite de{' '}
+          <strong>{rotuloMes(mes)}</strong>. Você confere tudo antes de gravar, e a edição manual
+          continua disponível na tabela do Holerite.
         </div>
 
         {!proposta && (

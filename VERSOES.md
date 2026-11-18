@@ -50,6 +50,51 @@ git checkout v2.111
 
 ## Versões
 
+### 2.115 — Importação de VT, Ponto e Caju + Saúde financeira com rateio
+
+- **Aba Dados** agora lê os PDFs. Cada card pede o **Mês/Ano de referência** (independente do
+  filtro global) e a confirmação dele; mostra **prévia** com vínculos pendentes (De-Para) antes de
+  gravar. Reimportar o mesmo tipo/mês pergunta se **substitui** o lote anterior (o antigo vira
+  `SUBSTITUIDO`, nunca é apagado).
+- **VT:** só linhas `PAGO`; "NÃO FAZER" é ignorado. Soma as modalidades do mesmo colaborador
+  (BILHETE + PIX…) e guarda o canal. Leitura por coordenadas (o texto simples vem desalinhado).
+- **Ponto (iFractal):** batidas `Liberado` → dias por obra (1 obra = 1,0; 2 obras no dia = 0,5 cada)
+  → % de rateio do mês. Rua → obra comparando **só o nome da rua** (sem número, sem acento, sem o
+  tipo "Rua/Av"), exato: "Rua Iná" ≠ "Rua I". Ruas extras de uma obra (ex.: Caraguatatuba) são
+  vinculadas na prévia, sem duplicar a obra. Dá para resolver pendências depois, **sem reenviar o
+  PDF** (botão "Pendências / refazer rateio").
+- **Caju:** o PDF é uma imagem, então o **OCR roda no navegador** (`tesseract.js`, só carregado
+  nesta tela). A tela mostra as linhas **editáveis** e confere o dígito verificador do CPF e a soma
+  VA + Mobilidade contra o total do cabeçalho. Só o Auxílio Alimentação (Fixo + Flexível) é gravado;
+  a Mobilidade é descartada.
+- **Lançamentos manuais antigos** de VA/VT no mês de um lote importado: a importação pede para
+  **manter** ou **remover** cada um (remover = exclusão lógica com auditoria). Sem decisão, eles
+  não são somados.
+- **Saúde financeira por obra** passa a usar a mesma conta do Gastos: o excedente do holerite
+  (`H − P`) e VA/VT/Extras entram **rateados pelo ponto** (sem ponto: obra padrão; sem obra:
+  "Sem obra definida"). Substitui o antigo "folha não coberta", que ia sempre para a obra atual e
+  incluía Vale Extra/Vale Ex RH no total.
+- Café continua com o card pronto e "Parser pendente de layout PDF".
+
+### 2.114 — Gastos por colaborador rateados por obra (fase 1) + aba Holerite
+
+- **Financeiro → Gastos** agora tem 3 sub-abas: **Resumo** (custo por obra, total geral ou por
+  categoria VA/VT/Café/Extras/Holerite), **Detalhado** (custo por colaborador, rateio entre obras,
+  **+ Extra** e ajuste manual do rateio) e **Dados** (cards de importação de Caju, VT, Ponto e Café).
+  Os lançamentos manuais de Café e outros continuam, dentro do Resumo.
+- **Regra do holerite:** só o que o holerite **excede a produção + diárias** do mês vira custo
+  rateado (custo total da pessoa = o maior entre produção e holerite). VA, VT e Extras são sempre
+  rateados pelo % do ponto. Sem ponto → obra padrão; sem obra → "Sem obra definida".
+- Nova aba **Financeiro → Holerite**: importação do PDF de holerites (a mesma da Conciliação, que
+  continua existindo) + Vale, INSS, Taxa e Pagto. **Pagamentos Antecipados** passa a mostrar só
+  Vale Extra, Vale Ex RH (PF) e Adiantamento (PJ). As colunas do banco são as mesmas: nada migrou.
+- Banco (só aditivo): `gastos_lotes`, `gastos_colaborador_itens`, `ponto_eventos`,
+  `gastos_rateio_mensal`, `gastos_extras`, `colaborador_aliases`, `obra_enderecos_alias` e as
+  colunas `origem`/`lote_id` em `financeiro_gastos`. Todas entram no backup.
+- **Ainda não incluído** (próximas versões): leitura dos PDFs de VT, Ponto e Caju (OCR no
+  navegador), De-Para de colaboradores e ruas, e a ligação com a Saúde financeira. Café: parser
+  pendente de layout.
+
 ### 2.113 — Manuais dentro do sistema
 
 - Nova aba **Configurações → 📘 Manuais**, exclusiva do **ADM**: lê os manuais na tela, copia o

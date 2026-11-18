@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.113**
+> **Versão do sistema: 2.115**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e saúde financeira de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.113** (tag `v2.113`) |
+| **Versão atual** | **2.115** (tag `v2.115`) |
 
 ### Stack
 
@@ -170,7 +170,9 @@ HappySite/
 | Diárias | `Diarias.jsx` | `diarias.js` |
 | Prestadores | `Prestadores.jsx` | `prestadores.js` |
 | EPI | `Epi.jsx` | `epi.js` |
-| Financeiro | `Financeiro.jsx` (Receita, Gastos, Resumo) | `financeiro.js` |
+| Financeiro | `Financeiro.jsx` (Receita, Holerite, Resumo) | `financeiro.js` |
+| ↳ Gastos (custo por colaborador/obra) | `gastos/` (`GastosCustos`, `GastosResumo`, `GastosDetalhado`, `GastosDados`, `PainelPrevia`, `EditorCaju`) + `utils/cajuOcr.js` + lançamentos manuais em `Financeiro.jsx` | `gastosCustos.js` (telas), `gastosImportacao.js` (lotes/De-Para) · `utils/gastosCustos.js` (motor), `parserVt.js`, `parserPonto.js`, `pontoRateio.js`, `pdfLinhas.js` |
+| ↳ Holerite | `Conciliacao.jsx` (`modoFixo="importar"`) + `PagamentosAntecipados.jsx` (`modo="holerite"`) | `conciliacao.js`, `pagamentos-antecipados.js` |
 | ↳ Pagtos. Antecipados | `PagamentosAntecipados.jsx` | `pagamentos-antecipados.js` |
 | ↳ Relatórios | `Relatorios.jsx` | `relatorios.js` |
 | Conciliação | `Conciliacao.jsx` | `conciliacao.js` |
@@ -256,6 +258,37 @@ if (feito.rows.length === 0) {
   await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE]);
 }
 ```
+
+### 5.11 Custo de holerite: só o que excede a produção
+No módulo Financeiro → Gastos (`utils/gastosCustos.js`), o custo de holerite rateado por obra é
+`máx(H − P, 0)`, onde `P` = produção marcada + diárias e `H` = Vale + INSS + Taxa + Pagto. A produção
+já está nas obras pela marcação; somar o holerite inteiro contaria duas vezes. Vale Extra, Vale Ex
+RH e Adiantamento **não** fazem parte de `H`. **Não altere sem rever a saúde financeira**, que
+precisa usar a mesma regra — e usa: `routes/relatorios.js` chama `calcularCustosMes` de
+`utils/gastosCustos.js`, então Gastos e Saúde financeira nunca divergem.
+
+### 5.12 Um lote ATIVO por tipo e mês
+`gastos_lotes` tem índice único parcial `(tipo, mes_referencia) WHERE status = 'ATIVO'`. Reimportar
+exige marcar o lote antigo como `SUBSTITUIDO` na **mesma transação**; nunca apague o lote antigo.
+O teste de rateio por colaborador usa o mês inventado `2099-01`, como os demais.
+
+### 5.13 Parsers de PDF: por coordenadas, e PDFs reais nunca vão para o Git
+VT e Ponto são lidos por **posição** (`utils/pdfLinhas.js`, pdfjs), porque o texto simples vem em
+colunas desalinhadas. Se o layout mudar, o parser deve **falhar com mensagem clara** ("Cabeçalho …
+não encontrado"), nunca importar números errados. Ao mexer neles, teste com os PDFs reais e
+confira o total contra uma soma independente. Esses PDFs têm **CPFs e nomes**: ficam fora do
+repositório. `pdfjs-dist` não é dependência direta: vem fixada pelo `pdf-parse` — não atualize um
+sem testar os parsers.
+
+### 5.14 Chave de rua não é idempotente
+`normalizarRua` (em `parserPonto.js`) transforma abreviações de tipo só na 1ª palavra ("R." → rua).
+Reaplicá-la numa chave já normalizada muda o resultado ("r" = Rua R viraria "rua"). Guarde e compare
+a chave **como veio do parser**; nunca a normalize de novo.
+
+### 5.15 Caju: OCR no navegador
+`tesseract.js` roda no navegador e baixa o modelo de idioma de um CDN no primeiro uso, então a tela
+precisa de internet. O servidor só extrai a imagem das páginas (`/gastos-importacao/CAJU/imagens`).
+A conferência (CPF e total do cabeçalho) é obrigatória na tela: o OCR pode errar um dígito.
 
 ---
 
@@ -431,7 +464,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.113).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.115).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -462,7 +495,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.113** |
+| Versão | **2.115** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |

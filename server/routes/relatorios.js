@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
 const { rotuloCelula } = require('../utils/celulasLabel');
+const { calcularCustosMes, classificarTipoGasto } = require('../utils/gastosCustos');
 
 const router = express.Router();
 
@@ -211,76 +212,91 @@ function obterObra(mapa, chave, nome) {
 // de verdade e pertence a uma obra — se ficasse de fora, o lucro apareceria inflado.
 //
 // A REGRA (por pessoa e por MÊS, nunca no acumulado — senão um mês compensaria o outro):
-//   produzido = produção marcada nas obras + diárias do mês
-//   folha     = total do pagamento antecipado do mês (vem do holerite)
+//   P = produção marcada nas obras + diárias do mês   (já está nas obras certas)
+//   H = holerite recebido = Vale + INSS + Taxa + Pagto
 //
-//   • produzido >= folha → não acrescenta nada. A folha é ADIANTAMENTO do que a pessoa
-//     produziu; o custo já está contado na produção. Somar de novo contaria duas vezes.
-//   • produzido <  folha → a diferença (folha − produzido) é custo real ainda não alocado.
-//     Vai para a OBRA ATUAL do cadastro (colaboradores.obra_id); sem obra definida, entra
-//     na linha "Sem obra definida" para o valor ficar visível em vez de sumir.
+//   • H <= P → não acrescenta nada. O holerite é ADIANTAMENTO do que a pessoa produziu; o custo
+//     já está contado na produção. Somar de novo contaria duas vezes.
+//   • H >  P → a diferença (H − P) é custo real ainda não alocado. O custo total da pessoa é
+//     H (o que ela recebeu), mesmo que a Medição fique negativa.
 //
-// ⚠️ SINAL: pagamentos antecipados podem ser NEGATIVOS (vale extra/vale ex RH a favor da
-// pessoa). Um total negativo não é custo — é saldo a receber. Por isso só entra aqui a
-// diferença POSITIVA (GREATEST(... , 0)), evitando que um valor negativo vire "crédito" e
-// reduza indevidamente o custo da obra.
-const SQL_TOTAL_FOLHA = `(pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento + pa.vale_ex_rh)`;
+// ONDE o excedente cai: no RATEIO do ponto eletrônico do mês (% de dias por obra); sem ponto,
+// na obra atual do cadastro; sem obra, na linha "Sem obra definida" — nunca é descartado.
+// VA, VT e Extras dos colaboradores seguem o mesmo rateio (ver utils/gastosCustos.js, que é a
+// mesma conta mostrada em Financeiro → Gastos).
+//
+// ⚠️ SINAL: um holerite negativo não é custo — só entra a diferença POSITIVA.
+// ⚠️ Vale Extra, Vale Ex RH e Adiantamento NÃO fazem parte de H: são descontos da Medição.
 
-async function buscarCustoFolha(mesInicio, mesFim) {
-  // Produção e diárias são somadas POR PESSOA/MÊS para serem comparadas com a folha do mesmo
-  // mês. O LEFT JOIN garante que quem não tem produção nenhuma continue aparecendo.
-  let sql = `
-    WITH folha AS (
-      SELECT pa.colaborador_id, pa.mes_ciclo, ${SQL_TOTAL_FOLHA} AS total
-      FROM pagamentos_antecipados pa
-      WHERE ${SQL_TOTAL_FOLHA} > 0
-        {FILTRO_FOLHA}
-    ),
-    producao_pessoa AS (
-      SELECT cel.colaborador_id, cel.mes_ciclo, SUM(cel.valor) AS total
-      FROM obra_servico_celulas cel
-      JOIN obra_servicos os ON os.id = cel.obra_servico_id
-      WHERE os.excluido = 0
-      GROUP BY cel.colaborador_id, cel.mes_ciclo
-    ),
-    diaria_pessoa AS (
-      SELECT d.colaborador_id, d.mes_ciclo, d.total
-      FROM diarias d
-    )
-    SELECT c.id AS colaborador_id, c.nome, c.funcao, c.obra_id,
-           o.nome AS obra_nome,
-           f.mes_ciclo,
-           f.total AS folha,
-           COALESCE(p.total, 0) + COALESCE(di.total, 0) AS produzido,
-           GREATEST(f.total - COALESCE(p.total, 0) - COALESCE(di.total, 0), 0) AS diferenca
-    FROM folha f
-    JOIN colaboradores c ON c.id = f.colaborador_id
-    LEFT JOIN obras o ON o.id = c.obra_id
-    LEFT JOIN producao_pessoa p ON p.colaborador_id = f.colaborador_id AND p.mes_ciclo = f.mes_ciclo
-    LEFT JOIN diaria_pessoa di ON di.colaborador_id = f.colaborador_id AND di.mes_ciclo = f.mes_ciclo
-    ORDER BY c.nome, f.mes_ciclo
-  `;
-
+// Meses a calcular: o período pedido, ou todos os meses com algum dado de custo por colaborador.
+async function mesesDoPeriodo(mesInicio, mesFim) {
+  if (mesInicio && mesFim) {
+    const meses = [];
+    let [ano, mes] = mesInicio.split('-').map(Number);
+    while (`${ano}-${String(mes).padStart(2, '0')}` <= mesFim && meses.length < 120) {
+      meses.push(`${ano}-${String(mes).padStart(2, '0')}`);
+      mes += 1;
+      if (mes > 12) { mes = 1; ano += 1; }
+    }
+    return meses;
+  }
   const params = [];
-  let filtroFolha = '';
-  if (mesInicio) { filtroFolha += ' AND pa.mes_ciclo >= ?'; params.push(mesInicio); }
-  if (mesFim) { filtroFolha += ' AND pa.mes_ciclo <= ?'; params.push(mesFim); }
-  sql = sql.replace('{FILTRO_FOLHA}', filtroFolha);
-
-  const linhas = await db.all(sql, ...params);
-  // Só interessa quem tem diferença a alocar; quem produziu mais do que recebeu já está contado.
-  return linhas.filter(l => Number(l.diferenca) > 0);
+  let filtro = '';
+  if (mesInicio) { filtro += ' AND m >= ?'; params.push(mesInicio); }
+  if (mesFim) { filtro += ' AND m <= ?'; params.push(mesFim); }
+  const linhas = await db.all(
+    `SELECT DISTINCT m FROM (
+       SELECT mes_ciclo AS m FROM pagamentos_antecipados WHERE (vale + fgts + taxa + pagto) <> 0
+       UNION SELECT mes_referencia FROM gastos_colaborador_itens
+       UNION SELECT mes_referencia FROM gastos_extras WHERE excluido = 0
+     ) t WHERE 1 = 1${filtro} ORDER BY m`, ...params
+  );
+  return linhas.map(l => l.m);
 }
 
-// Gastos com funcionários (Café, VA, Vale Transporte e outros) lançados na aba Gastos.
+// Devolve, por colaborador/mês/obra, o excedente de holerite (`folha`) e os benefícios
+// (`beneficios`: VA, Vale Transporte e Extras), já rateados.
+async function buscarCustosColaboradores(mesInicio, mesFim) {
+  const folha = [];
+  const beneficios = new Map();
+  for (const mes of await mesesDoPeriodo(mesInicio, mesFim)) {
+    const { colaboradores } = await calcularCustosMes(mes);
+    for (const c of colaboradores) {
+      for (const d of c.distribuicao) {
+        if (d.holerite > 0) {
+          folha.push({
+            colaborador_id: c.colaborador_id, nome: c.nome, funcao: c.funcao,
+            obra_id: d.obra_id, obra_nome: d.obra_id ? d.obra_nome : null, mes_ciclo: mes,
+            folha: c.holerite_recebido, produzido: c.producao_diarias, diferenca: d.holerite
+          });
+        }
+        for (const [campo, rotulo] of [['va', 'VA'], ['vt', 'Vale Transporte'], ['extras', 'Extras']]) {
+          if (!d[campo]) continue;
+          const chave = `${d.obra_id || 0}|${rotulo}`;
+          if (!beneficios.has(chave)) {
+            beneficios.set(chave, { obra_id: d.obra_id, obra_nome: d.obra_id ? d.obra_nome : null, tipo: rotulo, valor: 0, qtd: 0 });
+          }
+          const linha = beneficios.get(chave);
+          linha.valor += d[campo];
+          linha.qtd += 1;
+        }
+      }
+    }
+  }
+  return { folha, beneficios: [...beneficios.values()] };
+}
+
+// Gastos DIRETOS da obra (Café e demais lançamentos manuais da aba Gastos).
 //
 // São custo real da operação e abatem a receita da obra, como a produção e as diárias.
 // Agrupados por obra + tipo, para a visão detalhada mostrar de onde vem cada parcela.
 // Gastos sem obra informada ficam com obra_id NULL e vão para a linha "Sem obra definida".
+//
+// VA/VT lançados à mão num mês que já tem importação (Caju/VT) NÃO entram aqui, a menos que o
+// usuário tenha decidido mantê-los: somar os dois contaria duas vezes.
 async function buscarCustoGastos(mesInicio, mesFim) {
   let sql = `
-    SELECT g.obra_id, o.nome AS obra_nome, g.tipo,
-           SUM(g.valor) AS valor, COUNT(*)::int AS qtd
+    SELECT g.obra_id, o.nome AS obra_nome, g.tipo, g.mes_ciclo, g.manter_com_lote, g.valor
     FROM financeiro_gastos g
     LEFT JOIN obras o ON o.id = g.obra_id
     WHERE g.excluido = 0
@@ -288,8 +304,24 @@ async function buscarCustoGastos(mesInicio, mesFim) {
   const params = [];
   if (mesInicio) { sql += ' AND g.mes_ciclo >= ?'; params.push(mesInicio); }
   if (mesFim) { sql += ' AND g.mes_ciclo <= ?'; params.push(mesFim); }
-  sql += ' GROUP BY g.obra_id, o.nome, g.tipo ORDER BY o.nome, g.tipo';
-  return db.all(sql, ...params);
+  const linhas = await db.all(sql, ...params);
+
+  const lotes = await db.all("SELECT tipo, mes_referencia FROM gastos_lotes WHERE status = 'ATIVO' AND tipo IN ('CAJU', 'VT')");
+  const ativos = new Set(lotes.map(l => `${l.tipo}|${l.mes_referencia}`));
+
+  const agrupado = new Map();
+  for (const g of linhas) {
+    const classe = classificarTipoGasto(g.tipo);
+    const duplica = (classe === 'VA' && ativos.has(`CAJU|${g.mes_ciclo}`)) || (classe === 'VT' && ativos.has(`VT|${g.mes_ciclo}`));
+    if (duplica && !g.manter_com_lote) continue;
+
+    const chave = `${g.obra_id || 0}|${g.tipo}`;
+    if (!agrupado.has(chave)) agrupado.set(chave, { obra_id: g.obra_id, obra_nome: g.obra_nome, tipo: g.tipo, valor: 0, qtd: 0 });
+    const item = agrupado.get(chave);
+    item.valor += Number(g.valor) || 0;
+    item.qtd += 1;
+  }
+  return [...agrupado.values()].sort((a, b) => (a.obra_nome || '').localeCompare(b.obra_nome || '', 'pt-BR') || a.tipo.localeCompare(b.tipo, 'pt-BR'));
 }
 
 // Diárias lançadas SEM rateio por obra (existem em "diarias" mas não têm linha em
@@ -405,14 +437,22 @@ function montarResposta(mapa, periodo, diariasSemObra) {
 router.get('/saude-obras', async (req, res) => {
   const { data_inicio, data_fim, mes_inicio, mes_fim } = req.query;
 
-  const [entradas, producao, diarias, diariasSemObra, folha, gastos] = await Promise.all([
+  const [entradas, producao, diarias, diariasSemObra, custosColab, gastosDiretos] = await Promise.all([
     buscarEntradas(data_inicio, data_fim),
     buscarCustoProducao(mes_inicio, mes_fim),
     buscarCustoDiarias(mes_inicio, mes_fim),
     buscarDiariasSemObra(mes_inicio, mes_fim),
-    buscarCustoFolha(mes_inicio, mes_fim),
+    buscarCustosColaboradores(mes_inicio, mes_fim),
     buscarCustoGastos(mes_inicio, mes_fim)
   ]);
+  // Excedente de holerite e benefícios (VA, VT, Extras) já rateados por obra; os gastos
+  // diretos (Café e outros manuais) são somados na mesma lista, por obra + tipo.
+  const folha = custosColab.folha;
+  const gastos = [...gastosDiretos];
+  for (const b of custosColab.beneficios) {
+    const existente = gastos.find(g => (g.obra_id || 0) === (b.obra_id || 0) && g.tipo === b.tipo);
+    if (existente) { existente.valor += b.valor; existente.qtd += b.qtd; } else gastos.push(b);
+  }
 
   // Índice de obras cadastradas por nome normalizado — é a ponte entre a receita (texto livre)
   // e o custo (obra_id).
@@ -519,7 +559,7 @@ router.get('/saude-obras', async (req, res) => {
     grupo.pessoas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     registro.saidas.push({
       tipo: 'FOLHA',
-      servico: 'Folha (holerite sem produção)',
+      servico: 'Folha (holerite acima da produção)',
       valor: grupo.valor,
       pessoas: grupo.pessoas
     });
