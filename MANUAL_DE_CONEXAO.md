@@ -1,0 +1,476 @@
+# MANUAL DE CONEXÃO — HappySite
+
+> **Versão do sistema: 2.112**
+> Leia este arquivo INTEIRO antes de alterar qualquer coisa.
+>
+> O número da versão acima pode estar desatualizado se alguém esquecer de o corrigir aqui.
+> **A fonte de verdade é sempre `client/src/versao.js`** — e o número exibido no menu lateral
+> do sistema.
+
+Este documento existe para que **qualquer pessoa ou IA** consiga assumir a manutenção do sistema
+do zero — em um PC novo, após uma formatação ou em outra conversa — sem precisar do histórico de
+nenhum chat anterior.
+
+---
+
+## ⚠️ LEIA PRIMEIRO — as 5 regras inegociáveis
+
+O sistema está **em produção e em ampliação ao mesmo tempo**. Há uma empresa real usando isto
+todos os dias. Perder um dado ou uma ferramenta causa prejuízo real.
+
+1. **NUNCA remova funcionalidade existente.** Toda alteração é **aditiva**. Ao terminar, confira
+   o diff: deve ter quase só linhas `+`. Se houver linhas `-`, confirme uma a uma que são apenas
+   linhas reescritas (ex: ganharam um parâmetro), nunca recursos apagados.
+2. **NUNCA apague dados.** Migrações só **criam** colunas/tabelas (`IF NOT EXISTS`,
+   `ADD COLUMN`). Nenhum `DROP`, nenhum `DELETE` em dados reais.
+3. **Toda alteração sobe a versão.** Por menor que seja. `2.111` → `2.112` → `2.113`...
+   (ver seção "Fluxo de trabalho").
+4. **Teste contra o banco real antes de publicar.** Nunca confie só no "compilou". Veja a seção
+   "Como testar de verdade".
+5. **Confirme em produção depois do deploy.** O deploy pode falhar em silêncio.
+
+---
+
+## 1. O que é o sistema
+
+Sistema de gestão para a **Cerqueira Engenharia** (construção civil). Controla obras, medição de
+produção por colaborador, pagamentos, folha e saúde financeira de cada obra.
+
+| | |
+|---|---|
+| **Site em produção** | https://app.cerqueiraengenharia.com.br |
+| **Repositório** | https://github.com/happySiteCerqueira/happysite |
+| **Branch de produção** | `main` (todo push dispara deploy automático) |
+| **Versão atual** | **2.112** (tag `v2.112`) |
+
+### Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 19 + Vite + React Router · PWA instalável |
+| Backend | Node.js 22 + Express 5 (CommonJS) |
+| Banco | PostgreSQL 16 |
+| Infra | Docker Compose (app + db + Caddy) em AWS Lightsail |
+| HTTPS | Caddy (Let's Encrypt, renovação automática) |
+| Deploy | GitHub Actions via SSH |
+
+---
+
+## 2. Conectar em um PC novo
+
+### 2.1 Instalar
+
+- **Node.js 22 LTS** (obrigatório 22: o Vite usado exige `node:util.styleText`)
+- **Git**
+- **VS Code** + extensão **Cline** (se for usar IA)
+
+### 2.2 Clonar
+
+```powershell
+cd "$env:USERPROFILE\Documents"
+git clone https://github.com/happySiteCerqueira/happysite.git HappySite
+cd HappySite
+npm --prefix server install
+npm --prefix client install
+```
+
+### 2.3 Criar o `.env` do servidor
+
+Crie **`server/.env`** (ele está no `.gitignore`, por isso nunca vem no clone):
+
+```
+DATABASE_URL=postgresql://usuario:senha@host/database?sslmode=require
+PORT=3001
+```
+
+> 🔑 **Onde achar a senha real:** as credenciais estão em
+> `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` (fora do repositório).
+> Se esse arquivo se perdeu, a `DATABASE_URL` também está no `.env` **dentro do servidor**:
+> `ssh ubuntu@3.228.110.68` → `cat /opt/happysite/.env`
+
+Variáveis opcionais (o sistema funciona sem elas, só desliga o recurso):
+
+| Variável | Para quê |
+|---|---|
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Enviar backup diário ao Google Drive |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Notificações push e lembretes |
+
+### 2.4 Rodar local
+
+```powershell
+# Terminal 1 — backend (http://localhost:3001)
+node server/server.js
+
+# Terminal 2 — frontend (http://localhost:5173)
+cd client
+npm run dev
+```
+
+> ⚠️ **Atenção:** o `.env` aponta para o **banco de produção**. Rodar local **mexe nos dados
+> reais**. Para só ler, tudo bem; para testar escrita, use um mês inventado (ex: `2099-01`) e
+> apague os registros no fim — é o que os scripts de teste deste manual fazem.
+
+### 2.5 Acesso SSH ao servidor
+
+```powershell
+ssh ubuntu@3.228.110.68
+cd /opt/happysite
+```
+
+| Comando | O que faz |
+|---|---|
+| `sudo docker compose ps` | Status dos containers |
+| `sudo docker compose logs app --tail 100` | Log da aplicação |
+| `sudo docker compose restart app` | Reinicia só a aplicação |
+| `sudo docker compose up -d --build` | Rebuild manual (o deploy automático já faz) |
+| `cat .env` | Ver as credenciais de produção |
+
+> ⚠️ **NUNCA** rode `docker compose down -v`. O `-v` apaga os volumes — ou seja, **todos os
+> dados**.
+
+---
+
+## 3. Mapa do projeto
+
+```
+HappySite/
+├── client/                      FRONTEND (React + Vite)
+│   └── src/
+│       ├── versao.js            ★ NÚMERO DA VERSÃO — fonte única
+│       ├── App.jsx                Rotas
+│       ├── components/Layout.jsx  Menu lateral (mostra a versão)
+│       ├── context/               AuthContext, ApuracaoContext (mês global)
+│       ├── pages/                 Uma tela por módulo
+│       └── utils/                 Exportações PDF/Excel
+│
+├── server/                      BACKEND (Express)
+│   ├── server.js                  Registro das rotas + trava anti-rota-esquecida
+│   ├── db/database.js           ★ Schema + TODAS as migrações
+│   ├── routes/                    Uma rota por módulo
+│   └── utils/                     auth, auditoria, backup, parsers de PDF...
+│
+├── VERSOES.md                   ★ Histórico de versões
+├── MANUAL_DE_CONEXAO.md         ★ Este arquivo
+├── DEPLOY_VPS.md                  Infraestrutura detalhada
+├── ARQUITETURA_SISTEMA.md         Documentação técnica profunda
+├── docker-compose.yml             Stack de produção
+└── .github/workflows/deploy.yml   Deploy automático
+```
+
+### Módulos (rota → arquivo)
+
+| Menu | Frontend | Backend |
+|---|---|---|
+| Painel | `Painel.jsx` | `painel.js` |
+| Obras | `Obras.jsx`, `ObraDetalhe.jsx` | `obras.js` |
+| Medição | `Medicao.jsx` | `medicoes.js` |
+| Diárias | `Diarias.jsx` | `diarias.js` |
+| Prestadores | `Prestadores.jsx` | `prestadores.js` |
+| EPI | `Epi.jsx` | `epi.js` |
+| Financeiro | `Financeiro.jsx` (Receita, Gastos, Resumo) | `financeiro.js` |
+| ↳ Pagtos. Antecipados | `PagamentosAntecipados.jsx` | `pagamentos-antecipados.js` |
+| ↳ Relatórios | `Relatorios.jsx` | `relatorios.js` |
+| Conciliação | `Conciliacao.jsx` | `conciliacao.js` |
+| Controle de ASO | `Aso.jsx` | `aso.js` |
+| Agenda | `Agenda.jsx` | `agenda.js` |
+| Advertência | `Advertencia.jsx` | `advertencias.js` |
+| Auditoria | `Auditoria.jsx` | `auditoria.js` |
+| Cadastro | `Cadastro.jsx` | `colaboradores.js` |
+| Controle de Acesso | `ControleAcesso.jsx` | `permissoes.js` |
+
+---
+
+## 4. Convenções do código (siga, não invente)
+
+- **Tudo em português**: variáveis, funções, tabelas, colunas, comentários.
+- **Comentários explicam o PORQUÊ**, não o quê. Quase sempre registram um problema real que
+  aconteceu. Ao alterar algo comentado, **leia o comentário antes** — ele costuma avisar
+  exactamente o que vai quebrar.
+- **SQL usa `?`** como placeholder (um adaptador traduz para `$1, $2` do Postgres). É
+  intencional. Parâmetros vão **soltos**, não em array:
+  ```js
+  await db.get('SELECT * FROM obras WHERE id = ?', id);
+  await db.all('SELECT * FROM x WHERE a = ? AND b = ?', a, b);
+  await db.run('INSERT INTO x (a,b) VALUES (?,?)', a, b);   // info.lastInsertRowid
+  await db.transaction(async (trx) => { ... });              // atômico
+  ```
+- **Exclusão é lógica** (`excluido = 1`), nunca `DELETE`, nas tabelas críticas.
+- **Auditoria**: toda escrita relevante chama `registrar(...)` ou `registrarSnapshot(...)`.
+- Sem bibliotecas novas sem necessidade real. O projeto é deliberadamente enxuto.
+
+---
+
+## 5. ⚠️ ARMADILHAS — leia antes de mexer
+
+Cada item abaixo é um problema que **já aconteceu** ou que foi evitado por pouco.
+
+### 5.1 Tabela nova? Adicione ao backup
+`server/utils/tabelasBackup.js`. Se esquecer, o backup **ignora a tabela em silêncio** e os
+dados somem numa restauração. Já aconteceu com EPI e com `diaria_obras`.
+
+### 5.2 Rota nova? Registre no `server.js`
+Existe uma trava: se houver arquivo em `routes/` sem o `app.use` correspondente, **o servidor
+recusa subir** (falha o deploy de propósito, mantendo a versão boa no ar).
+
+### 5.3 A coluna `fgts` é o **INSS**
+Em `pagamentos_antecipados`, a coluna chamada `fgts` é exibida como **INSS** em todo o sistema.
+É herança histórica; não renomeie (quebraria backups e exportações).
+
+### 5.4 Recálculo automático pode zerar valores
+`utils/recalculoAutomatico.js` e um bloco em `routes/medicoes.js` reescrevem
+`valor = quantidade × valor_unitario` em todas as marcações. Serviços de **valor digitado à mão**
+(ex: ADM) têm `valor_manual = TRUE` e ficam de fora — sem isso, zerariam.
+
+### 5.5 Valores negativos são válidos
+Vale Extra / Vale Ex RH podem ser negativos (saldo a favor da pessoa). Filtros usam `<> 0`, não
+`> 0`. No custo de folha usa-se `GREATEST(..., 0)`: negativo é crédito, não custo.
+
+### 5.6 Receita liga à obra por NOME, não por ID
+`financeiro_receitas.obra_nome` é texto livre; o custo usa `obra_id`. O cruzamento normaliza o
+nome (maiúsculas, sem acento). Nomes que não casam aparecem com aviso — nunca são descartados.
+
+### 5.7 Campo "função" é texto livre
+Já causou duplicata no filtro (`Ajudante` vs `AJUDANTE`). Hoje é normalizado em CAIXA ALTA na
+gravação e os filtros comparam ignorando maiúsculas. Mantenha os dois lados.
+
+### 5.8 Medição só lista quem participa de produção
+`colaboradores.participa_producao`. Ajudantes e operadores nascem `FALSE`; demais e **todo PJ**,
+`TRUE`. **Salvaguarda:** o filtro só vale para quem entraria apenas por diária/antecipado — quem
+tem produção marcada aparece sempre, para nunca sumir um pagamento real.
+
+### 5.9 Mês pago trava edição
+Medição com `status = 'PAGO'` bloqueia alterações do mês. Use `bloquearSeCicloPago(...)`.
+
+### 5.10 Migração que roda uma vez só
+Use a tabela `migracoes_aplicadas` com uma chave única. Sem isso, a migração rodaria a cada
+arranque e **desfaria ajustes manuais** do usuário.
+
+```js
+const CHAVE = 'nome_unico_da_migracao';
+const feito = await pool.query('SELECT 1 FROM migracoes_aplicadas WHERE chave = $1', [CHAVE]);
+if (feito.rows.length === 0) {
+  // ... alteração ...
+  await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE]);
+}
+```
+
+---
+
+## 6. FLUXO DE TRABALHO — siga na ordem
+
+Este é o roteiro completo, do pedido até o site atualizado.
+
+### Passo 1 — Entender antes de escrever
+Leia os arquivos envolvidos **inteiros**, não só o trecho. Os comentários avisam o que quebra.
+
+### Passo 2 — Implementar de forma aditiva
+Rota nova, coluna nova, componente novo. Nunca mexa no que funciona.
+
+### Passo 3 — Validar sintaxe e build
+
+```powershell
+# Backend
+node --check server/routes/ARQUIVO.js
+
+# Frontend (dentro de client/)
+npm run build    # tem de terminar "✓ built in ..."
+npm run lint     # tem de dar "0 errors" (24 warnings são pré-existentes)
+```
+
+### Passo 4 — ⭐ TESTAR CONTRA O BANCO REAL
+
+**Esta é a etapa que separa "parece funcionar" de "funciona".** Crie um script temporário
+`server/scripts/_teste.js`, rode, confira os números, **apague o script e os dados de teste**.
+
+```js
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+const express = require('express');
+const db = require('../db/database');
+const { gerarToken } = require('../utils/auth');
+
+const MES = '2099-01';   // mês inventado: nunca colide com dado real
+
+(async () => {
+  await db.pronto;                       // espera as migrações
+  const app = express();
+  app.use(express.json());
+  app.use('/api/obras', require('../routes/obras'));
+  const servidor = app.listen(3990);
+  const adm = await db.get("SELECT id, nome, perfil FROM usuarios WHERE perfil = 'ADM' LIMIT 1");
+  const H = { Authorization: `Bearer ${gerarToken(adm)}`, 'Content-Type': 'application/json' };
+
+  // ... chame as rotas com fetch e CONFIRA os números ...
+
+  // LIMPEZA obrigatória
+  await db.run('DELETE FROM tabela WHERE mes_ciclo = ?', MES);
+  servidor.close();
+  process.exit(0);
+})().catch(e => { console.error('FALHOU:', e.message); process.exit(1); });
+```
+
+**Rode e leia a saída** (o terminal pode truncar; redirecione para arquivo):
+
+```powershell
+node 'server\scripts\_teste.js' 2>&1 | Out-File 't.txt' -Encoding utf8
+Get-Content 't.txt' -Raw
+```
+
+**O que todo teste deve provar:**
+- Os números batem com o esperado (some de forma independente e compare).
+- Nada sumiu: compare o total antes e depois.
+- Regras de borda: valor zero, negativo, duplicado, mês vazio.
+- A limpeza funcionou: zero resíduos no fim.
+
+### Passo 5 — Conferir o diff
+
+```powershell
+git --no-pager diff --stat
+git --no-pager diff -U0 | Select-String -Pattern '^-[^-]'   # remoções reais
+```
+
+Cada linha `-` tem de ser justificável. Se apagou funcionalidade, **volte atrás**.
+
+### Passo 6 — ⭐ SUBIR A VERSÃO
+
+Edite **`client/src/versao.js`** (único lugar):
+
+```js
+export const VERSAO_SISTEMA = '2.112';   // era 2.111
+```
+
+E acrescente a entrada no topo da lista de versões em **`VERSOES.md`**.
+
+### Passo 7 — Commit, tag e push
+
+```powershell
+git add <arquivos>
+git commit -m "Titulo curto" -m "Explicacao do porque, sem acentos no comando"
+git tag -a v2.112 -m "Versao 2.112"
+git push origin main
+git push origin v2.112
+```
+
+> O push na `main` **dispara o deploy automático**. Não há mais nada a fazer no servidor.
+
+### Passo 8 — ⭐ CONFIRMAR EM PRODUÇÃO
+
+O deploy leva **4 a 6 minutos**. Espere e verifique:
+
+```powershell
+# 1) O app subiu? (se a migração falhar, o container não sobe e isto falha)
+Invoke-WebRequest 'https://app.cerqueiraengenharia.com.br/ping' -UseBasicParsing
+
+# 2) A rota nova existe? 401 = existe e protegida. 404 = o build ainda não subiu.
+try { Invoke-WebRequest 'https://app.cerqueiraengenharia.com.br/api/SUA_ROTA' -UseBasicParsing }
+catch { [int]$_.Exception.Response.StatusCode }
+
+# 3) A versão nova chegou ao navegador?
+$html = (Invoke-WebRequest 'https://app.cerqueiraengenharia.com.br/' -UseBasicParsing).Content
+$arq = [regex]::Match($html, '/assets/(index-[A-Za-z0-9_\-]+\.js)').Groups[1].Value
+$js = (Invoke-WebRequest "https://app.cerqueiraengenharia.com.br/assets/$arq" -UseBasicParsing).Content
+$js.Contains('2.112')    # tem de ser True
+```
+
+**502 Bad Gateway** = container reiniciando. Espere ~2 min e repita.
+
+### Passo 9 — Limpar
+Apague scripts e arquivos temporários. `git status` tem de ficar **limpo**.
+
+---
+
+## 7. Como voltar a uma versão anterior
+
+```powershell
+git tag -l                  # listar versões
+git checkout v2.111         # voltar o código
+```
+
+> ⚠️ Voltar o código **não desfaz migrações do banco**. Isso é seguro e proposital: as migrações
+> são sempre aditivas (criam, nunca apagam), então o código antigo convive com colunas novas.
+> Para restaurar **dados**, use **Financeiro → Backup** (independente da versão do código).
+
+Para republicar corrigindo um commit ruim:
+
+```powershell
+git checkout main
+git revert <hash_do_commit_ruim>
+git push origin main
+```
+
+---
+
+## 8. Se algo der errado
+
+| Sintoma | Causa provável | O que fazer |
+|---|---|---|
+| Site não muda após deploy | Cache do navegador | `Ctrl+Shift+R`. No celular (PWA), feche e reabra |
+| **502 Bad Gateway** | Container reiniciando | Espere ~2 min |
+| Deploy "passou" mas nada mudou | Build falhou | Aba **Actions** no GitHub → ver log |
+| Servidor não sobe | Rota não registrada ou migração falhou | `sudo docker compose logs app --tail 100` |
+| Site fora do ar | Container parado | `sudo docker compose up -d` |
+| Dados errados após alteração | Migração ou recálculo | Restaure por **Financeiro → Backup** |
+
+> **Importante:** se o build falhar, o site **continua no ar na versão anterior**. O Docker só
+> troca o container depois do build terminar com sucesso.
+
+---
+
+## 9. Prompt para iniciar uma conversa nova com IA
+
+Copie e cole isto ao abrir um chat novo (foi para resolver exatamente este problema que o
+manual existe):
+
+```
+Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.112).
+
+ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
+1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
+2. VERSOES.md             <- histórico de versões
+3. ARQUITETURA_SISTEMA.md <- detalhe técnico (consulte quando precisar)
+
+Regras inegociáveis:
+- NUNCA remova funcionalidade existente. Toda alteração é aditiva.
+- NUNCA apague dados. Migrações só criam colunas/tabelas.
+- Toda alteração sobe a versão (ex: 2.112 -> 2.113) em client/src/versao.js + VERSOES.md.
+- Teste contra o banco real antes de publicar (seção 6, passo 4 do manual).
+- Confirme em produção depois do deploy (seção 6, passo 8).
+
+Stack: React+Vite (client/) · Node+Express (server/) · PostgreSQL · Docker na AWS Lightsail.
+Deploy: push na main dispara GitHub Actions automaticamente.
+
+Meu pedido é: [DESCREVA AQUI]
+```
+
+---
+
+## 10. Referência rápida
+
+| | |
+|---|---|
+| Site | https://app.cerqueiraengenharia.com.br |
+| Repositório | https://github.com/happySiteCerqueira/happysite |
+| Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
+| Pasta no servidor | `/opt/happysite` |
+| Versão | **2.112** |
+| Onde mudar a versão | `client/src/versao.js` |
+| Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
+| Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |
+| Tempo de deploy | 4 a 6 minutos |
+
+### Perfis de usuário
+
+`ADM` · `RH` · `FINANCEIRO` · `ENGENHEIRO` · `MESTRE` · `ENCARREGADO` · `APONTADOR`
+
+- **`ADM`** passa em qualquer verificação de permissão (ver `utils/permissaoModulo.js`).
+- **`ENCARREGADO`** é restrito: só enxerga o módulo **EPI** (ver `Layout.jsx`).
+- Os demais são controlados em **Controle de Acesso** (tabela `perfil_permissoes`).
+
+### Outros documentos
+
+| Arquivo | Quando consultar |
+|---|---|
+| `VERSOES.md` | Histórico e regra de numeração |
+| `ARQUITETURA_SISTEMA.md` | Detalhe técnico profundo (schema, fluxos, cálculos) |
+| `DEPLOY_VPS.md` | Recriar o servidor, configurar Drive e notificações push |
+| `MIGRACAO_POSTGRES.md` | Histórico da migração SQLite → Postgres |

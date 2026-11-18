@@ -2,6 +2,10 @@
 
 > O número da versão aparece no sistema, no menu lateral, entre o perfil do usuário e o botão
 > **Sair**.
+>
+> 📘 **Para assumir a manutenção do sistema** (PC novo, formatação ou conversa nova com IA),
+> leia primeiro o **`MANUAL_DE_CONEXAO.md`** — ele tem as regras, as armadilhas e o fluxo de
+> trabalho completo.
 
 ## Como funciona
 
@@ -45,6 +49,14 @@ git checkout v2.111
 ---
 
 ## Versões
+
+### 2.112 — Manual de Conexão
+
+- Criado o **`MANUAL_DE_CONEXAO.md`**: documento único para assumir a manutenção do sistema do
+  zero, sem depender do histórico de nenhuma conversa. Cobre instalação em PC novo, acesso ao
+  servidor, mapa do projeto, convenções, **armadilhas conhecidas**, fluxo de trabalho completo
+  (implementar → testar no banco real → subir versão → deploy → confirmar em produção), como
+  voltar a uma versão anterior e um prompt pronto para iniciar conversa com IA.
 
 ### 2.111 — *versão inicial do controle de versão*
 
