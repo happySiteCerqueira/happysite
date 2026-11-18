@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApuracao } from '../context/ApuracaoContext';
 import Modal from './Modal';
 import MinhaAssinatura from './MinhaAssinatura';
+import { VERSAO_SISTEMA } from '../versao';
 
 function rotuloMesApuracao(mes) {
   const [ano, m] = mes.split('-');
@@ -122,6 +123,11 @@ export default function Layout() {
         <div className="layout-sidebar-rodape" style={{ color: '#94a3b8', fontSize: 12, marginTop: 16, borderTop: '1px solid #1e293b', paddingTop: 12 }}>
           <div style={{ color: '#fff', fontWeight: 600 }}>{usuario?.nome}</div>
           <div>{usuario?.perfil}</div>
+          {/* Versão do sistema: fica entre o perfil e o botão Sair, sempre visível. O valor vem
+              de src/versao.js — fonte única, para não existirem dois números divergentes. */}
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }} title="Versão do sistema">
+            v{VERSAO_SISTEMA}
+          </div>
           <button onClick={logout} className="btn-secondary btn-sm" style={{ marginTop: 8, width: '100%' }}>Sair</button>
         </div>
       </aside>
