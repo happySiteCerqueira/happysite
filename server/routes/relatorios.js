@@ -83,4 +83,274 @@ router.get('/', async (req, res) => {
   res.json({ itens, totais });
 });
 
+// ===========================================================================================
+// SAÚDE FINANCEIRA POR OBRA — cruza o que ENTROU com o que foi PAGO em cada obra
+// ===========================================================================================
+//
+// ENTRADA (receita da obra): financeiro_receitas.valor_liquido — já é o valor LÍQUIDO, ou seja,
+//   com os 11% da nota descontados quando "com_nota" está marcado (ver calcularValorLiquido em
+//   routes/financeiro.js). É esse valor que entra de fato no caixa.
+//
+// SAÍDA (custo de mão de obra): o que a empresa paga aos colaboradores naquela obra:
+//   1. Produção — obra_servico_celulas.valor (cada célula marcada no desenho do prédio);
+//   2. Diárias  — rateadas por obra em diaria_obras (quantidade) × diarias.valor_unitario_usado.
+//
+// ⚠️ PONTO DELICADO — a ligação entre os dois lados é pelo NOME da obra:
+//   • o custo tem obra_id (chave real, vinda de obras);
+//   • a receita tem apenas obra_nome (texto livre digitado no lançamento).
+// Por isso o cruzamento normaliza o nome (sem acentos, maiúsculas, espaços colapsados). Uma
+// receita cujo nome não casa com nenhuma obra cadastrada NÃO é descartada: aparece como uma
+// linha própria, com aviso, para o valor nunca sumir silenciosamente do relatório.
+//
+// ⚠️ Pagamentos antecipados (vale, INSS, taxa...) NÃO entram como custo da obra: são
+// ADIANTAMENTOS do valor da produção, não um custo adicional. Somá-los contaria duas vezes.
+
+// Normaliza o nome da obra para o cruzamento: maiúsculas, sem acentos e sem espaços repetidos.
+function normalizarNomeObra(texto) {
+  return (texto || '')
+    .toString()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
+}
+
+function arredondar(valor) {
+  return Math.round((Number(valor) || 0) * 100) / 100;
+}
+
+// Receitas do período, agrupadas por obra + serviço (Pintura, Produção, Diárias, Reforma...).
+// O filtro de período usa data_medicao, que é a data de referência do lançamento na Receita.
+async function buscarEntradas(dataInicio, dataFim) {
+  let sql = `
+    SELECT obra_nome, servico, com_nota,
+           SUM(valor_bruto) AS bruto, SUM(valor_liquido) AS liquido, COUNT(*)::int AS qtd
+    FROM financeiro_receitas
+    WHERE excluido = 0
+  `;
+  const params = [];
+  if (dataInicio) { sql += ' AND data_medicao >= ?'; params.push(dataInicio); }
+  if (dataFim) { sql += ' AND data_medicao <= ?'; params.push(dataFim); }
+  sql += ' GROUP BY obra_nome, servico, com_nota ORDER BY obra_nome, servico';
+  return db.all(sql, ...params);
+}
+
+// Custo de PRODUÇÃO por obra e serviço (células marcadas no desenho do prédio).
+// Serviços EXCLUÍDOS (excluido = 1) ficam de fora, como em todo o resto do sistema — foram
+// apagados por engano/arrependimento e não representam pagamento real. Já os INATIVOS
+// (ativo = 0) continuam contando: o serviço existiu, foi executado e pago; apenas não aceita
+// marcações novas. Tirá-los esconderia custo real e inflaria artificialmente o lucro da obra.
+async function buscarCustoProducao(mesInicio, mesFim) {
+  let sql = `
+    SELECT o.id AS obra_id, o.nome AS obra_nome, os.nome AS servico,
+           SUM(cel.valor) AS valor, COUNT(*)::int AS qtd
+    FROM obra_servico_celulas cel
+    JOIN obra_servicos os ON os.id = cel.obra_servico_id
+    JOIN obras o ON o.id = os.obra_id
+    WHERE os.excluido = 0
+  `;
+  const params = [];
+  if (mesInicio) { sql += ' AND cel.mes_ciclo >= ?'; params.push(mesInicio); }
+  if (mesFim) { sql += ' AND cel.mes_ciclo <= ?'; params.push(mesFim); }
+  sql += ' GROUP BY o.id, o.nome, os.nome ORDER BY o.nome, os.nome';
+  return db.all(sql, ...params);
+}
+
+// Custo de DIÁRIAS por obra. A quantidade fica rateada em diaria_obras (por obra) e o valor
+// unitário em diarias (por pessoa/mês) — por isso o JOIN entre as duas pela chave
+// (colaborador_id, mes_ciclo). Linhas removidas do rateio (excluido = 1) ficam de fora.
+async function buscarCustoDiarias(mesInicio, mesFim) {
+  let sql = `
+    SELECT o.id AS obra_id, o.nome AS obra_nome,
+           SUM(dobra.quantidade * d.valor_unitario_usado) AS valor,
+           SUM(dobra.quantidade) AS quantidade
+    FROM diaria_obras dobra
+    JOIN obras o ON o.id = dobra.obra_id
+    JOIN diarias d ON d.colaborador_id = dobra.colaborador_id AND d.mes_ciclo = dobra.mes_ciclo
+    WHERE dobra.excluido = 0
+  `;
+  const params = [];
+  if (mesInicio) { sql += ' AND dobra.mes_ciclo >= ?'; params.push(mesInicio); }
+  if (mesFim) { sql += ' AND dobra.mes_ciclo <= ?'; params.push(mesFim); }
+  sql += ' GROUP BY o.id, o.nome ORDER BY o.nome';
+  return db.all(sql, ...params);
+}
+
+// Cria (ou reaproveita) o registro consolidado de uma obra dentro do mapa de resultados.
+function obterObra(mapa, chave, nome) {
+  if (!mapa.has(chave)) {
+    mapa.set(chave, {
+      chave,
+      obra_id: null,
+      obra: nome,
+      // Entradas abertas por serviço (Pintura, Produção, Diárias, Reforma N/S) — é o que a
+      // visão "detalhada" mostra; a "geral" usa apenas os totais.
+      entradas: [],
+      // Saídas abertas por tipo: cada serviço de obra executado + a linha de Diárias.
+      saidas: [],
+      total_entrada_bruta: 0,
+      total_entrada_liquida: 0,
+      total_saida: 0,
+      // Receita lançada com um nome de obra que não existe no cadastro de Obras: entra no
+      // relatório mesmo assim (para o valor não sumir), mas sinalizada.
+      sem_obra_cadastrada: false
+    });
+  }
+  return mapa.get(chave);
+}
+
+// Diárias lançadas SEM rateio por obra (existem em "diarias" mas não têm linha em
+// "diaria_obras"). Esse valor foi pago de verdade, mas não pertence a nenhuma obra — logo não
+// entra em nenhuma linha do relatório. Em vez de deixá-lo sumir silenciosamente e inflar o
+// lucro, ele é devolvido à parte para a tela avisar.
+async function buscarDiariasSemObra(mesInicio, mesFim) {
+  let sql = `
+    SELECT COUNT(*)::int AS qtd, COALESCE(SUM(d.total), 0) AS valor
+    FROM diarias d
+    WHERE d.total <> 0
+      AND NOT EXISTS (
+        SELECT 1 FROM diaria_obras dobra
+        WHERE dobra.colaborador_id = d.colaborador_id
+          AND dobra.mes_ciclo = d.mes_ciclo
+          AND dobra.excluido = 0
+      )
+  `;
+  const params = [];
+  if (mesInicio) { sql += ' AND d.mes_ciclo >= ?'; params.push(mesInicio); }
+  if (mesFim) { sql += ' AND d.mes_ciclo <= ?'; params.push(mesFim); }
+  const linha = await db.get(sql, ...params);
+  return { qtd: linha ? linha.qtd : 0, valor: arredondar(linha ? linha.valor : 0) };
+}
+
+// Consolida o mapa de obras em saldo, margem e totais gerais.
+function montarResposta(mapa, periodo, diariasSemObra) {
+  const obras = [...mapa.values()].map(registro => {
+    const saldo = arredondar(registro.total_entrada_liquida - registro.total_saida);
+    // Margem = quanto sobra de cada R$ 100 que entraram. Sem entrada não há margem a calcular
+    // (null, e não 0) — a tela mostra "-" em vez de um 0% que pareceria prejuízo total.
+    const margem = registro.total_entrada_liquida !== 0
+      ? Math.round((saldo / registro.total_entrada_liquida) * 1000) / 10
+      : null;
+
+    registro.entradas.sort((a, b) => a.servico.localeCompare(b.servico, 'pt-BR'));
+    registro.saidas.sort((a, b) => a.servico.localeCompare(b.servico, 'pt-BR'));
+
+    return {
+      ...registro,
+      total_desconto_nota: arredondar(registro.total_entrada_bruta - registro.total_entrada_liquida),
+      saldo,
+      margem,
+      // Obra sem custo lançado apareceria como "100% de lucro", o que quase sempre significa
+      // apenas que a mão de obra ainda não foi registrada. A tela avisa em vez de enganar.
+      sem_custo_lancado: registro.total_saida === 0,
+      sem_entrada_lancada: registro.total_entrada_liquida === 0
+    };
+  });
+
+  // Maior saldo primeiro: as obras que mais contribuem (e, no fim, as que mais preocupam).
+  obras.sort((a, b) => b.saldo - a.saldo);
+
+  const totais = obras.reduce((acc, o) => ({
+    entrada_bruta: arredondar(acc.entrada_bruta + o.total_entrada_bruta),
+    entrada_liquida: arredondar(acc.entrada_liquida + o.total_entrada_liquida),
+    desconto_nota: arredondar(acc.desconto_nota + o.total_desconto_nota),
+    saida: arredondar(acc.saida + o.total_saida),
+    saldo: arredondar(acc.saldo + o.saldo)
+  }), { entrada_bruta: 0, entrada_liquida: 0, desconto_nota: 0, saida: 0, saldo: 0 });
+
+  totais.margem = totais.entrada_liquida !== 0
+    ? Math.round((totais.saldo / totais.entrada_liquida) * 1000) / 10
+    : null;
+
+  return {
+    obras,
+    totais,
+    periodo,
+    // Avisos agregados, para a tela destacar sem precisar varrer a lista inteira.
+    avisos: {
+      receitas_sem_obra_cadastrada: obras.filter(o => o.sem_obra_cadastrada).map(o => o.obra),
+      obras_sem_custo: obras.filter(o => o.sem_custo_lancado && !o.sem_entrada_lancada).map(o => o.obra),
+      // Custo real que ficou de fora do rateio por obra (ver buscarDiariasSemObra).
+      diarias_sem_obra: diariasSemObra
+    }
+  };
+}
+
+// Relatório de saúde financeira por obra: cruza as entradas (Receita) com o custo de mão de
+// obra (produção + diárias) e devolve o saldo e a margem de cada obra.
+//
+// Filtros opcionais:
+//   data_inicio / data_fim (YYYY-MM-DD) → aplicados às receitas (data_medicao);
+//   mes_inicio / mes_fim   (YYYY-MM)    → aplicados aos custos (mes_ciclo).
+// A tela envia os dois a partir do mesmo período escolhido, para que os dois lados fiquem
+// sempre comparando o mesmo intervalo de tempo.
+router.get('/saude-obras', async (req, res) => {
+  const { data_inicio, data_fim, mes_inicio, mes_fim } = req.query;
+
+  const [entradas, producao, diarias, diariasSemObra] = await Promise.all([
+    buscarEntradas(data_inicio, data_fim),
+    buscarCustoProducao(mes_inicio, mes_fim),
+    buscarCustoDiarias(mes_inicio, mes_fim),
+    buscarDiariasSemObra(mes_inicio, mes_fim)
+  ]);
+
+  // Índice de obras cadastradas por nome normalizado — é a ponte entre a receita (texto livre)
+  // e o custo (obra_id).
+  const obrasCadastradas = await db.all('SELECT id, nome FROM obras ORDER BY nome');
+  const indicePorNome = new Map();
+  obrasCadastradas.forEach(o => indicePorNome.set(normalizarNomeObra(o.nome), o));
+
+  const mapa = new Map();
+
+  // ---- Lado ENTRADA (Receita) ----
+  for (const linha of entradas) {
+    const chaveNome = normalizarNomeObra(linha.obra_nome);
+    const obraCadastrada = indicePorNome.get(chaveNome);
+    const registro = obterObra(mapa, chaveNome, obraCadastrada ? obraCadastrada.nome : linha.obra_nome);
+    if (obraCadastrada) registro.obra_id = obraCadastrada.id;
+    else registro.sem_obra_cadastrada = true;
+
+    const liquido = arredondar(linha.liquido);
+    const bruto = arredondar(linha.bruto);
+    registro.entradas.push({
+      servico: linha.servico,
+      com_nota: !!linha.com_nota,
+      valor_bruto: bruto,
+      valor_liquido: liquido,
+      // Quanto foi retido pela nota (11%); 0 quando o lançamento é sem nota.
+      desconto_nota: arredondar(bruto - liquido),
+      qtd: linha.qtd
+    });
+    registro.total_entrada_bruta = arredondar(registro.total_entrada_bruta + bruto);
+    registro.total_entrada_liquida = arredondar(registro.total_entrada_liquida + liquido);
+  }
+
+  // ---- Lado SAÍDA: produção ----
+  for (const linha of producao) {
+    const chaveNome = normalizarNomeObra(linha.obra_nome);
+    const registro = obterObra(mapa, chaveNome, linha.obra_nome);
+    registro.obra_id = linha.obra_id;
+    const valor = arredondar(linha.valor);
+    registro.saidas.push({ tipo: 'PRODUCAO', servico: linha.servico, valor, qtd: linha.qtd });
+    registro.total_saida = arredondar(registro.total_saida + valor);
+  }
+
+  // ---- Lado SAÍDA: diárias ----
+  for (const linha of diarias) {
+    const chaveNome = normalizarNomeObra(linha.obra_nome);
+    const registro = obterObra(mapa, chaveNome, linha.obra_nome);
+    registro.obra_id = linha.obra_id;
+    const valor = arredondar(linha.valor);
+    registro.saidas.push({
+      tipo: 'DIARIA',
+      servico: 'Diárias',
+      valor,
+      quantidade: arredondar(linha.quantidade)
+    });
+    registro.total_saida = arredondar(registro.total_saida + valor);
+  }
+
+  res.json(montarResposta(mapa, { data_inicio, data_fim }, diariasSemObra));
+});
+
 module.exports = router;
