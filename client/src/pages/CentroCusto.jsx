@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
+import { useApuracao } from '../context/ApuracaoContext';
 
-function mesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+function rotuloMes(mes) {
+  const [ano, m] = mes.split('-');
+  return `${m}/${ano}`;
 }
 
 function formatarMoeda(valor) {
@@ -43,32 +44,43 @@ function SaudeObras() {
   // 'geral' = uma linha por obra (entrou x pagou x saldo);
   // 'detalhada' = abre cada obra por tipo de entrada (Pintura, Produção, Diárias...) e de saída.
   const [visaoObra, setVisaoObra] = useState('geral');
-  const [periodo, setPeriodo] = useState('tudo'); // tudo | intervalo
-  const [mesInicio, setMesInicio] = useState(mesAtual());
-  const [mesFim, setMesFim] = useState(mesAtual());
+  // Por padrão mostra o MÊS DE APURAÇÃO (o seletor global do topo): é o que a pessoa costuma
+  // querer ao abrir a tela. 'tudo' = todo o histórico; 'intervalo' = outro mês ou período.
+  const { mes: mesApuracao } = useApuracao();
+  const [periodo, setPeriodo] = useState('apuracao'); // apuracao | tudo | intervalo
+  const [mesInicio, setMesInicio] = useState(mesApuracao);
+  const [mesFim, setMesFim] = useState(mesApuracao);
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
   const [expandida, setExpandida] = useState(null);
 
+  function escolherPeriodo(novo) {
+    // Ao passar para "outro mês ou intervalo", começa no mês de apuração em vez de um mês aleatório.
+    if (novo === 'intervalo') { setMesInicio(mesApuracao); setMesFim(mesApuracao); }
+    setPeriodo(novo);
+  }
+
   useEffect(() => {
     setCarregando(true);
     setErro('');
     const params = {};
-    if (periodo === 'intervalo') {
+    if (periodo !== 'tudo') {
       // Os dois lados usam campos de data diferentes: a Receita tem uma DATA (data_medicao) e
-      // o custo tem o MÊS DE CICLO (YYYY-MM). Por isso o mesmo intervalo escolhido é enviado
+      // o custo tem o MÊS DE CICLO (YYYY-MM). Por isso o mesmo período escolhido é enviado
       // nos dois formatos — assim ambos comparam exatamente o mesmo período.
-      params.mes_inicio = mesInicio;
-      params.mes_fim = mesFim;
-      params.data_inicio = `${mesInicio}-01`;
-      params.data_fim = ultimoDiaDoMes(mesFim);
+      const inicio = periodo === 'apuracao' ? mesApuracao : mesInicio;
+      const fim = periodo === 'apuracao' ? mesApuracao : mesFim;
+      params.mes_inicio = inicio;
+      params.mes_fim = fim;
+      params.data_inicio = `${inicio}-01`;
+      params.data_fim = ultimoDiaDoMes(fim);
     }
     api.get('/relatorios/saude-obras', { params })
       .then(res => setDados(res.data))
       .catch(() => setErro('Não foi possível carregar o centro de custo das obras.'))
       .finally(() => setCarregando(false));
-  }, [periodo, mesInicio, mesFim]);
+  }, [periodo, mesInicio, mesFim, mesApuracao]);
 
   return (
     <div>
@@ -83,9 +95,10 @@ function SaudeObras() {
           </div>
           <div className="flex-col gap-2">
             <label>Período</label>
-            <select value={periodo} onChange={e => setPeriodo(e.target.value)}>
+            <select value={periodo} onChange={e => escolherPeriodo(e.target.value)}>
+              <option value="apuracao">Mês de apuração ({rotuloMes(mesApuracao)})</option>
               <option value="tudo">Todo o histórico</option>
-              <option value="intervalo">Escolher meses</option>
+              <option value="intervalo">Outro mês ou intervalo</option>
             </select>
           </div>
           {periodo === 'intervalo' && (

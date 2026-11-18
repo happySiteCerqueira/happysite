@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.118** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.119** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -162,7 +162,9 @@ Custo de holerite rateado = máx(H − P, 0)
 #### Centro de Custo — o relatório mais importante
 
 Fica em **Financeiro → Centro de Custo** (antes era um botão dentro de Relatórios; usa a mesma
-permissão `financeiro.relatorios`). Cruza o que **entrou** com o que **saiu** em cada obra:
+permissão `financeiro.relatorios`). Abre no **mês de apuração** do topo; o período pode ser
+trocado para **Todo o histórico** ou **Outro mês ou intervalo**. Cruza o que **entrou** com o que
+**saiu** em cada obra:
 
 ```
 Entrou = receita LÍQUIDA (já com a nota descontada)

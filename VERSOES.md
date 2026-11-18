@@ -50,6 +50,12 @@ git checkout v2.111
 
 ## Versões
 
+### 2.119 — Centro de Custo abre no mês de apuração
+
+- O **Centro de Custo** agora abre, por padrão, no **mês de apuração** do seletor do topo (e
+  acompanha quando ele muda). Para ver outro recorte: **Todo o histórico** ou **Outro mês ou
+  intervalo** (De/Até, começando no mês de apuração). Antes abria sempre em "Todo o histórico".
+
 ### 2.118 — Cabeçalho fixo nas tabelas de Holerite e Pagamentos Antecipados
 
 - O título das colunas (Nome, Função, CPF/CNPJ, valores e Total) agora **fica sempre visível**: a
