@@ -17,6 +17,13 @@ const ROTULOS = {
 //                              Adiantamento (PJ) — lançamentos internos;
 //   modo "holerite"          → Holerite: Vale, INSS, Taxa e Pagto, que vêm do PDF da contabilidade.
 // Os dois modos gravam nas mesmas colunas e o total de cada tabela soma só o que ela mostra.
+// Cabeçalho que não sai da tela ao rolar a tabela. O fundo é opaco (senão as linhas aparecem
+// por baixo) e a linha inferior vai em box-shadow: com border-collapse a borda normal não
+// acompanha o elemento "sticky".
+const CABECALHO_FIXO = {
+  position: 'sticky', top: 0, zIndex: 2, background: '#f9fafb', boxShadow: '0 1px 0 #e5e7eb'
+};
+
 const COLUNAS_POR_MODO = {
   extras: { PF: ['vale_extra', 'vale_ex_rh'], PJ: ['adiantamento'] },
   holerite: { PF: ['vale', 'fgts', 'taxa', 'pagto'], PJ: [] }
@@ -115,16 +122,20 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
 
   function Tabela({ titulo, itens, colunas }) {
     return (
-      <div className="card" style={{ marginBottom: 20, overflowX: 'auto' }}>
+      <div className="card" style={{ marginBottom: 20 }}>
         <h3>{titulo}</h3>
+        {/* A tabela rola DENTRO deste quadro (vertical e horizontal), e o cabeçalho fica fixo no
+            topo dele: com overflow-x no card, "position: sticky" não acompanhava a rolagem da
+            página e o título das colunas sumia ao descer. */}
+        <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 230px)', minHeight: 160 }}>
         <table>
           <thead>
             <tr>
-              <th>Nome</th>
-              <th>Função</th>
-              <th>CPF/CNPJ</th>
-              {colunas.map(c => <th key={c}>{ROTULOS[c]}</th>)}
-              <th>Total</th>
+              <th style={CABECALHO_FIXO}>Nome</th>
+              <th style={CABECALHO_FIXO}>Função</th>
+              <th style={CABECALHO_FIXO}>CPF/CNPJ</th>
+              {colunas.map(c => <th key={c} style={CABECALHO_FIXO}>{ROTULOS[c]}</th>)}
+              <th style={CABECALHO_FIXO}>Total</th>
             </tr>
           </thead>
           <tbody>
@@ -144,6 +155,7 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
             {itens.length === 0 && <tr><td colSpan={colunas.length + 4} style={{ color: '#9ca3af' }}>Nenhum cadastro nesta categoria.</td></tr>}
           </tbody>
         </table>
+        </div>
       </div>
     );
   }

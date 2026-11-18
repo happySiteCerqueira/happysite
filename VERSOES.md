@@ -50,6 +50,13 @@ git checkout v2.111
 
 ## Versões
 
+### 2.118 — Cabeçalho fixo nas tabelas de Holerite e Pagamentos Antecipados
+
+- O título das colunas (Nome, Função, CPF/CNPJ, valores e Total) agora **fica sempre visível**: a
+  tabela rola dentro do próprio quadro, com o cabeçalho fixo no topo dele. Antes, ao descer a
+  página, o título saía da tela porque o quadro tinha rolagem horizontal, o que impedia o
+  `position: sticky` de acompanhar a página.
+
 ### 2.117 — Pagamentos Antecipados em abas PF / PJ
 
 - Em **Financeiro → Pagtos. Antecipados**, Colaboradores (PF) e Empreiteiros (PJ) agora ficam em
