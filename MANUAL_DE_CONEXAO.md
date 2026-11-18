@@ -1,7 +1,10 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.112**
+> **Versão do sistema: 2.113**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
+>
+> 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
+> De lá dá para lê-lo, copiá-lo ou baixá-lo de qualquer PC, sempre na versão que está no ar.
 >
 > O número da versão acima pode estar desatualizado se alguém esquecer de o corrigir aqui.
 > **A fonte de verdade é sempre `client/src/versao.js`** — e o número exibido no menu lateral
@@ -41,7 +44,7 @@ produção por colaborador, pagamentos, folha e saúde financeira de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.112** (tag `v2.112`) |
+| **Versão atual** | **2.113** (tag `v2.113`) |
 
 ### Stack
 
@@ -340,6 +343,12 @@ export const VERSAO_SISTEMA = '2.112';   // era 2.111
 
 E acrescente a entrada no topo da lista de versões em **`VERSOES.md`**.
 
+> 📌 **Atualize também os manuais.** Se a alteração mudou como algo funciona, corrija o
+> `MANUAL_DO_SISTEMA.md`; se mudou o processo de manutenção, corrija este arquivo. Os manuais
+> ficam disponíveis para download dentro do sistema (Configurações → Manuais) e precisam
+> corresponder sempre ao que está no ar — é isso que permite retomar o trabalho em qualquer
+> conversa de IA sem perder contexto.
+
 ### Passo 7 — Commit, tag e push
 
 ```powershell
@@ -422,12 +431,13 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.112).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.113).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
-2. VERSOES.md             <- histórico de versões
-3. ARQUITETURA_SISTEMA.md <- detalhe técnico (consulte quando precisar)
+2. MANUAL_DO_SISTEMA.md   <- como cada módulo funciona por dentro
+3. VERSOES.md             <- histórico de versões
+4. ARQUITETURA_SISTEMA.md <- detalhe técnico (consulte quando precisar)
 
 Regras inegociáveis:
 - NUNCA remova funcionalidade existente. Toda alteração é aditiva.
@@ -452,7 +462,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.112** |
+| Versão | **2.113** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |
@@ -470,6 +480,7 @@ Meu pedido é: [DESCREVA AQUI]
 
 | Arquivo | Quando consultar |
 |---|---|
+| `MANUAL_DO_SISTEMA.md` | Como cada módulo funciona, regras de negócio e banco de dados |
 | `VERSOES.md` | Histórico e regra de numeração |
 | `ARQUITETURA_SISTEMA.md` | Detalhe técnico profundo (schema, fluxos, cálculos) |
 | `DEPLOY_VPS.md` | Recriar o servidor, configurar Drive e notificações push |

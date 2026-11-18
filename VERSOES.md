@@ -50,6 +50,17 @@ git checkout v2.111
 
 ## Versões
 
+### 2.113 — Manuais dentro do sistema
+
+- Nova aba **Configurações → 📘 Manuais**, exclusiva do **ADM**: lê os manuais na tela, copia o
+  conteúdo com um clique e **baixa os arquivos** para colar em qualquer chat de IA.
+- Criado o **`MANUAL_DO_SISTEMA.md`**: como cada módulo funciona por dentro, regras de negócio
+  que não são óbvias, estrutura do banco e permissões.
+- Rota `/api/manuais` restrita ao ADM, com proteção contra path traversal (o cliente envia uma
+  chave, nunca um caminho de arquivo).
+- **Dockerfile** passa a copiar os `.md` para `server/manuais/` — sem isso os arquivos não
+  existiriam dentro do container e a tela falharia só em produção.
+
 ### 2.112 — Manual de Conexão
 
 - Criado o **`MANUAL_DE_CONEXAO.md`**: documento único para assumir a manutenção do sistema do

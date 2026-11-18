@@ -26,6 +26,18 @@ COPY --from=build /app/server ./server
 COPY --from=build /app/client/dist ./client/dist
 COPY --from=build /app/package.json ./package.json
 
+# Manuais (.md da raiz) copiados para DENTRO da imagem.
+#
+# POR QUÊ: a imagem final só recebe "server" e "client/dist" — os arquivos .md da raiz do
+# projeto NÃO existiriam no container, e a tela de Manuais (Configurações → Manuais, só ADM)
+# daria erro de "arquivo não encontrado" em produção, mesmo funcionando no PC local.
+#
+# Ficam em server/manuais/ para a rota os ler por um caminho previsível, idêntico em
+# desenvolvimento e em produção.
+COPY --from=build /app/MANUAL_DE_CONEXAO.md ./server/manuais/MANUAL_DE_CONEXAO.md
+COPY --from=build /app/MANUAL_DO_SISTEMA.md ./server/manuais/MANUAL_DO_SISTEMA.md
+COPY --from=build /app/VERSOES.md ./server/manuais/VERSOES.md
+
 EXPOSE 3001
 
 CMD ["node", "server/server.js"]

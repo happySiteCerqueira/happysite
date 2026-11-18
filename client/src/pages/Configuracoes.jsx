@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Usuarios from './Usuarios';
 import Backup from './Backup';
 import ControleAcesso from './ControleAcesso';
+import Manuais from './Manuais';
 import MinhaAssinatura from '../components/MinhaAssinatura';
 
 export default function Configuracoes() {
@@ -71,6 +72,13 @@ export default function Configuracoes() {
             🔒 Controle de Acesso
           </button>
         )}
+        {/* Manuais: exclusivo do ADM. Descrevem a infraestrutura (IP do servidor, caminho das
+            credenciais, estrutura do banco) e por isso não ficam à vista dos demais perfis. */}
+        {ehAdm && (
+          <button className={subAba === 'manuais' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('manuais')}>
+            📘 Manuais
+          </button>
+        )}
       </div>
 
 
@@ -130,6 +138,7 @@ export default function Configuracoes() {
       {subAba === 'usuarios' && ehAdm && <Usuarios />}
       {subAba === 'backup' && ehAdm && <Backup />}
       {subAba === 'acessos' && ehAdm && <ControleAcesso />}
+      {subAba === 'manuais' && ehAdm && <Manuais />}
     </div>
   );
 }
