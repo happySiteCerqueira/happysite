@@ -357,7 +357,10 @@ router.post('/atualizar-tudo', async (req, res) => {
 
   await db.transaction(async (trx) => {
     // ---- 1) Serviços de obra: recalcula célula por célula (individual e grupo) ----
-    const servicos = await trx.all('SELECT * FROM obra_servicos WHERE ativo = 1 AND excluido = 0');
+    // valor_manual = FALSE: o serviço "ADM" fica de fora do recálculo. Os valores dele são
+    // digitados à mão e não derivam de quantidade x valor unitário — recalcular zeraria tudo,
+    // porque o ADM tem valor unitário 0. Mesma proteção de utils/recalculoAutomatico.js.
+    const servicos = await trx.all('SELECT * FROM obra_servicos WHERE ativo = 1 AND excluido = 0 AND valor_manual = FALSE');
     for (const servico of servicos) {
       const celulas = await trx.all('SELECT * FROM obra_servico_celulas WHERE obra_servico_id = ?', servico.id);
       if (celulas.length === 0) continue;

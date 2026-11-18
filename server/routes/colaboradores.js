@@ -42,10 +42,14 @@ const FUNCOES_SEM_PRODUCAO = ['AJUDANTE', 'OPERADOR DE CREMALHEIRA', 'OPERADOR D
 // Se o formulário enviou o campo (o usuário mexeu no checkbox), a escolha dele MANDA — é o que
 // permite abrir exceção para um ajudante específico que de facto produz. Só quando o campo não
 // vem é que o padrão por função é aplicado.
-function definirParticipaProducao(valorEnviado, funcao) {
+function definirParticipaProducao(valorEnviado, funcao, tipo) {
   if (valorEnviado !== undefined && valorEnviado !== null && valorEnviado !== '') {
     return paraBooleano(valorEnviado);
   }
+  // PJ (empreiteiro) SEMPRE participa: é contratado justamente para executar produção, e o
+  // "contato_responsavel" guardado no lugar da função é um nome de pessoa — nunca casaria com
+  // a lista de funções sem produção, mas deixar explícito evita engano futuro.
+  if (tipo === 'PJ') return true;
   return !FUNCOES_SEM_PRODUCAO.includes(normalizarFuncao(funcao) || '');
 }
 
@@ -179,7 +183,7 @@ router.post('/importar', permitir('RH', 'ADM'), async (req, res) => {
         banco, agencia, conta, pix, cor,
         // Importação por planilha também respeita o padrão por função: um ajudante importado
         // já entra sem "Produção/Diária" e não aparece na Medição sem necessidade.
-        definirParticipaProducao(undefined, tipo === 'CPF' ? funcaoOuContato : null)
+        definirParticipaProducao(undefined, tipo === 'CPF' ? funcaoOuContato : null, tipo)
       );
       criados++;
     }
@@ -226,7 +230,7 @@ router.post('/', permitir('RH', 'ADM'), async (req, res) => {
     b.obra_id ? Number(b.obra_id) : null,
     // Produção/Diária: vem desmarcado automaticamente para ajudantes e operadores; para as
     // demais funções, marcado. O usuário pode inverter no formulário.
-    definirParticipaProducao(b.participa_producao, b.funcao)
+    definirParticipaProducao(b.participa_producao, b.funcao, b.tipo || 'CPF')
   ];
   const placeholders = colunas.map(() => '?').join(',');
   const info = await db.run(
@@ -257,8 +261,9 @@ router.put('/:id', permitir('RH', 'ADM'), async (req, res) => {
     // sempre preenchido com o valor atual e seria impossível distinguir "o usuário mandou"
     // de "veio do banco". Se não veio no corpo, mantém o que já estava gravado.
     req.body.participa_producao !== undefined
-      ? definirParticipaProducao(req.body.participa_producao, b.funcao)
-      : atual.participa_producao,
+      ? definirParticipaProducao(req.body.participa_producao, b.funcao, b.tipo)
+      // PJ é sempre participante, mesmo em cadastros gravados antes desta regra.
+      : (b.tipo === 'PJ' ? true : atual.participa_producao),
     id
   );
   await registrar(req.usuario.id, 'EDITAR', 'colaboradores', id, req.body);

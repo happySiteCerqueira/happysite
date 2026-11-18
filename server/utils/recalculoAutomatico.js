@@ -27,6 +27,11 @@ async function recalcularServico(exec, servicoId) {
   const servico = await exec.get('SELECT * FROM obra_servicos WHERE id = ?', servicoId);
   if (!servico) return 0;
 
+  // Serviços de VALOR MANUAL (ex: "ADM") nunca são recalculados: o valor de cada lançamento foi
+  // digitado pelo usuário, não deriva de quantidade x valor unitário. Como o ADM tem valor
+  // unitário 0, recalcular zeraria tudo o que foi lançado — por isso a saída é imediata.
+  if (servico.valor_manual) return 0;
+
   const celulas = await exec.all('SELECT * FROM obra_servico_celulas WHERE obra_servico_id = ?', servicoId);
   if (celulas.length === 0) return 0;
 

@@ -159,6 +159,15 @@ router.post('/', permitir('RH'), async (req, res) => {
 
   const obraId = info.lastInsertRowid;
 
+  // Serviço "ADM" em TODA obra nova: não se mede onde foi executado, apenas quem recebeu e
+  // quanto. ordem = -1 deixa-o como primeira aba; valor_manual = TRUE impede que o recálculo
+  // automático zere os valores digitados (ver utils/recalculoAutomatico.js).
+  await db.run(
+    `INSERT INTO obra_servicos (obra_id, nome, modo_medicao, valor_unitario, unidade, ordem, valor_manual)
+     VALUES (?, 'ADM', 'apartamento', 0, 'un', -1, TRUE)`,
+    obraId
+  );
+
   // Cria automaticamente as abas de serviços padrão vinculadas à obra
   const servicosPadrao = await db.all('SELECT * FROM servicos_padrao ORDER BY ordem');
   for (const s of servicosPadrao) {
@@ -1418,5 +1427,93 @@ router.put('/servicos/:servicoId/quantidades/aplicar-varios-andares', permitir('
   res.json({ ok: true, quantidade: qtd, atualizados: celulasAtualizadas.length, celulas: celulasAtualizadas });
 });
 
+
+// ===========================================================================================
+// SERVIÇO DE VALOR MANUAL ("ADM")
+// ===========================================================================================
+//
+// Diferente dos demais serviços, o ADM não é medido por local: não há célula a marcar no
+// desenho do prédio. Cada linha é simplesmente "pessoa + valor + observação", dentro de um mês.
+//
+// Para não criar uma tabela nova (e para que esses valores entrem na Medição automaticamente,
+// já que ela lê obra_servico_celulas), cada lançamento é gravado como uma célula com
+// celula_key fixa = 'ADM'. A chave única da tabela é (obra_servico_id, celula_key, mes_ciclo,
+// colaborador_id), o que garante UMA linha por pessoa/mês — exatamente a regra desejada.
+const CELULA_ADM = 'ADM';
+
+// Lista os lançamentos do serviço manual num mês, já com o nome da pessoa.
+router.get('/servicos/:servicoId/manual', async (req, res) => {
+  const { mes } = req.query;
+  if (!mes) return res.status(400).json({ erro: 'mes (YYYY-MM) é obrigatório' });
+
+  const linhas = await db.all(
+    `SELECT cel.id, cel.colaborador_id, cel.valor, cel.observacao,
+            c.nome, c.tipo, c.funcao, c.contato_responsavel
+     FROM obra_servico_celulas cel
+     JOIN colaboradores c ON c.id = cel.colaborador_id
+     WHERE cel.obra_servico_id = ? AND cel.celula_key = ? AND cel.mes_ciclo = ?
+     ORDER BY c.nome`,
+    req.params.servicoId, CELULA_ADM, mes
+  );
+
+  res.json(linhas.map(l => ({
+    ...l,
+    valor: Number(l.valor) || 0,
+    funcao: l.tipo === 'PJ' ? (l.contato_responsavel || '') : (l.funcao || '')
+  })));
+});
+
+// Cria ou atualiza o lançamento de UMA pessoa no mês. O mesmo colaborador lançado duas vezes
+// atualiza a linha existente (chave única), em vez de duplicar.
+router.post('/servicos/:servicoId/manual', permitir('ENGENHEIRO', 'MESTRE', 'ADM', 'RH'), async (req, res) => {
+  const { colaborador_id, mes_ciclo, valor, observacao } = req.body;
+  if (!colaborador_id || !mes_ciclo) return res.status(400).json({ erro: 'colaborador_id e mes_ciclo são obrigatórios' });
+
+  const servico = await db.get('SELECT * FROM obra_servicos WHERE id = ? AND excluido = 0', req.params.servicoId);
+  if (!servico) return res.status(404).json({ erro: 'Serviço não encontrado' });
+  if (!servico.valor_manual) return res.status(400).json({ erro: 'Este serviço não é de lançamento manual.' });
+
+  // Mesma trava dos demais lançamentos: mês já pago não pode ser alterado.
+  if (await bloquearSeCicloPago(res, [Number(colaborador_id)], mes_ciclo)) return;
+
+  const valorNum = Number(valor) || 0;
+  const existente = await db.get(
+    `SELECT id FROM obra_servico_celulas
+     WHERE obra_servico_id = ? AND celula_key = ? AND mes_ciclo = ? AND colaborador_id = ?`,
+    req.params.servicoId, CELULA_ADM, mes_ciclo, colaborador_id
+  );
+
+  if (existente) {
+    await db.run(
+      'UPDATE obra_servico_celulas SET valor = ?, observacao = ? WHERE id = ?',
+      valorNum, observacao || null, existente.id
+    );
+    await registrar(req.usuario.id, 'EDITAR_LANCAMENTO_MANUAL', 'obra_servico_celulas', existente.id, req.body);
+    return res.json({ id: existente.id, atualizado: true });
+  }
+
+  // quantidade = 1 apenas para manter a coluna coerente; o que vale é o valor digitado.
+  const info = await db.run(
+    `INSERT INTO obra_servico_celulas
+     (obra_servico_id, celula_key, colaborador_id, grupo_id, mes_ciclo, quantidade, valor, observacao, criado_por)
+     VALUES (?,?,?,NULL,?,1,?,?,?)`,
+    req.params.servicoId, CELULA_ADM, colaborador_id, mes_ciclo, valorNum, observacao || null, req.usuario.id
+  );
+  await registrar(req.usuario.id, 'CRIAR_LANCAMENTO_MANUAL', 'obra_servico_celulas', info.lastInsertRowid, req.body);
+  res.json({ id: info.lastInsertRowid });
+});
+
+router.delete('/servicos/:servicoId/manual/:id', permitir('ENGENHEIRO', 'MESTRE', 'ADM', 'RH'), async (req, res) => {
+  const linha = await db.get(
+    'SELECT * FROM obra_servico_celulas WHERE id = ? AND obra_servico_id = ?',
+    req.params.id, req.params.servicoId
+  );
+  if (!linha) return res.status(404).json({ erro: 'Lançamento não encontrado' });
+  if (await bloquearSeCicloPago(res, [linha.colaborador_id], linha.mes_ciclo)) return;
+
+  await db.run('DELETE FROM obra_servico_celulas WHERE id = ?', req.params.id);
+  await registrar(req.usuario.id, 'REMOVER_LANCAMENTO_MANUAL', 'obra_servico_celulas', req.params.id, linha);
+  res.json({ ok: true });
+});
 
 module.exports = router;

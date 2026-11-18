@@ -928,10 +928,26 @@ async function migrate() {
   if (producaoAplicada.rows.length === 0) {
     const r = await pool.query(`
       UPDATE colaboradores SET participa_producao = FALSE
-      WHERE UPPER(TRIM(funcao)) IN ('AJUDANTE', 'OPERADOR DE CREMALHEIRA', 'OPERADOR DE MINI GRUA')
+      WHERE tipo = 'CPF'
+        AND UPPER(TRIM(funcao)) IN ('AJUDANTE', 'OPERADOR DE CREMALHEIRA', 'OPERADOR DE MINI GRUA')
     `);
+    // Empreiteiro (PJ) é contratado para executar produção: sempre participa, sem exceção.
+    await pool.query("UPDATE colaboradores SET participa_producao = TRUE WHERE tipo = 'PJ'");
+    // Marca como aplicada: sem isto a migração rodaria a cada arranque e desfaria as exceções
+    // manuais (ex: um ajudante marcado à mão voltaria a ficar desmarcado).
     await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_PRODUCAO]);
     console.log(`[migracao] Producao/Diaria desmarcada para ${r.rowCount} colaborador(es) (ajudantes/operadores).`);
+  }
+
+  // Correção aplicada depois: a primeira versão da migração acima não tratava o PJ de forma
+  // explícita. Como ela já rodou (e não repete), esta chave nova garante que todo empreiteiro
+  // fique marcado como participante também nos bancos que já passaram pela versão anterior.
+  const CHAVE_PJ_PRODUCAO = 'pj_sempre_participa_producao';
+  const pjAplicado = await pool.query('SELECT 1 FROM migracoes_aplicadas WHERE chave = $1', [CHAVE_PJ_PRODUCAO]);
+  if (pjAplicado.rows.length === 0) {
+    const r = await pool.query("UPDATE colaboradores SET participa_producao = TRUE WHERE tipo = 'PJ' AND participa_producao = FALSE");
+    await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_PJ_PRODUCAO]);
+    if (r.rowCount > 0) console.log(`[migracao] ${r.rowCount} PJ marcado(s) como participante de producao.`);
   }
 
   // Padroniza as funções já cadastradas em CAIXA ALTA, sem espaços sobrando.
@@ -960,6 +976,47 @@ async function migrate() {
     `);
     await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_FUNCOES]);
     console.log(`[migracao] Funcoes padronizadas em caixa alta: ${r1.rowCount} colaborador(es), ${r2.rowCount} PJ.`);
+  }
+
+  // Serviço de VALOR MANUAL (hoje usado pelo serviço "ADM" de cada obra).
+  //
+  // Serviços normais calculam o valor sozinhos: quantidade da célula x valor unitário. O ADM é
+  // diferente — não se mede onde foi executado, apenas se lança a pessoa e quanto ela recebeu.
+  //
+  // ⚠️ Esta marca é o que PROTEGE esses valores: o recálculo automático
+  // (utils/recalculoAutomatico.js) reescreve valor = quantidade x valor_unitario em todas as
+  // marcações do serviço. Como o ADM não tem valor unitário, sem esta marca todo valor digitado
+  // à mão seria zerado no próximo recálculo (que dispara ao editar preços, serviços ou diárias).
+  if (!(await colunaExiste('obra_servicos', 'valor_manual'))) {
+    await pool.query('ALTER TABLE obra_servicos ADD COLUMN valor_manual BOOLEAN NOT NULL DEFAULT FALSE');
+    console.log('[migracao] Coluna "valor_manual" adicionada em obra_servicos.');
+  }
+
+  // Observação por lançamento (campo "obs" da linha do ADM).
+  if (!(await colunaExiste('obra_servico_celulas', 'observacao'))) {
+    await pool.query('ALTER TABLE obra_servico_celulas ADD COLUMN observacao TEXT');
+    console.log('[migracao] Coluna "observacao" adicionada em obra_servico_celulas.');
+  }
+
+  // Cria o serviço "ADM" nas obras que ainda não o têm. Roda sempre (e não uma única vez) para
+  // cobrir também as obras criadas antes desta versão; o IF NOT EXISTS lógico evita duplicar.
+  const obrasSemAdm = await pool.query(`
+    SELECT o.id FROM obras o
+    WHERE NOT EXISTS (
+      SELECT 1 FROM obra_servicos os
+      WHERE os.obra_id = o.id AND UPPER(TRIM(os.nome)) = 'ADM' AND os.excluido = 0
+    )
+  `);
+  for (const obra of obrasSemAdm.rows) {
+    // ordem = -1: o ADM fica como primeira aba da obra, antes dos serviços de produção.
+    await pool.query(
+      `INSERT INTO obra_servicos (obra_id, nome, modo_medicao, valor_unitario, unidade, ordem, valor_manual)
+       VALUES ($1, 'ADM', 'apartamento', 0, 'un', -1, TRUE)`,
+      [obra.id]
+    );
+  }
+  if (obrasSemAdm.rows.length > 0) {
+    console.log(`[migracao] Servico "ADM" criado em ${obrasSemAdm.rows.length} obra(s).`);
   }
 
   // Gastos com funcionários rateados por obra (Café, VA, Vale Transporte e outros).

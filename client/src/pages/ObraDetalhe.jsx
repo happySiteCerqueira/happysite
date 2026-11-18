@@ -973,7 +973,19 @@ export default function ObraDetalhe() {
         )}
       </div>
 
-      {servicoAtivo && (
+      {/* Serviço de valor manual (ADM): não tem desenho do prédio nem células a marcar — é só
+          uma lista de "pessoa + valor + obs" do mês. Por isso tem tela própria. */}
+      {servicoAtivo && servicoAtivo.valor_manual && (
+        <ServicoManual
+          servico={servicoAtivo}
+          mes={mes}
+          setMes={setMes}
+          pessoas={todasPessoas}
+          podeEditar={temPermissao('RH', 'ENGENHEIRO', 'MESTRE', 'ADM')}
+        />
+      )}
+
+      {servicoAtivo && !servicoAtivo.valor_manual && (
         <div className="card">
           <div className="flex gap-2" style={{ alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
             <strong>{servicoAtivo.nome}</strong>
@@ -1796,6 +1808,230 @@ export default function ObraDetalhe() {
         />
       )}
     </div>
+  );
+}
+
+// ===========================================================================================
+// SERVIÇO DE VALOR MANUAL ("ADM")
+// ===========================================================================================
+//
+// Não há desenho do prédio nem célula a marcar: o ADM é apenas uma lista de lançamentos do mês,
+// cada um com pessoa, valor e observação. A linha em branco do fim é sempre renderizada — ao
+// preenchê-la, ela vira um lançamento e uma nova linha vazia aparece por baixo.
+//
+// Os valores lançados aqui entram na Medição como qualquer outra produção da obra.
+function ServicoManual({ servico, mes, setMes, pessoas, podeEditar }) {
+  const [linhas, setLinhas] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState('');
+  // Linha nova ainda não gravada (a que fica sempre no fim da lista).
+  const [nova, setNova] = useState({ colaborador_id: '', valor: '', observacao: '' });
+  const [salvando, setSalvando] = useState(false);
+
+  function carregar() {
+    setCarregando(true);
+    api.get(`/obras/servicos/${servico.id}/manual`, { params: { mes } })
+      .then(res => setLinhas(res.data))
+      .catch(() => setLinhas([]))
+      .finally(() => setCarregando(false));
+  }
+  useEffect(carregar, [servico.id, mes]);
+
+  // Só pessoas ativas; quem já foi lançado sai da lista para não duplicar (uma linha por
+  // pessoa/mês é a regra da chave única no banco).
+  const jaLancados = new Set(linhas.map(l => l.colaborador_id));
+  const disponiveis = pessoas
+    .filter(p => p.ativo !== 0 && !jaLancados.has(p.id))
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+
+  async function salvar(colaboradorId, valor, observacao) {
+    setSalvando(true);
+    setErro('');
+    try {
+      await api.post(`/obras/servicos/${servico.id}/manual`, {
+        colaborador_id: colaboradorId, mes_ciclo: mes, valor, observacao
+      });
+      carregar();
+      return true;
+    } catch (e) {
+      setErro(e.response?.data?.erro || 'Não foi possível salvar o lançamento.');
+      return false;
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  // Grava a linha nova e limpa o formulário, deixando-o pronto para o próximo lançamento.
+  async function adicionar() {
+    if (!nova.colaborador_id) { setErro('Escolha o colaborador.'); return; }
+    const ok = await salvar(Number(nova.colaborador_id), Number(nova.valor) || 0, nova.observacao);
+    if (ok) setNova({ colaborador_id: '', valor: '', observacao: '' });
+  }
+
+  async function remover(linha) {
+    if (!window.confirm(`Remover o lançamento de ${linha.nome}?`)) return;
+    try {
+      await api.delete(`/obras/servicos/${servico.id}/manual/${linha.id}`);
+      carregar();
+    } catch (e) {
+      setErro(e.response?.data?.erro || 'Não foi possível remover.');
+    }
+  }
+
+  const total = linhas.reduce((soma, l) => soma + (Number(l.valor) || 0), 0);
+
+  return (
+    <div className="card">
+      <div className="flex gap-2" style={{ alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        <strong>{servico.nome}</strong>
+        <span style={{ fontSize: 12, color: '#6b7280' }}>
+          Lançamento direto: escolha a pessoa e informe o valor. Não é marcado no prédio.
+        </span>
+        <input type="month" value={mes} onChange={e => setMes(e.target.value)} style={{ marginLeft: 'auto' }} />
+      </div>
+
+      {erro && <div style={{ color: '#b91c1c', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{erro}</div>}
+      {carregando && <div style={{ fontSize: 13, color: '#6b7280' }}>Carregando...</div>}
+
+      <TabelaManual
+        linhas={linhas} podeEditar={podeEditar} nova={nova} setNova={setNova}
+        disponiveis={disponiveis} salvando={salvando} total={total}
+        onSalvarLinha={salvar} onRemover={remover} onAdicionar={adicionar}
+      />
+
+      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
+        Estes valores entram na <strong>Medição</strong> do mês, somando à produção da pessoa.
+      </div>
+    </div>
+  );
+}
+
+function TabelaManual({ linhas, podeEditar, nova, setNova, disponiveis, salvando, total, onSalvarLinha, onRemover, onAdicionar }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table>
+        <thead>
+          <tr>
+            <th style={{ minWidth: 220 }}>Colaborador</th>
+            <th style={{ width: 140 }}>Valor (R$)</th>
+            <th>Observação</th>
+            {podeEditar && <th style={{ width: 50 }}></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {linhas.map(linha => (
+            <LinhaManual
+              key={linha.id}
+              linha={linha}
+              podeEditar={podeEditar}
+              onSalvar={(valor, obs) => onSalvarLinha(linha.colaborador_id, valor, obs)}
+              onRemover={() => onRemover(linha)}
+            />
+          ))}
+
+          {/* Linha em branco permanente: preencheu, vira lançamento e nasce outra embaixo. */}
+          {podeEditar && (
+            <tr style={{ background: '#f8fafc' }}>
+              <td>
+                <select
+                  value={nova.colaborador_id}
+                  onChange={e => setNova({ ...nova, colaborador_id: e.target.value })}
+                  style={{ width: '100%' }}
+                >
+                  <option value="">+ Adicionar colaborador...</option>
+                  {disponiveis.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}{p.tipo === 'PJ' ? ' (PJ)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td>
+                <input
+                  type="number" step="0.01" placeholder="0,00" value={nova.valor}
+                  onChange={e => setNova({ ...nova, valor: e.target.value })}
+                  style={{ width: '100%' }}
+                />
+              </td>
+              <td>
+                <input
+                  placeholder="obs (opcional)" value={nova.observacao}
+                  onChange={e => setNova({ ...nova, observacao: e.target.value })}
+                  // Enter grava direto, sem tirar a mão do teclado.
+                  onKeyDown={e => { if (e.key === 'Enter') onAdicionar(); }}
+                  style={{ width: '100%' }}
+                />
+              </td>
+              <td>
+                <button className="btn-primary btn-sm" onClick={onAdicionar} disabled={salvando || !nova.colaborador_id}>
+                  ✔
+                </button>
+              </td>
+            </tr>
+          )}
+
+          {linhas.length === 0 && !podeEditar && (
+            <tr><td colSpan={3} style={{ color: '#9ca3af' }}>Nenhum lançamento neste mês.</td></tr>
+          )}
+        </tbody>
+        {linhas.length > 0 && (
+          <tfoot>
+            <tr>
+              <td style={{ fontWeight: 700, textAlign: 'right' }}>Total do mês</td>
+              <td style={{ fontWeight: 800 }}>
+                R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </td>
+              <td colSpan={podeEditar ? 2 : 1}></td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
+// Linha já gravada: valor e observação são editáveis e salvam ao sair do campo (onBlur).
+function LinhaManual({ linha, podeEditar, onSalvar, onRemover }) {
+  const [valor, setValor] = useState(linha.valor);
+  const [obs, setObs] = useState(linha.observacao || '');
+
+  // Se a lista for recarregada (ex: depois de gravar outra linha), reflete o valor do servidor.
+  useEffect(() => {
+    setValor(linha.valor);
+    setObs(linha.observacao || '');
+  }, [linha.valor, linha.observacao]);
+
+  // Só envia ao servidor se algo mudou de facto — evita gravação a cada clique fora do campo.
+  function salvarSeMudou() {
+    const mudouValor = Number(valor) !== Number(linha.valor);
+    const mudouObs = (obs || '') !== (linha.observacao || '');
+    if (mudouValor || mudouObs) onSalvar(Number(valor) || 0, obs);
+  }
+
+  return (
+    <tr>
+      <td>
+        {linha.nome}
+        {linha.funcao && <div style={{ fontSize: 11, color: '#9ca3af' }}>{linha.funcao}</div>}
+      </td>
+      <td>
+        {podeEditar
+          ? <input type="number" step="0.01" value={valor} style={{ width: '100%' }}
+              onChange={e => setValor(e.target.value)} onBlur={salvarSeMudou} />
+          : `R$ ${Number(linha.valor).toFixed(2)}`}
+      </td>
+      <td>
+        {podeEditar
+          ? <input value={obs} placeholder="obs (opcional)" style={{ width: '100%' }}
+              onChange={e => setObs(e.target.value)} onBlur={salvarSeMudou} />
+          : (linha.observacao || '-')}
+      </td>
+      {podeEditar && (
+        <td>
+          <button className="btn-secondary btn-sm" onClick={onRemover} title="Remover">🗑️</button>
+        </td>
+      )}
+    </tr>
   );
 }
 
