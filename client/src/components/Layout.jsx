@@ -84,7 +84,9 @@ export default function Layout() {
       {menuAberto && <div className="layout-overlay-mobile" onClick={() => setMenuAberto(false)} />}
 
       <aside className={`layout-sidebar${menuAberto ? ' layout-sidebar-aberta' : ''}`}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+        {/* flexShrink: 0 — numa tela baixa (ou com muitos itens no menu) o logo seria espremido
+            pelo flex; fixá-lo garante que só a lista de links role. */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, flexShrink: 0 }}>
           <img src="/logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: 70, objectFit: 'contain' }} />
         </div>
         <nav style={{ flex: 1, overflowY: 'auto' }}>
@@ -115,7 +117,9 @@ export default function Layout() {
           <NavLink to="/configuracoes" style={linkStyle}>⚙️ Configurações</NavLink>
 
         </nav>
-        <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 16, borderTop: '1px solid #1e293b', paddingTop: 12 }}>
+        {/* Rodapé fixo da lateral (nome, perfil e Sair). A classe layout-sidebar-rodape impede
+            que ele encolha ou role junto com a lista de links — ver index.css. */}
+        <div className="layout-sidebar-rodape" style={{ color: '#94a3b8', fontSize: 12, marginTop: 16, borderTop: '1px solid #1e293b', paddingTop: 12 }}>
           <div style={{ color: '#fff', fontWeight: 600 }}>{usuario?.nome}</div>
           <div>{usuario?.perfil}</div>
           <button onClick={logout} className="btn-secondary btn-sm" style={{ marginTop: 8, width: '100%' }}>Sair</button>

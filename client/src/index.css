@@ -91,6 +91,13 @@ table th { background: #f9fafb; font-weight: 600; }
 
 .layout-topbar-mobile { display: none; }
 
+/* A barra lateral acompanha a rolagem e NUNCA passa da altura da tela.
+   Sem "position: sticky + align-self: flex-start" ela se comporta como um filho flex comum e
+   é esticada até a altura do CONTEÚDO da página (não da janela): em telas longas — Medição,
+   Obras, Financeiro — o rodapé com o nome do usuário e o botão "Sair" ia parar lá embaixo,
+   obrigando a rolar a página inteira para deslogar.
+   Com a regra abaixo a lateral fica colada no topo, ocupa exatamente 100vh, e quem rola é
+   apenas a lista de links (nav), mantendo o "Sair" sempre visível. */
 .layout-sidebar {
   width: 220px;
   background: #0f172a;
@@ -98,7 +105,18 @@ table th { background: #f9fafb; font-weight: 600; }
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
 }
+
+/* min-height: 0 é obrigatório para que um filho flex com overflow role de verdade; sem isso
+   o nav cresce além do container em vez de criar a própria barra de rolagem. */
+.layout-sidebar nav { min-height: 0; }
+
+/* Bloco do usuário + botão Sair: fixo no rodapé da lateral, nunca encolhe nem rola junto. */
+.layout-sidebar-rodape { flex-shrink: 0; }
 
 .layout-overlay-mobile { display: none; }
 
@@ -120,11 +138,15 @@ table th { background: #f9fafb; font-weight: 600; }
   }
   .layout-topbar-titulo { color: #fff; font-weight: 700; font-size: 15px; }
 
-  /* Sidebar passa a ser um menu deslizante (drawer), oculto por padrão */
+  /* Sidebar passa a ser um menu deslizante (drawer), oculto por padrão.
+     "position: fixed" sobrepõe o "sticky" do desktop — aqui a lateral é sobreposta à tela, e
+     não uma coluna ao lado dela. A altura continua 100vh, então o "Sair" também fica sempre
+     visível no celular, com a lista de links rolando por dentro. */
   .layout-sidebar {
     position: fixed;
     top: 0;
     left: 0;
+    align-self: auto;
     height: 100vh;
     width: 260px;
     max-width: 82vw;
