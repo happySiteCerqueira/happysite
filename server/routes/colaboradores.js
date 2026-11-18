@@ -17,6 +17,21 @@ async function proximaCor() {
   return CORES[row.c % CORES.length];
 }
 
+// Padroniza a função em CAIXA ALTA, sem espaços duplicados nem sobras nas pontas.
+//
+// POR QUÊ: o campo é texto livre e os filtros de Medição, Pagamentos Antecipados, Prestadores
+// e Obras agrupam por texto EXATO. Bastava alguém digitar "Ajudante" em vez de "AJUDANTE" para
+// a mesma função aparecer DUAS VEZES na lista, com as pessoas divididas entre as duas opções —
+// foi exatamente o que aconteceu (48 em "AJUDANTE" e 2 em "Ajudante").
+//
+// Normalizar na gravação resolve a origem do problema; os filtros também passaram a agrupar
+// sem diferenciar maiúsculas, para proteger os dados que já existiam.
+function normalizarFuncao(texto) {
+  if (texto === undefined || texto === null) return texto;
+  const limpo = texto.toString().trim().replace(/\s+/g, ' ');
+  return limpo ? limpo.toUpperCase() : null;
+}
+
 router.use(autenticar);
 
 // ---- Exportar / Modelo / Importar em planilha Excel ----
@@ -108,7 +123,10 @@ router.post('/importar', permitir('RH', 'ADM'), async (req, res) => {
     const telefone = l[COLUNAS_COLAB[3]] ? String(l[COLUNAS_COLAB[3]]) : null;
     const email = l[COLUNAS_COLAB[4]] || null;
     const endereco = l[COLUNAS_COLAB[5]] || null;
-    const funcaoOuContato = l[COLUNAS_COLAB[6]] || null;
+    // Normaliza também na importação por planilha: é a porta de entrada mais provável para
+    // grafias diferentes da mesma função ("Ajudante" vs "AJUDANTE"), que duplicariam a opção
+    // nos filtros de Medição e Pagamentos Antecipados.
+    const funcaoOuContato = normalizarFuncao(l[COLUNAS_COLAB[6]]) || null;
     const banco = l[COLUNAS_COLAB[7]] || null;
     const agencia = l[COLUNAS_COLAB[8]] ? String(l[COLUNAS_COLAB[8]]) : null;
     const conta = l[COLUNAS_COLAB[9]] ? String(l[COLUNAS_COLAB[9]]) : null;
@@ -174,7 +192,7 @@ router.post('/', permitir('RH', 'ADM'), async (req, res) => {
   const colunas = ['tipo', 'nome', 'documento', 'telefone', 'email', 'endereco', 'funcao', 'contato_responsavel', 'banco', 'agencia', 'conta', 'pix', 'cor', 'valor_diaria', 'data_nascimento', 'data_admissao', 'data_primeiro_aso', 'experiencia_status', 'obra_id'];
   const valores = [
     b.tipo || 'CPF', b.nome, b.documento || null, b.telefone || null, b.email || null,
-    b.endereco || null, b.funcao || null, b.contato_responsavel || null,
+    b.endereco || null, normalizarFuncao(b.funcao) || null, normalizarFuncao(b.contato_responsavel) || null,
     b.banco || null, b.agencia || null, b.conta || null, b.pix || null, cor, Number(b.valor_diaria) || 0,
     b.data_nascimento || null, b.data_admissao || null, b.data_primeiro_aso || null, experienciaStatus,
     // Obra atual (opcional). É o destino do custo de quem recebe pelo holerite sem ter
@@ -200,7 +218,8 @@ router.put('/:id', permitir('RH', 'ADM'), async (req, res) => {
     funcao=?, contato_responsavel=?, banco=?, agencia=?, conta=?, pix=?, cor=?, valor_diaria=?,
     data_nascimento=?, data_admissao=?, data_primeiro_aso=?, obra_id=? WHERE id=?`,
     b.tipo, b.nome, b.documento, b.telefone, b.email, b.endereco,
-    b.funcao, b.contato_responsavel, b.banco, b.agencia, b.conta, b.pix, b.cor, Number(b.valor_diaria) || 0,
+    normalizarFuncao(b.funcao), normalizarFuncao(b.contato_responsavel),
+    b.banco, b.agencia, b.conta, b.pix, b.cor, Number(b.valor_diaria) || 0,
     // Obra atual: muda quando a pessoa é transferida de obra. String vazia vinda do <select>
     // ("sem obra") precisa virar NULL, senão o Postgres recusa o valor na chave estrangeira.
     b.data_nascimento || null, b.data_admissao || null, b.data_primeiro_aso || null,

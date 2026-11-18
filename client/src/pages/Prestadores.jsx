@@ -110,17 +110,22 @@ function ListaPrestadores() {
 
   // Lista de funções distintas já cadastradas (para o dropdown de filtro), calculada a partir
   // do que já está na tela (independe de status ativo/arquivado consultado no momento).
-  const funcoesDisponiveis = [...new Set(
+  // Agrupamento insensível a maiúsculas/minúsculas e a espaços sobrando: sem isto, "Ajudante"
+  // e "AJUDANTE" apareciam como DUAS funções diferentes no filtro, dividindo as pessoas entre
+  // as duas opções. Ver normalizarFuncao em server/routes/colaboradores.js.
+  const chaveFuncao = f => (f || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const funcoesDisponiveis = [...new Map(
     lista
       .map(p => (p.tipo === 'PJ' ? p.contato_responsavel : p.funcao))
       .filter(f => f && f.trim())
-  )].sort();
+      .map(f => [chaveFuncao(f), f.trim()])
+  ).values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   const listaFiltrada = lista.filter(p => {
     if (filtroTipo && p.tipo !== filtroTipo) return false;
     if (filtroFuncao) {
       const f = p.tipo === 'PJ' ? p.contato_responsavel : p.funcao;
-      if (f !== filtroFuncao) return false;
+      if (chaveFuncao(f) !== chaveFuncao(filtroFuncao)) return false;
     }
     return true;
   });

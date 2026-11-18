@@ -25,13 +25,20 @@ export default function PagamentosAntecipados() {
   }
   useEffect(carregar, [mes]);
 
-  const funcoesDisponiveis = [...new Set(
-    [...planilha.PJ, ...planilha.CPF].map(i => i.funcao).filter(f => f && f.trim())
-  )].sort();
+  // Agrupamento insensível a maiúsculas/minúsculas e a espaços sobrando: o campo "função" é
+  // texto livre e, sem isto, "Ajudante" e "AJUDANTE" viravam DUAS opções no filtro, com as
+  // pessoas divididas entre elas. Ver normalizarFuncao em server/routes/colaboradores.js.
+  const chaveFuncao = f => (f || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const funcoesDisponiveis = [...new Map(
+    [...planilha.PJ, ...planilha.CPF]
+      .map(i => i.funcao)
+      .filter(f => f && f.trim())
+      .map(f => [chaveFuncao(f), f.trim()])
+  ).values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   function filtrarItens(itens) {
     return itens.filter(i => {
-      if (filtroFuncao && i.funcao !== filtroFuncao) return false;
+      if (filtroFuncao && chaveFuncao(i.funcao) !== chaveFuncao(filtroFuncao)) return false;
       return true;
     });
   }

@@ -244,9 +244,18 @@ export default function ObraDetalhe() {
   }
 
   // Opções do filtro de cargo, montadas a partir de quem está ativo (sem repetir, em ordem).
-  const funcoesDisponiveis = [...new Set(
-    todasPessoas.filter(p => p.ativo !== 0).map(funcaoDe).filter(f => f.trim())
-  )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  //
+  // O agrupamento ignora maiúsculas/minúsculas e espaços sobrando: o campo é texto livre e,
+  // sem isto, "Ajudante" e "AJUDANTE" viravam DUAS opções no filtro, com as pessoas divididas
+  // entre elas. Ver normalizarFuncao em server/routes/colaboradores.js.
+  const chaveFuncao = f => (f || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const funcoesDisponiveis = [...new Map(
+    todasPessoas
+      .filter(p => p.ativo !== 0)
+      .map(funcaoDe)
+      .filter(f => f.trim())
+      .map(f => [chaveFuncao(f), f.trim()])
+  ).values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
   // Janela de carência após o desligamento. Motivo: o pagamento é feito no mês seguinte ao
   // trabalho, então quem saiu dia 05 ainda tem produção a medir/receber na virada do mês.
@@ -279,7 +288,7 @@ export default function ObraDetalhe() {
       if (jaVinculada(p)) return true;
       // Desligados: entram se estiverem na carência (automático) ou se o usuário pediu todos.
       if (p.ativo === 0 && !incluirDesligados && !dentroDaCarencia(p)) return false;
-      if (filtroFuncao && funcaoDe(p) !== filtroFuncao) return false;
+      if (filtroFuncao && chaveFuncao(funcaoDe(p)) !== chaveFuncao(filtroFuncao)) return false;
       if (!termo) return true;
       const nome = (p.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       return nome.includes(termo);

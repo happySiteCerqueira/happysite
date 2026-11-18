@@ -906,6 +906,34 @@ async function migrate() {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_financeiro_receitas_ativas ON financeiro_receitas (data_medicao) WHERE excluido = 0');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_diaria_obras_ativas ON diaria_obras (colaborador_id, mes_ciclo) WHERE excluido = 0');
 
+  // Padroniza as funções já cadastradas em CAIXA ALTA, sem espaços sobrando.
+  //
+  // POR QUÊ: o campo é texto livre e os filtros (Medição, Pagamentos Antecipados, Prestadores,
+  // Obras) agrupam por texto EXATO. Quem digitou "Ajudante" em vez de "AJUDANTE" criava uma
+  // SEGUNDA opção no filtro, com as pessoas divididas entre as duas — foi o que aconteceu:
+  // 48 pessoas em "AJUDANTE" e 2 em "Ajudante", aparecendo como funções diferentes na tela.
+  //
+  // Roda UMA única vez (controlada por migracoes_aplicadas). A partir daqui, a normalização na
+  // gravação (normalizarFuncao em routes/colaboradores.js) impede que volte a acontecer.
+  const CHAVE_FUNCOES = 'normalizar_funcoes_caixa_alta';
+  const funcoesNormalizadas = await pool.query('SELECT 1 FROM migracoes_aplicadas WHERE chave = $1', [CHAVE_FUNCOES]);
+  if (funcoesNormalizadas.rows.length === 0) {
+    const r1 = await pool.query(`
+      UPDATE colaboradores
+      SET funcao = UPPER(TRIM(REGEXP_REPLACE(funcao, '\\s+', ' ', 'g')))
+      WHERE funcao IS NOT NULL AND funcao <> ''
+        AND funcao <> UPPER(TRIM(REGEXP_REPLACE(funcao, '\\s+', ' ', 'g')))
+    `);
+    const r2 = await pool.query(`
+      UPDATE colaboradores
+      SET contato_responsavel = UPPER(TRIM(REGEXP_REPLACE(contato_responsavel, '\\s+', ' ', 'g')))
+      WHERE tipo = 'PJ' AND contato_responsavel IS NOT NULL AND contato_responsavel <> ''
+        AND contato_responsavel <> UPPER(TRIM(REGEXP_REPLACE(contato_responsavel, '\\s+', ' ', 'g')))
+    `);
+    await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_FUNCOES]);
+    console.log(`[migracao] Funcoes padronizadas em caixa alta: ${r1.rowCount} colaborador(es), ${r2.rowCount} PJ.`);
+  }
+
   // Gastos com funcionários rateados por obra (Café, VA, Vale Transporte e outros).
   //
   // POR QUÊ: são despesas mensais reais da operação que, até aqui, não eram lançadas em lugar

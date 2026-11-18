@@ -73,8 +73,22 @@ export default function Medicao() {
   // Lista de funções distintas presentes nas linhas atuais (para o dropdown de filtro), e o
   // filtro em si aplicado apenas na exibição/exportação — "linhas" original continua intacta
   // para as demais operações (confirmar, pagar).
-  const funcoesDisponiveis = [...new Set(linhas.map(item => item.funcao).filter(f => f && f.trim()))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  const linhasFiltradas = filtroFuncao ? linhas.filter(item => item.funcao === filtroFuncao) : linhas;
+  //
+  // O agrupamento IGNORA maiúsculas/minúsculas e espaços sobrando: o campo "função" é texto
+  // livre e, antes da padronização, "Ajudante" e "AJUDANTE" apareciam como DUAS opções no
+  // filtro, com as pessoas divididas entre elas (48 numa, 2 na outra). Comparar pela forma
+  // normalizada junta tudo numa opção só, mesmo em cadastros antigos ainda não corrigidos.
+  const chaveFuncao = f => (f || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const funcoesDisponiveis = [...new Map(
+    linhas
+      .map(item => item.funcao)
+      .filter(f => f && f.trim())
+      // Guarda a 1ª grafia encontrada como rótulo, mas indexada pela chave normalizada.
+      .map(f => [chaveFuncao(f), f.trim()])
+  ).values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const linhasFiltradas = filtroFuncao
+    ? linhas.filter(item => chaveFuncao(item.funcao) === chaveFuncao(filtroFuncao))
+    : linhas;
 
   return (
     <div>
