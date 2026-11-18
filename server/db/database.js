@@ -906,6 +906,34 @@ async function migrate() {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_financeiro_receitas_ativas ON financeiro_receitas (data_medicao) WHERE excluido = 0');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_diaria_obras_ativas ON diaria_obras (colaborador_id, mes_ciclo) WHERE excluido = 0');
 
+  // Gastos com funcionários rateados por obra (Café, VA, Vale Transporte e outros).
+  //
+  // POR QUÊ: são despesas mensais reais da operação que, até aqui, não eram lançadas em lugar
+  // nenhum — e por isso não abatiam a receita no relatório de saúde financeira, deixando a
+  // margem das obras otimista demais.
+  //
+  // obra_id é OPCIONAL (ON DELETE SET NULL): nem todo gasto é de uma obra específica. Quando
+  // não houver obra, o valor entra na linha "Sem obra definida" do relatório, para ficar
+  // visível em vez de desaparecer.
+  //
+  // mes_ciclo (YYYY-MM) é a competência do gasto, no mesmo formato usado por diárias, medições
+  // e pagamentos antecipados — assim o filtro de período do relatório funciona igual para todos.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS financeiro_gastos (
+      id SERIAL PRIMARY KEY,
+      mes_ciclo TEXT NOT NULL,
+      obra_id INTEGER REFERENCES obras(id) ON DELETE SET NULL,
+      tipo TEXT NOT NULL,
+      descricao TEXT,
+      valor DOUBLE PRECISION NOT NULL DEFAULT 0,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      excluido INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_financeiro_gastos_ativos ON financeiro_gastos (mes_ciclo) WHERE excluido = 0');
+
   // Migração idempotente: "obra atual" do colaborador (colaboradores.obra_id).
   //
   // POR QUÊ: há gente — tipicamente ajudantes e quem é pago pelo salário da carteira — que NÃO

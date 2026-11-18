@@ -131,13 +131,240 @@ export default function Financeiro() {
   );
 }
 
-// Aba "Gastos" — ainda não implementada, reservado o espaço para uso futuro.
+// Aba "Gastos": despesas mensais com funcionários (Café, VA, Vale Transporte e outras) que não
+// passam pela folha nem pela produção, mas são custo real da obra. Entram no relatório de saúde
+// financeira abatendo a receita.
+//
+// A obra é opcional — sem ela o gasto aparece no relatório como "Sem obra definida", para o
+// valor continuar visível em vez de desaparecer.
+const GASTO_VAZIO = { mes_ciclo: '', obra_id: '', tipo: '', descricao: '', valor: '' };
+
 function Gastos() {
+  const { usuario } = useAuth();
+  const podeLancar = ['ADM', 'FINANCEIRO'].includes(usuario?.perfil);
+
+  const [mes, setMes] = useState(mesAtual());
+  const [dados, setDados] = useState(null);
+  const [obras, setObras] = useState([]);
+  const [tipos, setTipos] = useState([]);
+  const [form, setForm] = useState({ ...GASTO_VAZIO, mes_ciclo: mesAtual() });
+  const [editandoId, setEditandoId] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    api.get('/obras').then(res => setObras(res.data)).catch(() => setObras([]));
+    api.get('/financeiro/gastos/tipos').then(res => setTipos(res.data)).catch(() => setTipos([]));
+  }, []);
+
+  function carregar() {
+    api.get('/financeiro/gastos', { params: { mes } })
+      .then(res => setDados(res.data))
+      .catch(() => setDados(null));
+  }
+  useEffect(carregar, [mes]);
+
+  // Ao trocar o mês do filtro, o formulário acompanha: evita lançar sem querer num mês
+  // diferente do que está sendo visualizado na tela.
+  useEffect(() => { setForm(f => ({ ...f, mes_ciclo: mes })); }, [mes]);
+
+  async function salvar() {
+    if (!form.tipo.trim()) { setErro('Informe o tipo do gasto.'); return; }
+    if (!(Number(form.valor) > 0)) { setErro('Informe um valor maior que zero.'); return; }
+    setSalvando(true); setErro('');
+    try {
+      if (editandoId) await api.put(`/financeiro/gastos/${editandoId}`, form);
+      else await api.post('/financeiro/gastos', form);
+      setForm({ ...GASTO_VAZIO, mes_ciclo: mes });
+      setEditandoId(null);
+      carregar();
+    } catch (e) {
+      setErro(e.response?.data?.erro || 'Não foi possível salvar o gasto.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  function editar(item) {
+    setEditandoId(item.id);
+    setErro('');
+    setForm({
+      mes_ciclo: item.mes_ciclo,
+      // O <select> trabalha com string; sem converter, o campo abriria vazio na edição.
+      obra_id: item.obra_id ? String(item.obra_id) : '',
+      tipo: item.tipo,
+      descricao: item.descricao || '',
+      valor: item.valor
+    });
+  }
+
+  async function excluir(item) {
+    if (!window.confirm(`Excluir o gasto "${item.tipo}" de R$ ${formatarValorBR(item.valor)}?`)) return;
+    try {
+      await api.delete(`/financeiro/gastos/${item.id}`);
+      carregar();
+    } catch (e) {
+      setErro(e.response?.data?.erro || 'Não foi possível excluir.');
+    }
+  }
+
   return (
-    <div className="card" style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }}>💸</div>
-      <h3 style={{ margin: 0, color: '#6b7280' }}>Gastos</h3>
-      <p style={{ marginTop: 8 }}>Esta aba ainda será implementada.</p>
+    <div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="flex gap-4" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="flex-col gap-2">
+            <label style={{ fontSize: 12 }}>Mês</label>
+            <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
+          </div>
+          {dados && (
+            <div style={{ fontSize: 13 }}>
+              Total de <strong>{rotuloMes(mes)}</strong>:{' '}
+              <strong style={{ fontSize: 16, color: '#d97706' }}>R$ {formatarValorBR(dados.total)}</strong>
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
+          Gastos com funcionários (Café, VA, Vale Transporte...). Entram no relatório de{' '}
+          <strong>saúde financeira por obra</strong>, abatendo a receita da obra informada.
+        </div>
+      </div>
+
+      {podeLancar && (
+        <FormularioGasto
+          form={form} setForm={setForm} obras={obras} tipos={tipos}
+          editandoId={editandoId} salvando={salvando} erro={erro} onSalvar={salvar}
+          onCancelar={() => { setEditandoId(null); setForm({ ...GASTO_VAZIO, mes_ciclo: mes }); setErro(''); }}
+        />
+      )}
+
+      {dados && <ResumoGastos dados={dados} />}
+      {dados && <TabelaGastos itens={dados.itens} podeLancar={podeLancar} onEditar={editar} onExcluir={excluir} />}
+    </div>
+  );
+}
+
+// Formulário de lançamento/edição de um gasto.
+function FormularioGasto({ form, setForm, obras, tipos, editandoId, salvando, erro, onSalvar, onCancelar }) {
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h4 style={{ marginTop: 0 }}>{editandoId ? '✏️ Editar gasto' : '➕ Lançar gasto'}</h4>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+        <div className="flex-col gap-2">
+          <label style={{ fontSize: 12 }}>Mês</label>
+          <input type="month" value={form.mes_ciclo}
+            onChange={e => setForm({ ...form, mes_ciclo: e.target.value })} />
+        </div>
+        <div className="flex-col gap-2">
+          <label style={{ fontSize: 12 }}>Tipo</label>
+          {/* Lista com sugestões, mas aceita texto livre: amanhã pode surgir "Cesta básica"
+              ou "Alojamento" sem precisar mexer no código nem migrar o banco. */}
+          <input list="tipos-gasto" value={form.tipo} placeholder="Café, VA, Vale Transporte..."
+            onChange={e => setForm({ ...form, tipo: e.target.value })} />
+          <datalist id="tipos-gasto">
+            {tipos.map(t => <option key={t} value={t} />)}
+          </datalist>
+        </div>
+        <div className="flex-col gap-2">
+          <label style={{ fontSize: 12 }}>Obra</label>
+          <select value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>
+            <option value="">— Sem obra definida —</option>
+            {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+          </select>
+        </div>
+        <div className="flex-col gap-2">
+          <label style={{ fontSize: 12 }}>Valor (R$)</label>
+          <input type="number" step="0.01" value={form.valor}
+            onChange={e => setForm({ ...form, valor: e.target.value })} />
+        </div>
+        <div className="flex-col gap-2">
+          <label style={{ fontSize: 12 }}>Observação (opcional)</label>
+          <input value={form.descricao} placeholder="ex.: 12 funcionários"
+            onChange={e => setForm({ ...form, descricao: e.target.value })} />
+        </div>
+      </div>
+
+      <div className="flex gap-2" style={{ marginTop: 12 }}>
+        <button className="btn-primary" onClick={onSalvar} disabled={salvando}>
+          {salvando ? 'Salvando...' : (editandoId ? '💾 Salvar alteração' : '💾 Lançar')}
+        </button>
+        {editandoId && <button className="btn-secondary" onClick={onCancelar}>Cancelar</button>}
+      </div>
+
+      {erro && <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>{erro}</div>}
+    </div>
+  );
+}
+
+// Totais por tipo e por obra do mês: responde "em que foi gasto" e "em qual obra" sem
+// precisar somar a tabela a olho.
+function ResumoGastos({ dados }) {
+  const tipos = Object.entries(dados.por_tipo);
+  const obras = Object.entries(dados.por_obra);
+  if (tipos.length === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div className="card" style={{ flex: '1 1 260px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 6 }}>Por tipo</div>
+        {tipos.map(([tipo, valor]) => (
+          <div key={tipo} className="flex" style={{ justifyContent: 'space-between', fontSize: 13, padding: '2px 0' }}>
+            <span>{tipo}</span><strong>R$ {formatarValorBR(valor)}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="card" style={{ flex: '1 1 260px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 6 }}>Por obra</div>
+        {obras.map(([obra, valor]) => (
+          <div key={obra} className="flex" style={{ justifyContent: 'space-between', fontSize: 13, padding: '2px 0' }}>
+            <span style={{ color: obra === 'Sem obra definida' ? '#b45309' : undefined }}>{obra}</span>
+            <strong>R$ {formatarValorBR(valor)}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TabelaGastos({ itens, podeLancar, onEditar, onExcluir }) {
+  if (itens.length === 0) {
+    return (
+      <div className="card" style={{ fontSize: 13, color: '#6b7280' }}>
+        Nenhum gasto lançado neste mês.
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ overflowX: 'auto' }}>
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th><th>Obra</th><th>Observação</th><th>Valor</th>
+            {podeLancar && <th></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map(item => (
+            <tr key={item.id}>
+              <td>{item.tipo}</td>
+              {/* Sem obra fica em laranja: é o que precisa de correção para o custo chegar
+                  à obra certa no relatório de saúde financeira. */}
+              <td style={{ color: item.obra_nome ? undefined : '#b45309' }}>
+                {item.obra_nome || 'Sem obra definida'}
+              </td>
+              <td style={{ fontSize: 12, color: '#6b7280' }}>{item.descricao || '-'}</td>
+              <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>R$ {formatarValorBR(item.valor)}</td>
+              {podeLancar && (
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button className="btn-secondary btn-sm" onClick={() => onEditar(item)} title="Editar">✏️</button>{' '}
+                  <button className="btn-secondary btn-sm" onClick={() => onExcluir(item)} title="Excluir">🗑️</button>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

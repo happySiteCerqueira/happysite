@@ -273,14 +273,25 @@ function AvisosSaude({ avisos }) {
   const semCusto = avisos.obras_sem_custo || [];
   const diariasSoltas = avisos.diarias_sem_obra || { qtd: 0, valor: 0 };
   const temDiariasSoltas = diariasSoltas.qtd > 0;
-  const folhaSolta = avisos.folha_sem_obra || { valor: 0, pessoas: 0 };
+  const folhaSolta = avisos.folha_sem_obra || { valor: 0, pessoas: 0, gastos: 0 };
   const temFolhaSolta = folhaSolta.valor > 0;
-  if (semObra.length === 0 && semCusto.length === 0 && !temDiariasSoltas && !temFolhaSolta) return null;
+  const temGastosSoltos = (folhaSolta.gastos || 0) > 0;
+  if (semObra.length === 0 && semCusto.length === 0 && !temDiariasSoltas && !temFolhaSolta && !temGastosSoltos) return null;
 
   return (
     <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #d97706', fontSize: 12 }}>
       {/* Este é o aviso mais importante enquanto as obras não estiverem preenchidas nos
           cadastros: mostra exatamente quanto dinheiro saiu sem ter obra onde ser alocado. */}
+      {temGastosSoltos && (
+        <div style={{ marginBottom: 8 }}>
+          🧾 <strong>Gastos sem obra definida:</strong> {formatarMoeda(folhaSolta.gastos)}.
+          <div style={{ color: '#6b7280', marginTop: 2 }}>
+            Lançamentos da aba <strong>Gastos</strong> (Café, VA, Vale Transporte...) feitos sem
+            escolher a obra. Abra <strong>Financeiro → Gastos</strong>, edite o lançamento e
+            informe a obra para o valor abater a receita dela.
+          </div>
+        </div>
+      )}
       {temFolhaSolta && (
         <div style={{ marginBottom: 8 }}>
           💰 <strong>Pagamento sem obra definida:</strong> {formatarMoeda(folhaSolta.valor)} de{' '}
@@ -507,6 +518,7 @@ function BlocoSaidas({ saidas, total }) {
                   <div style={{ fontSize: 11, color: '#9ca3af' }}>
                     {item.tipo === 'DIARIA' && `${item.quantidade} diária(s) rateada(s)`}
                     {item.tipo === 'PRODUCAO' && `${item.qtd} marcação(ões) de produção`}
+                    {item.tipo === 'GASTO' && `${item.qtd} lançamento(s) na aba Gastos`}
                     {/* A linha de folha é a única que vale a pena abrir por pessoa: é ela que
                         responde "de quem é este custo que não veio de produção?". */}
                     {item.tipo === 'FOLHA' && `${item.pessoas.length} pagamento(s) sem produção equivalente`}

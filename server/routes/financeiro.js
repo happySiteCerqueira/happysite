@@ -414,4 +414,115 @@ router.get('/resumo/configuravel', permitir('ADM'), async (req, res) => {
   });
 });
 
+// ===========================================================================================
+// GASTOS COM FUNCIONÁRIOS (Café, VA, Vale Transporte e outros)
+// ===========================================================================================
+//
+// Despesas mensais da operação que não passam pela folha nem pela produção, mas que são custo
+// real da obra. Entram no relatório de saúde financeira abatendo a receita.
+//
+// A obra é OPCIONAL: quando não informada, o gasto aparece no relatório na linha
+// "Sem obra definida", para o valor continuar visível em vez de desaparecer.
+//
+// Os tipos abaixo são apenas as SUGESTÕES da tela. O campo é texto livre de propósito: amanhã
+// pode surgir "Cesta básica", "EPI" ou "Alojamento" sem precisar de alteração no código nem
+// migração no banco.
+const TIPOS_GASTO_SUGERIDOS = ['Café', 'VA', 'Vale Transporte'];
+
+function parseGasto(g) {
+  if (!g) return g;
+  return { ...g, valor: Number(g.valor) || 0 };
+}
+
+router.get('/gastos/tipos', (req, res) => res.json(TIPOS_GASTO_SUGERIDOS));
+
+// Lista os gastos do mês (ou de todos os meses, se "mes" não for informado), já com o nome da
+// obra resolvido. Excluídos logicamente nunca aparecem.
+router.get('/gastos', async (req, res) => {
+  const { mes, obra_id } = req.query;
+  let sql = `
+    SELECT g.*, o.nome AS obra_nome
+    FROM financeiro_gastos g
+    LEFT JOIN obras o ON o.id = g.obra_id
+    WHERE g.excluido = 0
+  `;
+  const params = [];
+  if (mes) { sql += ' AND g.mes_ciclo = ?'; params.push(mes); }
+  if (obra_id) { sql += ' AND g.obra_id = ?'; params.push(obra_id); }
+  sql += ' ORDER BY g.mes_ciclo DESC, o.nome NULLS FIRST, g.tipo, g.id DESC';
+
+  const linhas = await db.all(sql, ...params);
+  const itens = linhas.map(parseGasto);
+
+  // Totais por tipo e por obra: é o que a tela mostra no topo, sem precisar recalcular no React.
+  const porTipo = {};
+  const porObra = {};
+  let total = 0;
+  for (const item of itens) {
+    total += item.valor;
+    porTipo[item.tipo] = Math.round(((porTipo[item.tipo] || 0) + item.valor) * 100) / 100;
+    const chaveObra = item.obra_nome || 'Sem obra definida';
+    porObra[chaveObra] = Math.round(((porObra[chaveObra] || 0) + item.valor) * 100) / 100;
+  }
+
+  res.json({ itens, total: Math.round(total * 100) / 100, por_tipo: porTipo, por_obra: porObra });
+});
+
+router.post('/gastos', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
+  const { mes_ciclo, obra_id, tipo, descricao, valor } = req.body;
+  if (!mes_ciclo) return res.status(400).json({ erro: 'Informe o mês do gasto.' });
+  if (!tipo || !tipo.toString().trim()) return res.status(400).json({ erro: 'Informe o tipo do gasto (ex.: Café, VA, Vale Transporte).' });
+
+  const valorNum = Number(valor) || 0;
+  if (valorNum <= 0) return res.status(400).json({ erro: 'Informe um valor maior que zero.' });
+
+  const info = await db.run(
+    `INSERT INTO financeiro_gastos (mes_ciclo, obra_id, tipo, descricao, valor, criado_por)
+     VALUES (?,?,?,?,?,?)`,
+    mes_ciclo, obra_id ? Number(obra_id) : null, tipo.toString().trim(),
+    descricao ? descricao.toString().trim() : null, valorNum, req.usuario.id
+  );
+
+  await registrar(req.usuario.id, 'CRIAR', 'financeiro_gastos', info.lastInsertRowid, req.body);
+  res.json({ id: info.lastInsertRowid });
+});
+
+router.put('/gastos/:id', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
+  const atual = await db.get('SELECT * FROM financeiro_gastos WHERE id = ? AND excluido = 0', req.params.id);
+  if (!atual) return res.status(404).json({ erro: 'Gasto não encontrado' });
+
+  const { mes_ciclo, obra_id, tipo, descricao, valor } = req.body;
+  const valorFinal = valor !== undefined ? Number(valor) || 0 : atual.valor;
+  if (valorFinal <= 0) return res.status(400).json({ erro: 'Informe um valor maior que zero.' });
+
+  // Snapshot antes de alterar: permite identificar e reverter qualquer edição indevida.
+  await registrarSnapshot(req, 'EDITAR', 'financeiro_gastos', req.params.id, atual, req.body);
+
+  await db.run(
+    `UPDATE financeiro_gastos SET mes_ciclo = ?, obra_id = ?, tipo = ?, descricao = ?, valor = ?,
+       atualizado_em = NOW() WHERE id = ?`,
+    mes_ciclo || atual.mes_ciclo,
+    // obra_id === '' significa "tirar a obra"; undefined significa "não mexer".
+    obra_id !== undefined ? (obra_id ? Number(obra_id) : null) : atual.obra_id,
+    tipo !== undefined ? tipo.toString().trim() : atual.tipo,
+    descricao !== undefined ? (descricao ? descricao.toString().trim() : null) : atual.descricao,
+    valorFinal, req.params.id
+  );
+
+  await registrar(req.usuario.id, 'EDITAR', 'financeiro_gastos', req.params.id, req.body);
+  res.json({ ok: true });
+});
+
+// Exclusão LÓGICA, como nas receitas: o lançamento some das listas e dos relatórios, mas
+// continua no banco e pode ser reconstruído pela auditoria.
+router.delete('/gastos/:id', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
+  const atual = await db.get('SELECT * FROM financeiro_gastos WHERE id = ?', req.params.id);
+  if (!atual) return res.status(404).json({ erro: 'Gasto não encontrado' });
+  if (atual.excluido) return res.status(400).json({ erro: 'Este gasto já está excluído.' });
+
+  await registrarSnapshot(req, 'EXCLUIR', 'financeiro_gastos', req.params.id, atual, { excluido: 1 });
+  await db.run('UPDATE financeiro_gastos SET excluido = 1, atualizado_em = NOW() WHERE id = ?', req.params.id);
+  res.json({ ok: true });
+});
+
 module.exports = router;

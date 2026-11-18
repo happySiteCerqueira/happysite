@@ -272,6 +272,26 @@ async function buscarCustoFolha(mesInicio, mesFim) {
   return linhas.filter(l => Number(l.diferenca) > 0);
 }
 
+// Gastos com funcionários (Café, VA, Vale Transporte e outros) lançados na aba Gastos.
+//
+// São custo real da operação e abatem a receita da obra, como a produção e as diárias.
+// Agrupados por obra + tipo, para a visão detalhada mostrar de onde vem cada parcela.
+// Gastos sem obra informada ficam com obra_id NULL e vão para a linha "Sem obra definida".
+async function buscarCustoGastos(mesInicio, mesFim) {
+  let sql = `
+    SELECT g.obra_id, o.nome AS obra_nome, g.tipo,
+           SUM(g.valor) AS valor, COUNT(*)::int AS qtd
+    FROM financeiro_gastos g
+    LEFT JOIN obras o ON o.id = g.obra_id
+    WHERE g.excluido = 0
+  `;
+  const params = [];
+  if (mesInicio) { sql += ' AND g.mes_ciclo >= ?'; params.push(mesInicio); }
+  if (mesFim) { sql += ' AND g.mes_ciclo <= ?'; params.push(mesFim); }
+  sql += ' GROUP BY g.obra_id, o.nome, g.tipo ORDER BY o.nome, g.tipo';
+  return db.all(sql, ...params);
+}
+
 // Diárias lançadas SEM rateio por obra (existem em "diarias" mas não têm linha em
 // "diaria_obras"). Esse valor foi pago de verdade, mas não pertence a nenhuma obra — logo não
 // entra em nenhuma linha do relatório. Em vez de deixá-lo sumir silenciosamente e inflar o
@@ -355,10 +375,20 @@ function montarResposta(mapa, periodo, diariasSemObra) {
       // falta preencher em Cadastro.
       folha_sem_obra: (() => {
         const linha = obras.find(o => o.sem_obra_definida);
-        if (!linha) return { valor: 0, pessoas: 0 };
+        if (!linha) return { valor: 0, pessoas: 0, gastos: 0 };
+        // Separa as duas origens: folha vem de cadastro sem "Obra atual"; gastos vêm de
+        // lançamentos feitos sem escolher a obra. São problemas diferentes, resolvidos em
+        // telas diferentes — por isso o aviso precisa distingui-los.
         const bloco = linha.saidas.find(s => s.tipo === 'FOLHA');
         const nomes = bloco ? [...new Set(bloco.pessoas.map(p => p.nome))] : [];
-        return { valor: linha.total_saida, pessoas: nomes.length };
+        const totalGastos = linha.saidas
+          .filter(s => s.tipo === 'GASTO')
+          .reduce((soma, s) => soma + s.valor, 0);
+        return {
+          valor: arredondar(bloco ? bloco.valor : 0),
+          pessoas: nomes.length,
+          gastos: arredondar(totalGastos)
+        };
       })()
     }
   };
@@ -375,12 +405,13 @@ function montarResposta(mapa, periodo, diariasSemObra) {
 router.get('/saude-obras', async (req, res) => {
   const { data_inicio, data_fim, mes_inicio, mes_fim } = req.query;
 
-  const [entradas, producao, diarias, diariasSemObra, folha] = await Promise.all([
+  const [entradas, producao, diarias, diariasSemObra, folha, gastos] = await Promise.all([
     buscarEntradas(data_inicio, data_fim),
     buscarCustoProducao(mes_inicio, mes_fim),
     buscarCustoDiarias(mes_inicio, mes_fim),
     buscarDiariasSemObra(mes_inicio, mes_fim),
-    buscarCustoFolha(mes_inicio, mes_fim)
+    buscarCustoFolha(mes_inicio, mes_fim),
+    buscarCustoGastos(mes_inicio, mes_fim)
   ]);
 
   // Índice de obras cadastradas por nome normalizado — é a ponte entre a receita (texto livre)
@@ -439,11 +470,27 @@ router.get('/saude-obras', async (req, res) => {
     registro.total_saida = arredondar(registro.total_saida + valor);
   }
 
+  // Balde onde cai todo custo real que ainda não tem obra identificada (folha de quem não tem
+  // "Obra atual" no cadastro e gastos lançados sem obra). Fica visível no relatório como uma
+  // linha própria, em vez de o valor simplesmente desaparecer.
+  const CHAVE_SEM_OBRA = '__SEM_OBRA__';
+
+  // ---- Lado SAÍDA: gastos com funcionários (Café, VA, Vale Transporte...) ----
+  for (const linha of gastos) {
+    const chave = linha.obra_id ? normalizarNomeObra(linha.obra_nome) : CHAVE_SEM_OBRA;
+    const registro = obterObra(mapa, chave, linha.obra_nome || 'Sem obra definida');
+    if (chave === CHAVE_SEM_OBRA) registro.sem_obra_definida = true;
+    else registro.obra_id = linha.obra_id;
+
+    const valor = arredondar(linha.valor);
+    registro.saidas.push({ tipo: 'GASTO', servico: linha.tipo, valor, qtd: linha.qtd });
+    registro.total_saida = arredondar(registro.total_saida + valor);
+  }
+
   // ---- Lado SAÍDA: folha (holerite) de quem recebeu mais do que produziu ----
   //
   // Agrupa por obra para virar UMA linha de custo por obra, mas guarda a lista de pessoas que
   // a compõem, para a visão detalhada mostrar quem é e quanto de cada um.
-  const CHAVE_SEM_OBRA = '__SEM_OBRA__';
   const folhaPorObra = new Map();
   for (const linha of folha) {
     // Sem obra no cadastro, o custo vai para um balde próprio e visível — nunca é descartado.

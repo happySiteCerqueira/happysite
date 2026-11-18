@@ -8,7 +8,11 @@ const TABELAS_BACKUP = [
   'usuarios', 'colaboradores', 'obras', 'servicos_padrao', 'obra_servicos',
   'obra_servico_pessoas', 'obra_servico_grupos', 'obra_servico_grupo_membros', 'colaborador_precos',
   'obra_servico_celulas', 'obra_servico_quantidades', 'obra_apto_rotulos',
-  'pagamentos_antecipados', 'diarias', 'medicoes', 'financeiro_receitas',
+  // 'diaria_obras' guarda o rateio das diárias por obra. Estava faltando aqui e, por isso, o
+  // backup ignorava esse rateio em silêncio: ao restaurar, as diárias voltavam sem obra e o
+  // custo sumia do relatório de saúde financeira. Fica logo após 'diarias', que é a sua origem.
+  'pagamentos_antecipados', 'diarias', 'diaria_obras', 'medicoes',
+  'financeiro_receitas', 'financeiro_gastos',
   'epi_itens', 'epi_retiradas', 'epi_retirada_itens', 'epi_movimentos',
   'aso_historico',
   'advertencia_modelos', 'advertencias',
