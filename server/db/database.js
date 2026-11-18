@@ -906,6 +906,34 @@ async function migrate() {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_financeiro_receitas_ativas ON financeiro_receitas (data_medicao) WHERE excluido = 0');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_diaria_obras_ativas ON diaria_obras (colaborador_id, mes_ciclo) WHERE excluido = 0');
 
+  // "Produção/Diária": marca se o colaborador participa de produção medida em obra.
+  //
+  // POR QUÊ: ajudantes e operadores (cremalheira, mini grua) recebem pelo holerite mas não têm
+  // produção marcada no desenho do prédio. Como a Medição lista QUALQUER pessoa com lançamento
+  // no mês — incluindo pagamento antecipado —, eles enchiam a tela sem nada a medir.
+  //
+  // Nasce TRUE (a maioria das funções produz) e a migração abaixo desmarca apenas as funções
+  // que, por natureza, não produzem. O campo é editável a qualquer momento no cadastro, porque
+  // a regra pode mudar para uma pessoa específica.
+  if (!(await colunaExiste('colaboradores', 'participa_producao'))) {
+    await pool.query('ALTER TABLE colaboradores ADD COLUMN participa_producao BOOLEAN NOT NULL DEFAULT TRUE');
+    console.log('[migracao] Coluna "participa_producao" adicionada em colaboradores.');
+  }
+
+  // Desmarca, uma única vez, as funções que não participam de produção. Fica controlada por
+  // migracoes_aplicadas para NÃO desfazer ajustes manuais feitos depois pelo usuário: se
+  // alguém marcar um ajudante específico como participante, essa escolha é preservada.
+  const CHAVE_PRODUCAO = 'participa_producao_padrao_por_funcao';
+  const producaoAplicada = await pool.query('SELECT 1 FROM migracoes_aplicadas WHERE chave = $1', [CHAVE_PRODUCAO]);
+  if (producaoAplicada.rows.length === 0) {
+    const r = await pool.query(`
+      UPDATE colaboradores SET participa_producao = FALSE
+      WHERE UPPER(TRIM(funcao)) IN ('AJUDANTE', 'OPERADOR DE CREMALHEIRA', 'OPERADOR DE MINI GRUA')
+    `);
+    await pool.query('INSERT INTO migracoes_aplicadas (chave) VALUES ($1)', [CHAVE_PRODUCAO]);
+    console.log(`[migracao] Producao/Diaria desmarcada para ${r.rowCount} colaborador(es) (ajudantes/operadores).`);
+  }
+
   // Padroniza as funções já cadastradas em CAIXA ALTA, sem espaços sobrando.
   //
   // POR QUÊ: o campo é texto livre e os filtros (Medição, Pagamentos Antecipados, Prestadores,

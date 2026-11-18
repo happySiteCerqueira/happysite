@@ -32,6 +32,29 @@ function normalizarFuncao(texto) {
   return limpo ? limpo.toUpperCase() : null;
 }
 
+// Funções que, por natureza, NÃO têm produção medida em obra: recebem pelo holerite, mas não
+// são marcadas no desenho do prédio. Ao cadastrar alguém com uma destas funções, o sistema já
+// deixa "Produção/Diária" desmarcado — sem impedir que o usuário marque manualmente depois.
+const FUNCOES_SEM_PRODUCAO = ['AJUDANTE', 'OPERADOR DE CREMALHEIRA', 'OPERADOR DE MINI GRUA'];
+
+// Decide o valor de "participa_producao".
+//
+// Se o formulário enviou o campo (o usuário mexeu no checkbox), a escolha dele MANDA — é o que
+// permite abrir exceção para um ajudante específico que de facto produz. Só quando o campo não
+// vem é que o padrão por função é aplicado.
+function definirParticipaProducao(valorEnviado, funcao) {
+  if (valorEnviado !== undefined && valorEnviado !== null && valorEnviado !== '') {
+    return paraBooleano(valorEnviado);
+  }
+  return !FUNCOES_SEM_PRODUCAO.includes(normalizarFuncao(funcao) || '');
+}
+
+// Converte 'true'/'false', 1/0, true/false num booleano real.
+function paraBooleano(valor) {
+  if (typeof valor === 'boolean') return valor;
+  return ['true', '1', 'sim', 'on'].includes(valor.toString().trim().toLowerCase());
+}
+
 router.use(autenticar);
 
 // ---- Exportar / Modelo / Importar em planilha Excel ----
@@ -148,12 +171,15 @@ router.post('/importar', permitir('RH', 'ADM'), async (req, res) => {
       const cor = await proximaCor();
       await db.run(
         `INSERT INTO colaboradores
-        (tipo, nome, documento, telefone, email, endereco, funcao, contato_responsavel, banco, agencia, conta, pix, cor)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        (tipo, nome, documento, telefone, email, endereco, funcao, contato_responsavel, banco, agencia, conta, pix, cor, participa_producao)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         tipo, nome, documento, telefone, email, endereco,
         tipo === 'CPF' ? funcaoOuContato : null,
         tipo === 'PJ' ? funcaoOuContato : null,
-        banco, agencia, conta, pix, cor
+        banco, agencia, conta, pix, cor,
+        // Importação por planilha também respeita o padrão por função: um ajudante importado
+        // já entra sem "Produção/Diária" e não aparece na Medição sem necessidade.
+        definirParticipaProducao(undefined, tipo === 'CPF' ? funcaoOuContato : null)
       );
       criados++;
     }
@@ -189,7 +215,7 @@ router.post('/', permitir('RH', 'ADM'), async (req, res) => {
   // Novo colaborador com data de admissão informada entra automaticamente em período de experiência
   // (usado no quadro "Colaboradores em Experiência" do Painel). Sem data de admissão, considera-se já efetivado.
   const experienciaStatus = b.data_admissao ? 'EM_EXPERIENCIA' : 'EFETIVADO';
-  const colunas = ['tipo', 'nome', 'documento', 'telefone', 'email', 'endereco', 'funcao', 'contato_responsavel', 'banco', 'agencia', 'conta', 'pix', 'cor', 'valor_diaria', 'data_nascimento', 'data_admissao', 'data_primeiro_aso', 'experiencia_status', 'obra_id'];
+  const colunas = ['tipo', 'nome', 'documento', 'telefone', 'email', 'endereco', 'funcao', 'contato_responsavel', 'banco', 'agencia', 'conta', 'pix', 'cor', 'valor_diaria', 'data_nascimento', 'data_admissao', 'data_primeiro_aso', 'experiencia_status', 'obra_id', 'participa_producao'];
   const valores = [
     b.tipo || 'CPF', b.nome, b.documento || null, b.telefone || null, b.email || null,
     b.endereco || null, normalizarFuncao(b.funcao) || null, normalizarFuncao(b.contato_responsavel) || null,
@@ -197,7 +223,10 @@ router.post('/', permitir('RH', 'ADM'), async (req, res) => {
     b.data_nascimento || null, b.data_admissao || null, b.data_primeiro_aso || null, experienciaStatus,
     // Obra atual (opcional). É o destino do custo de quem recebe pelo holerite sem ter
     // produção marcada — ver a migração de obra_id em db/database.js.
-    b.obra_id ? Number(b.obra_id) : null
+    b.obra_id ? Number(b.obra_id) : null,
+    // Produção/Diária: vem desmarcado automaticamente para ajudantes e operadores; para as
+    // demais funções, marcado. O usuário pode inverter no formulário.
+    definirParticipaProducao(b.participa_producao, b.funcao)
   ];
   const placeholders = colunas.map(() => '?').join(',');
   const info = await db.run(
@@ -216,14 +245,21 @@ router.put('/:id', permitir('RH', 'ADM'), async (req, res) => {
   await db.run(
     `UPDATE colaboradores SET tipo=?, nome=?, documento=?, telefone=?, email=?, endereco=?,
     funcao=?, contato_responsavel=?, banco=?, agencia=?, conta=?, pix=?, cor=?, valor_diaria=?,
-    data_nascimento=?, data_admissao=?, data_primeiro_aso=?, obra_id=? WHERE id=?`,
+    data_nascimento=?, data_admissao=?, data_primeiro_aso=?, obra_id=?, participa_producao=? WHERE id=?`,
     b.tipo, b.nome, b.documento, b.telefone, b.email, b.endereco,
     normalizarFuncao(b.funcao), normalizarFuncao(b.contato_responsavel),
     b.banco, b.agencia, b.conta, b.pix, b.cor, Number(b.valor_diaria) || 0,
     // Obra atual: muda quando a pessoa é transferida de obra. String vazia vinda do <select>
     // ("sem obra") precisa virar NULL, senão o Postgres recusa o valor na chave estrangeira.
     b.data_nascimento || null, b.data_admissao || null, b.data_primeiro_aso || null,
-    b.obra_id ? Number(b.obra_id) : null, id
+    b.obra_id ? Number(b.obra_id) : null,
+    // Lê de req.body (e não de "b"): como b = { ...atual, ...req.body }, o campo estaria
+    // sempre preenchido com o valor atual e seria impossível distinguir "o usuário mandou"
+    // de "veio do banco". Se não veio no corpo, mantém o que já estava gravado.
+    req.body.participa_producao !== undefined
+      ? definirParticipaProducao(req.body.participa_producao, b.funcao)
+      : atual.participa_producao,
+    id
   );
   await registrar(req.usuario.id, 'EDITAR', 'colaboradores', id, req.body);
   res.json({ ok: true });

@@ -18,8 +18,20 @@ const COLABORADOR_VAZIO = {
   data_nascimento: '', data_admissao: '', data_primeiro_aso: '',
   // Obra atual: usada no relatório de saúde financeira para alocar o custo de folha de quem
   // recebe pelo holerite sem ter produção marcada (ajudantes, salário de carteira).
-  obra_id: ''
+  obra_id: '',
+  // Produção/Diária: define se a pessoa aparece na tela de Medição. Acompanha a função
+  // automaticamente (ver FUNCOES_SEM_PRODUCAO), mas pode ser alterada à mão.
+  participa_producao: true
 };
+
+// Funções que, por natureza, não têm produção medida em obra — recebem pelo holerite mas não
+// são marcadas no desenho do prédio. Mesma lista do servidor (routes/colaboradores.js).
+const FUNCOES_SEM_PRODUCAO = ['AJUDANTE', 'OPERADOR DE CREMALHEIRA', 'OPERADOR DE MINI GRUA'];
+
+function producaoPadraoDaFuncao(funcao) {
+  const normalizada = (funcao || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  return !FUNCOES_SEM_PRODUCAO.includes(normalizada);
+}
 
 
 export default function Cadastro() {
@@ -268,8 +280,15 @@ export default function Cadastro() {
                 {campo('Telefone', novoColab.telefone, e => setNovoColab({ ...novoColab, telefone: e.target.value }))}
                 {campo('E-mail', novoColab.email, e => setNovoColab({ ...novoColab, email: e.target.value }))}
                 {campo('Endereço', novoColab.endereco, e => setNovoColab({ ...novoColab, endereco: e.target.value }))}
+                {/* Ao digitar a função, o checkbox "Produção/Diária" acompanha automaticamente:
+                    ajudantes e operadores entram desmarcados, as demais funções marcadas.
+                    O usuário continua livre para inverter logo a seguir. */}
                 {novoColab.tipo === 'CPF'
-                  ? campo('Função', novoColab.funcao, e => setNovoColab({ ...novoColab, funcao: e.target.value }))
+                  ? campo('Função', novoColab.funcao, e => setNovoColab({
+                      ...novoColab,
+                      funcao: e.target.value,
+                      participa_producao: producaoPadraoDaFuncao(e.target.value)
+                    }))
                   : campo('Contato Responsável', novoColab.contato_responsavel, e => setNovoColab({ ...novoColab, contato_responsavel: e.target.value }))}
                 {campo('Banco', novoColab.banco, e => setNovoColab({ ...novoColab, banco: e.target.value }))}
                 {campo('Agência', novoColab.agencia, e => setNovoColab({ ...novoColab, agencia: e.target.value }))}
@@ -304,6 +323,24 @@ export default function Cadastro() {
                     produção lançada. Pode ser alterada quando a pessoa mudar de obra.
                   </span>
                 </div>
+                {/* Só faz sentido para CLT: empreiteiro (PJ) é sempre medido por produção. */}
+                {novoColab.tipo === 'CPF' && (
+                  <div className="flex-col gap-2">
+                    <label style={{ fontSize: 12 }}>Produção/Diária</label>
+                    <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="checkbox"
+                        checked={novoColab.participa_producao}
+                        onChange={e => setNovoColab({ ...novoColab, participa_producao: e.target.checked })}
+                      />
+                      Participa de produção/diária
+                    </label>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                      Desmarcado, a pessoa <strong>não aparece na Medição</strong> (caso de quem só
+                      recebe pelo holerite). Ajudantes e operadores já vêm desmarcados.
+                    </span>
+                  </div>
+                )}
               </div>
 
               <button className="btn-primary" disabled={salvandoColab} onClick={salvarColaboradorManual}>

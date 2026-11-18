@@ -207,7 +207,10 @@ function ListaPrestadores() {
       data_primeiro_aso: paraInputDate(p.data_primeiro_aso),
       // Obra atual. Vem como número do banco e o <select> trabalha com string — por isso a
       // conversão; sem ela o campo abriria sempre vazio, como se não houvesse obra definida.
-      obra_id: p.obra_id ? String(p.obra_id) : ''
+      obra_id: p.obra_id ? String(p.obra_id) : '',
+      // Produção/Diária. "!== false" e não "!!": cadastros anteriores à criação da coluna vêm
+      // com undefined e devem ser tratados como participantes (o padrão da maioria).
+      participa_producao: p.participa_producao !== false
     });
   }
 
@@ -431,6 +434,25 @@ function ListaPrestadores() {
                   Altere sempre que a pessoa for transferida de obra.
                 </span>
               </div>
+              {/* Exceção manual à regra por função: marque aqui o ajudante que, no caso dele,
+                  de facto produz — ou desmarque alguém que deixou de produzir. */}
+              {editando.tipo === 'CPF' && (
+                <div className="flex-col gap-2">
+                  <label style={{ fontSize: 12 }}>Produção/Diária</label>
+                  <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={editando.participa_producao}
+                      onChange={e => setEditando({ ...editando, participa_producao: e.target.checked })}
+                    />
+                    Participa de produção/diária
+                  </label>
+                  <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                    Desmarcado, a pessoa <strong>não aparece na Medição</strong> — caso de quem só
+                    recebe pelo holerite (ajudantes, operadores).
+                  </span>
+                </div>
+              )}
             </div>
 
           </>
