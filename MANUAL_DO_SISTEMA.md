@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.116** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.117** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -106,7 +106,7 @@ daquele mês (produção, diárias, antecipados).
 |---|---|
 | **📥 Receita** | O que a obra faturou. Campo **"com nota"** desconta 11% automaticamente |
 | **📄 Holerite** | Importa o PDF de holerites da contabilidade e mostra **Vale, INSS, Taxa e Pagto** por pessoa/mês (editável) |
-| **🧾 Pagtos. Antecipados** | Só lançamentos internos: **Vale Extra e Vale Ex RH** (PF) e **Adiantamento** (PJ) |
+| **🧾 Pagtos. Antecipados** | Só lançamentos internos, em abas separadas: **PF** (Vale Extra e Vale Ex RH) e **PJ** (Adiantamento) |
 | **💸 Gastos** | Custos por colaborador rateados por obra (VA, VT, Extras, Holerite) + Café direto da obra. Ver abaixo |
 | **🏗️ Centro de Custo** | O que entrou × o que saiu de cada obra: saldo e margem (antiga "Saúde financeira") |
 | **📈 Relatórios** | Produção × Pagamentos por colaborador |

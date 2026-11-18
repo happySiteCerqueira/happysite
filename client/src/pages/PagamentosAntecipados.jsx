@@ -29,7 +29,7 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
   const { mes, setMes } = useApuracao();
   const [planilha, setPlanilha] = useState({ PJ: [], CPF: [], colunas: { PF: [], PJ: [] } });
   const [salvandoKey, setSalvandoKey] = useState(null);
-  const [filtroTipo, setFiltroTipo] = useState(''); // '' | 'CPF' | 'PJ'
+  const [abaTipo, setAbaTipo] = useState('CPF'); // 'CPF' (PF) | 'PJ' — cada tipo tem a sua aba
   const [filtroFuncao, setFiltroFuncao] = useState('');
 
   function carregar() {
@@ -42,7 +42,7 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
   // pessoas divididas entre elas. Ver normalizarFuncao em server/routes/colaboradores.js.
   const chaveFuncao = f => (f || '').trim().replace(/\s+/g, ' ').toUpperCase();
   const funcoesDisponiveis = [...new Map(
-    [...planilha.PJ, ...planilha.CPF]
+    (modo === 'holerite' || abaTipo === 'CPF' ? planilha.CPF : planilha.PJ)
       .map(i => i.funcao)
       .filter(f => f && f.trim())
       .map(f => [chaveFuncao(f), f.trim()])
@@ -149,10 +149,28 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
   }
 
   const ehHolerite = modo === 'holerite';
+  // Holerite só existe para PF; em Pagamentos Antecipados PF e PJ ficam em abas separadas.
+  const tipoAtual = ehHolerite ? 'CPF' : abaTipo;
+  const abas = [
+    { chave: 'CPF', rotulo: `👷 Colaboradores (PF) · ${planilha.CPF.length}` },
+    { chave: 'PJ', rotulo: `🏢 Empreiteiros (PJ) · ${planilha.PJ.length}` }
+  ];
 
   return (
     <div>
       <h2>{ehHolerite ? '📄 Holerite' : '🧾 Pagamentos Antecipados'}</h2>
+
+      {!ehHolerite && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          {abas.map(a => (
+            <button key={a.chave} className={abaTipo === a.chave ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+              onClick={() => { setAbaTipo(a.chave); setFiltroFuncao(''); }}>
+              {a.rotulo}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
           <label style={{ marginRight: 8 }}>Mês:</label>
@@ -161,30 +179,21 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
 
         <span style={{ width: 1, height: 24, background: '#e5e7eb' }}></span>
 
-        {!ehHolerite && (
-          <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} style={{ fontSize: 13 }}>
-            <option value="">Todos os tipos</option>
-            <option value="CPF">Colaborador (PF)</option>
-            <option value="PJ">Empreiteiro (PJ)</option>
-          </select>
-        )}
-
         <select value={filtroFuncao} onChange={e => setFiltroFuncao(e.target.value)} style={{ fontSize: 13 }}>
           <option value="">Todas as funções</option>
           {funcoesDisponiveis.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
 
-        {(filtroTipo || filtroFuncao) && (
-          <button className="btn-secondary btn-sm" onClick={() => { setFiltroTipo(''); setFiltroFuncao(''); }}>
+        {filtroFuncao && (
+          <button className="btn-secondary btn-sm" onClick={() => setFiltroFuncao('')}>
             ✖ Limpar filtros
           </button>
         )}
       </div>
 
-      {!ehHolerite && filtroTipo !== 'CPF' && (
+      {tipoAtual === 'PJ' ? (
         <Tabela titulo="Pessoa Jurídica (Empreiteiros)" itens={filtrarItens(planilha.PJ)} colunas={colunasModo.PJ} />
-      )}
-      {filtroTipo !== 'PJ' && (
+      ) : (
         <Tabela titulo="Pessoa Física (Colaboradores)" itens={filtrarItens(planilha.CPF)} colunas={colunasModo.PF} />
       )}
       <p style={{ color: '#6b7280', fontSize: 12 }}>

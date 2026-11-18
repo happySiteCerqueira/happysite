@@ -50,6 +50,12 @@ git checkout v2.111
 
 ## Versões
 
+### 2.117 — Pagamentos Antecipados em abas PF / PJ
+
+- Em **Financeiro → Pagtos. Antecipados**, Colaboradores (PF) e Empreiteiros (PJ) agora ficam em
+  **abas separadas** (com a contagem de cada uma), no lugar do filtro "Todos os tipos". O filtro
+  de função lista só as funções da aba aberta. A aba Holerite continua só com PF.
+
 ### 2.116 — Centro de Custo
 
 - A **Saúde financeira por obra** saiu de dentro de Relatórios e virou a aba própria
