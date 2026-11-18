@@ -264,4 +264,7 @@ function conciliar(listaSistema, listaHolerite, opcoes = {}) {
   };
 }
 
-module.exports = { conciliar, montarItens, similaridade, ROTULOS_ITENS, LIMIAR_SIMILARIDADE };
+// "cruzar" é exportado para a importação automática (routes/conciliacao.js) reaproveitar
+// exatamente o mesmo casamento de nomes usado na conferência — nome exato, CPF e, por último,
+// semelhança. Assim importar e conferir nunca discordam sobre quem é quem.
+module.exports = { conciliar, cruzar, montarItens, similaridade, ROTULOS_ITENS, LIMIAR_SIMILARIDADE };

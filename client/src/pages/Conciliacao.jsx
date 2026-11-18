@@ -36,6 +36,17 @@ function nomeComFuncao(item) {
   return funcao ? `${item.nome} (${funcao})` : item.nome;
 }
 
+// Colunas preenchidas pela importação automática. São as ÚNICAS que o holerite conhece —
+// Vale Extra, Vale Ex RH e Adiantamento são lançamentos internos e nunca vêm do PDF.
+// A coluna do banco chama-se `fgts` mas é exibida como INSS em todo o sistema (ver
+// ROTULOS_PAGAMENTO em utils/medicaoExport.js).
+const COLUNAS_IMPORT = [
+  { coluna: 'vale', rotulo: 'Vale (953)' },
+  { coluna: 'fgts', rotulo: 'INSS (91005)' },
+  { coluna: 'taxa', rotulo: 'Taxa (441)' },
+  { coluna: 'pagto', rotulo: 'Pagto (Líquido)' }
+];
+
 export default function Conciliacao() {
   // Usa a Data de Apuração global (seletor no topo), como as demais telas do ciclo mensal.
   const { mes } = useApuracao();
@@ -51,15 +62,103 @@ export default function Conciliacao() {
   const inputHolerite = useRef(null);
   const inputMedicao = useRef(null);
 
+  // --- Modo de trabalho da tela -----------------------------------------------------------
+  // 'conferir' = compara o PDF com o que já está lançado (comportamento original);
+  // 'importar' = lê o PDF e preenche os Pagamentos Antecipados automaticamente.
+  const [modo, setModo] = useState('conferir');
+  const [arquivoImport, setArquivoImport] = useState(null);
+  const [propostaImport, setPropostaImport] = useState(null);
+  const [selecionados, setSelecionados] = useState({});
+  const [importando, setImportando] = useState(false);
+  const [resultadoImport, setResultadoImport] = useState(null);
+  const inputImport = useRef(null);
+
   // Ao trocar o mês de apuração o relatório anterior deixa de fazer sentido: é descartado para
   // não deixar na tela números de uma competência diferente da que está selecionada no topo.
   useEffect(() => {
     setRelatorio(null);
     setErro('');
+    // A proposta de importação também é de um mês específico: descartada junto, para ninguém
+    // gravar em Novembro valores lidos enquanto Outubro estava selecionado.
+    setPropostaImport(null);
+    setResultadoImport(null);
+    setSelecionados({});
     api.get('/conciliacao/previa', { params: { mes } })
       .then(res => setPrevia(res.data))
       .catch(() => setPrevia(null));
   }, [mes]);
+
+  // Passo 1 da importação: envia o PDF e recebe a proposta do que será gravado (nada é
+  // persistido ainda). As linhas já vêm com a sugestão de marcação vinda do servidor.
+  async function gerarPropostaImportacao() {
+    if (!arquivoImport) {
+      setErro('Selecione o PDF dos Holerites para importar.');
+      return;
+    }
+    setImportando(true);
+    setErro('');
+    setResultadoImport(null);
+
+    const dados = new FormData();
+    dados.append('holerite', arquivoImport);
+    dados.append('mes_ciclo', mes);
+
+    try {
+      const res = await api.post('/conciliacao/importar/previa', dados, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setPropostaImport(res.data);
+      const marcados = {};
+      res.data.itens.forEach(item => { marcados[item.colaborador_id] = item.sugerido; });
+      setSelecionados(marcados);
+    } catch (e) {
+      setErro(e.response?.data?.erro || 'Não foi possível ler o PDF para importação.');
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  // Passo 2: grava apenas as linhas marcadas. Depois recarrega a prévia do mês para os
+  // contadores do topo refletirem os lançamentos recém-criados.
+  async function confirmarImportacao() {
+    const itens = propostaImport.itens
+      .filter(item => selecionados[item.colaborador_id] && !item.bloqueado)
+      .map(item => ({ colaborador_id: item.colaborador_id, valores: item.valores }));
+
+    if (itens.length === 0) {
+      setErro('Marque pelo menos um colaborador para importar.');
+      return;
+    }
+
+    setImportando(true);
+    setErro('');
+    try {
+      const res = await api.post('/conciliacao/importar/confirmar', { mes_ciclo: mes, itens });
+      setResultadoImport(res.data);
+      setPropostaImport(null);
+      setSelecionados({});
+      if (inputImport.current) inputImport.current.value = '';
+      setArquivoImport(null);
+      const atualizada = await api.get('/conciliacao/previa', { params: { mes } });
+      setPrevia(atualizada.data);
+    } catch (e) {
+      setErro(e.response?.data?.erro || 'Não foi possível gravar a importação.');
+    } finally {
+      setImportando(false);
+    }
+  }
+
+  function alternarTodos(marcar) {
+    const novos = {};
+    propostaImport.itens.forEach(item => {
+      novos[item.colaborador_id] = marcar && !item.bloqueado;
+    });
+    setSelecionados(novos);
+  }
+
+  const totalSelecionado = propostaImport
+    ? propostaImport.itens.filter(i => selecionados[i.colaborador_id] && !i.bloqueado).length
+    : 0;
 
   async function processar() {
     if (!arquivoHolerite) {
@@ -112,6 +211,25 @@ export default function Conciliacao() {
         Vale (953), INSS (91005), Taxa (441) e Pagto (Salário Líquido).
       </p>
 
+      {/* Dois modos de uso do MESMO PDF: conferir o que já está lançado (comportamento
+          original da tela) ou importar os valores para poupar a digitação manual. O
+          lançamento manual em Pagamentos Antecipados continua disponível como sempre. */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+        {[
+          { chave: 'conferir', rotulo: '🔍 Conferir lançamentos' },
+          { chave: 'importar', rotulo: '📥 Importar do holerite' }
+        ].map(item => (
+          <button
+            key={item.chave}
+            className={modo === item.chave ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => { setModo(item.chave); setErro(''); }}
+          >
+            {item.rotulo}
+          </button>
+        ))}
+      </div>
+
+      {modo === 'conferir' && (
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="flex gap-4" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div className="flex-col gap-2">
@@ -173,15 +291,35 @@ export default function Conciliacao() {
           <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>{erro}</div>
         )}
       </div>
+      )}
 
-      {!relatorio && !processando && (
+      {modo === 'importar' && (
+        <PainelImportacao
+          mes={mes}
+          inputRef={inputImport}
+          onArquivo={setArquivoImport}
+          proposta={propostaImport}
+          selecionados={selecionados}
+          setSelecionados={setSelecionados}
+          totalSelecionado={totalSelecionado}
+          processando={importando}
+          erro={erro}
+          resultado={resultadoImport}
+          onGerar={gerarPropostaImportacao}
+          onConfirmar={confirmarImportacao}
+          onAlternarTodos={alternarTodos}
+          onCancelar={() => { setPropostaImport(null); setSelecionados({}); setErro(''); }}
+        />
+      )}
+
+      {modo === 'conferir' && !relatorio && !processando && (
         <div className="card" style={{ fontSize: 13, color: '#6b7280' }}>
           Selecione o PDF dos Holerites e clique em <strong>Conciliar</strong> para comparar os
           valores com o que está lançado no sistema.
         </div>
       )}
 
-      {relatorio && (
+      {modo === 'conferir' && relatorio && (
         <>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
             {CARTOES.map(cartao => (
@@ -255,6 +393,249 @@ export default function Conciliacao() {
       )}
 
       {detalhe && <ModalDetalhe item={detalhe} onFechar={() => setDetalhe(null)} />}
+    </div>
+  );
+}
+
+// Painel da importação automática: lê o PDF dos Holerites e preenche os Pagamentos
+// Antecipados do mês, poupando a digitação dos 4 valores de cada colaborador.
+//
+// Fluxo deliberado em DOIS PASSOS — nada é gravado sem o usuário conferir e confirmar:
+//   1. "Ler holerite"        → mostra a proposta, linha a linha, com o valor atual ao lado;
+//   2. "Importar marcados"   → grava só o que ficou marcado.
+function PainelImportacao({
+  mes, inputRef, onArquivo, proposta, selecionados, setSelecionados,
+  totalSelecionado, processando, erro, resultado, onGerar, onConfirmar, onAlternarTodos, onCancelar
+}) {
+  return (
+    <>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
+          Lê o PDF dos Holerites e preenche automaticamente <strong>Vale</strong>,{' '}
+          <strong>INSS</strong>, <strong>Taxa</strong> e <strong>Pagto</strong> em Pagamentos
+          Antecipados de <strong>{rotuloMes(mes)}</strong>. Você confere tudo antes de gravar, e o
+          lançamento manual continua disponível normalmente.
+        </div>
+
+        {!proposta && (
+          <div className="flex gap-4" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="flex-col gap-2">
+              <label style={{ fontWeight: 600 }}>PDF dos Holerites</label>
+              <input
+                type="file"
+                accept="application/pdf"
+                ref={inputRef}
+                onChange={e => onArquivo(e.target.files[0] || null)}
+              />
+            </div>
+            <button className="btn-primary" onClick={onGerar} disabled={processando}>
+              {processando ? 'Lendo...' : '📄 Ler holerite'}
+            </button>
+          </div>
+        )}
+
+        {erro && (
+          <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>{erro}</div>
+        )}
+      </div>
+
+      {resultado && <ResultadoImportacao resultado={resultado} mes={mes} />}
+
+      {proposta && (
+        <PropostaImportacao
+          proposta={proposta}
+          selecionados={selecionados}
+          setSelecionados={setSelecionados}
+          totalSelecionado={totalSelecionado}
+          processando={processando}
+          onConfirmar={onConfirmar}
+          onAlternarTodos={onAlternarTodos}
+          onCancelar={onCancelar}
+        />
+      )}
+    </>
+  );
+}
+
+// Tabela de revisão da importação: cada linha mostra o valor que será gravado e, quando já
+// havia lançamento, o valor atual entre parênteses — para o usuário ver exatamente o que muda.
+function PropostaImportacao({
+  proposta, selecionados, setSelecionados, totalSelecionado, processando,
+  onConfirmar, onAlternarTodos, onCancelar
+}) {
+  const { itens, sem_cadastro: semCadastro, diagnostico } = proposta;
+
+  return (
+    <>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="flex gap-4" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#6b7280' }}>
+            {diagnostico.total_recibos} recibo(s) lidos em {diagnostico.total_paginas} página(s) ·{' '}
+            {diagnostico.total_cruzados} cruzado(s) com o cadastro
+            {diagnostico.total_sem_cadastro > 0 && ` · ${diagnostico.total_sem_cadastro} sem cadastro`}
+          </span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn-secondary btn-sm" onClick={() => onAlternarTodos(true)} disabled={processando}>
+              Marcar todos
+            </button>
+            <button className="btn-secondary btn-sm" onClick={() => onAlternarTodos(false)} disabled={processando}>
+              Desmarcar todos
+            </button>
+            <button className="btn-secondary btn-sm" onClick={onCancelar} disabled={processando}>
+              ✕ Cancelar
+            </button>
+            <button className="btn-success" onClick={onConfirmar} disabled={processando || totalSelecionado === 0}>
+              {processando ? 'Gravando...' : `✔ Importar ${totalSelecionado} marcado(s)`}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {itens.length === 0
+        ? <Vazio texto="Nenhum colaborador do PDF foi reconhecido no cadastro do sistema." />
+        : (
+          <TabelaProposta
+            itens={itens}
+            selecionados={selecionados}
+            setSelecionados={setSelecionados}
+            processando={processando}
+          />
+        )}
+
+      {semCadastro.length > 0 && <ListaSemCadastro itens={semCadastro} />}
+    </>
+  );
+}
+
+// Situação de cada linha da proposta, em texto curto e com cor — é o que orienta o usuário
+// sobre o que vai acontecer se ele deixar a linha marcada.
+function SituacaoItem({ item }) {
+  if (item.bloqueado) return <span style={{ color: '#b91c1c' }}>🔒 {item.motivo_bloqueio}</span>;
+  if (item.match_aproximado) return <span style={{ color: '#b45309' }}>⚠️ Confira o nome</span>;
+  if (!item.houve_mudanca) return <span style={{ color: '#6b7280' }}>Já está igual</span>;
+  if (item.ja_tinha_lancamento) return <span style={{ color: '#b45309' }}>Vai substituir</span>;
+  return <span style={{ color: '#166534' }}>Novo lançamento</span>;
+}
+
+function TabelaProposta({ itens, selecionados, setSelecionados, processando }) {
+  return (
+    <div className="card" style={{ marginBottom: 12, overflowX: 'auto' }}>
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: 36 }}></th>
+            <th>Colaborador</th>
+            {COLUNAS_IMPORT.map(c => <th key={c.coluna}>{c.rotulo}</th>)}
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map(item => (
+            <tr key={item.colaborador_id} style={{ opacity: item.bloqueado ? 0.55 : 1 }}>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={!!selecionados[item.colaborador_id] && !item.bloqueado}
+                  disabled={item.bloqueado || processando}
+                  onChange={e => setSelecionados(anterior => ({
+                    ...anterior,
+                    [item.colaborador_id]: e.target.checked
+                  }))}
+                />
+              </td>
+              <td>
+                {nomeComFuncao(item)}
+                <div style={{ fontSize: 11, color: '#6b7280' }}>
+                  Holerite pág. {item.pagina_holerite}
+                  {item.match_aproximado && ` · por semelhança (${item.score_match}%) com "${item.nome_holerite}"`}
+                </div>
+              </td>
+              {COLUNAS_IMPORT.map(c => {
+                const novo = item.valores[c.coluna];
+                const velho = item.anteriores[c.coluna];
+                const mudou = novo !== velho;
+                return (
+                  <td key={c.coluna} style={{ whiteSpace: 'nowrap' }}>
+                    <span style={{ fontWeight: mudou ? 700 : 400, color: mudou ? '#15803d' : '#111827' }}>
+                      {formatarMoeda(novo)}
+                    </span>
+                    {/* Só mostra o valor anterior quando ele realmente vai ser substituído. */}
+                    {mudou && item.ja_tinha_lancamento && (
+                      <div style={{ fontSize: 11, color: '#b45309' }}>era {formatarMoeda(velho)}</div>
+                    )}
+                  </td>
+                );
+              })}
+              <td style={{ fontSize: 11 }}><SituacaoItem item={item} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
+        ℹ️ <strong>Vale Extra</strong>, <strong>Vale Ex RH</strong> e <strong>Adiantamento</strong>{' '}
+        não existem no holerite e <strong>não são alterados</strong> pela importação — continuam
+        como foram lançados manualmente.
+      </div>
+    </div>
+  );
+}
+
+// Recibos lidos no PDF que não têm colaborador correspondente no cadastro. Não são importados:
+// a importação só preenche pessoas que já existem no sistema, nunca cria cadastro sozinha.
+function ListaSemCadastro({ itens }) {
+  return (
+    <div className="card" style={{ borderLeft: '4px solid #d97706' }}>
+      <strong style={{ fontSize: 14 }}>
+        ⚠️ {itens.length} recibo(s) sem colaborador correspondente no cadastro
+      </strong>
+      <div style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 8px' }}>
+        Estes não serão importados. Cadastre a pessoa (ou corrija a grafia do nome em Cadastro) e
+        leia o PDF novamente.
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Nome no holerite</th>
+            <th>CPF</th>
+            <th>Pág.</th>
+            <th>Pagto (Líquido)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map((item, indice) => (
+            <tr key={indice}>
+              <td>{item.nome}</td>
+              <td>{item.cpf || '-'}</td>
+              <td>{item.pagina}</td>
+              <td>{formatarMoeda(item.pagto)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Confirmação pós-gravação: diz quantos entraram e lista o que foi ignorado (e por quê).
+function ResultadoImportacao({ resultado, mes }) {
+  return (
+    <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid #16a34a' }}>
+      <strong style={{ fontSize: 14, color: '#166534' }}>
+        ✅ {resultado.total_aplicados} lançamento(s) importado(s) em {rotuloMes(mes)}
+      </strong>
+      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+        Os valores já estão em <strong>Pagamentos Antecipados</strong> e podem ser ajustados
+        manualmente a qualquer momento.
+      </div>
+
+      {resultado.ignorados && resultado.ignorados.length > 0 && (
+        <ul style={{ fontSize: 12, color: '#b45309', margin: '8px 0 0', paddingLeft: 18 }}>
+          {resultado.ignorados.map((item, indice) => (
+            <li key={indice}>{item.nome || `Colaborador ${item.colaborador_id}`}: {item.motivo}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
