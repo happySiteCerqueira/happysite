@@ -50,6 +50,19 @@ function formatarValorBR(valor) {
   return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Dias de atraso de um recebimento: a "Data Pagamento" é o LIMITE que o cliente tem para pagar.
+// Passada essa data e enquanto o status não for PAGO, o lançamento está em atraso. Ao marcar como
+// Pago a sinalização some sozinha. Retorna 0 quando não há atraso (ou não há data limite).
+function diasDeAtraso(item) {
+  if (!item.data_pagamento || item.status === 'PAGO') return 0;
+  const limite = item.data_pagamento.slice(0, 10);
+  const dataHoje = hoje();
+  if (limite >= dataHoje) return 0;
+  const [la, lm, ld] = limite.split('-').map(Number);
+  const [ha, hm, hd] = dataHoje.split('-').map(Number);
+  return Math.round((Date.UTC(ha, hm - 1, hd) - Date.UTC(la, lm - 1, ld)) / 86400000);
+}
+
 
 function baixarBlob(blob, nomeArquivo) {
   const url = window.URL.createObjectURL(blob);
@@ -455,14 +468,17 @@ function Entrada() {
   const [carregandoArquivo, setCarregandoArquivo] = useState(false);
 
   function carregar() {
+    // "Em atraso" não existe como status no banco: é calculado na tela (data limite vencida e
+    // ainda não pago). Por isso, nesse filtro busca tudo e filtra aqui.
+    const filtraAtraso = filtroStatus === 'ATRASADO';
     api.get('/financeiro/receitas', {
       params: {
         meses: mesesSelecionados.length > 0 ? mesesSelecionados : undefined,
         obra: filtroObra || undefined,
-        status: filtroStatus || undefined
+        status: filtroStatus && !filtraAtraso ? filtroStatus : undefined
       },
       paramsSerializer: { indexes: null }
-    }).then(res => setItens(res.data));
+    }).then(res => setItens(filtraAtraso ? res.data.filter(i => diasDeAtraso(i) > 0) : res.data));
   }
   useEffect(carregar, [mesesSelecionados, filtroObra, filtroStatus]);
 
@@ -663,6 +679,7 @@ function Entrada() {
           <option value="EM_ANALISE">Em Análise</option>
           <option value="CONFIRMADO">Confirmado</option>
           <option value="PAGO">Pago</option>
+          <option value="ATRASADO">⚠️ Em atraso</option>
         </select>
 
         <div style={{ flex: 1 }} />
@@ -688,6 +705,21 @@ function Entrada() {
       {erro && <div className="card" style={{ background: '#fef2f2', color: '#dc2626', marginBottom: 12 }}>{erro}</div>}
       {msg && <div className="card" style={{ background: '#f0fdf4', color: '#15803d', marginBottom: 12, whiteSpace: 'pre-wrap' }}>{msg}</div>}
 
+      {(() => {
+        const atrasados = itens.filter(i => diasDeAtraso(i) > 0);
+        if (atrasados.length === 0) return null;
+        const total = atrasados.reduce((s, i) => s + (Number(i.valor_liquido) || 0), 0);
+        return (
+          <div className="card" style={{ background: '#fef2f2', borderLeft: '4px solid #dc2626', color: '#991b1b', marginBottom: 12, fontSize: 13 }}>
+            ⚠️ <strong>{atrasados.length} recebimento(s) em atraso</strong> (data de pagamento vencida e ainda não pagos):{' '}
+            <strong>R$ {formatarValorBR(total)}</strong> líquidos. Verifique com o cliente.
+            {filtroStatus !== 'ATRASADO' && (
+              <> <button className="btn-secondary btn-sm" onClick={() => setFiltroStatus('ATRASADO')}>Ver só os atrasados</button></>
+            )}
+          </div>
+        );
+      })()}
+
 
       <div className="card" style={{ overflowX: 'auto' }}>
         <table>
@@ -707,8 +739,10 @@ function Entrada() {
             </tr>
           </thead>
           <tbody>
-            {itens.map(item => (
-              <tr key={item.id}>
+            {itens.map(item => {
+              const atraso = diasDeAtraso(item);
+              return (
+              <tr key={item.id} style={atraso > 0 ? { background: '#fef2f2', boxShadow: 'inset 4px 0 0 #dc2626' } : undefined}>
                 <td>{item.data_medicao ? item.data_medicao.slice(0, 10).split('-').reverse().join('/') : '-'}</td>
                 <td>{item.obra_nome}</td>
                 <td>{item.servico}</td>
@@ -717,7 +751,15 @@ function Entrada() {
                 <td>R$ {formatarValorBR(item.valor_liquido)}</td>
 
                 <td style={{ color: '#6b7280' }}>{item.fonte_pagador || '-'}</td>
-                <td>{item.data_pagamento ? item.data_pagamento.slice(0, 10).split('-').reverse().join('/') : '-'}</td>
+                <td style={atraso > 0 ? { color: '#b91c1c', fontWeight: 700 } : undefined}>
+                  {item.data_pagamento ? item.data_pagamento.slice(0, 10).split('-').reverse().join('/') : '-'}
+                  {atraso > 0 && (
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: '#dc2626', borderRadius: 4, padding: '1px 6px', marginTop: 2, display: 'inline-block', whiteSpace: 'nowrap' }}
+                      title="A data limite de pagamento já passou e o recebimento ainda não foi marcado como Pago">
+                      ⚠️ ATRASADO · {atraso} {atraso === 1 ? 'dia' : 'dias'}
+                    </div>
+                  )}
+                </td>
                 <td style={{ color: '#6b7280' }}>{item.conta || '-'}</td>
                 <td><span className={`badge ${STATUS_BADGE[item.status]}`}>{STATUS_ROTULO[item.status]}</span></td>
                 <td>
@@ -790,7 +832,8 @@ function Entrada() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {itens.length === 0 && <tr><td colSpan={11} style={{ color: '#9ca3af' }}>Nenhuma entrada encontrada.</td></tr>}
 
           </tbody>

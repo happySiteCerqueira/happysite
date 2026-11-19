@@ -50,6 +50,15 @@ git checkout v2.111
 
 ## Versões
 
+### 2.121 — Sinalização de recebimento em atraso (Financeiro → Receita)
+
+- Na aba **Receita**, a **Data Pagamento** é o limite que o cliente tem para pagar. Passada essa
+  data, e enquanto o status **não for Pago**, a linha fica **destacada em vermelho**, a data ganha
+  a etiqueta **"⚠️ ATRASADO · N dias"** e aparece um aviso no topo com a quantidade e o valor
+  líquido em atraso. Ao marcar como **Pago** a sinalização some e a linha volta ao normal.
+- Novo filtro **"⚠️ Em atraso"** ao lado dos status. O atraso é calculado na tela (não existe como
+  status no banco), então nada muda nos dados nem nos relatórios.
+
 ### 2.120 — Custo do EPI entra nos gastos e no Centro de Custo
 
 - Cada item de **EPI** tem agora um **valor unitário** (cadastro, modal de edição e **direto na
