@@ -86,10 +86,14 @@ const somaPor = (linhas, chave = 'valor') => {
 //   custa 3,5 mil, mesmo com a medição negativa. Vale Extra / Vale Ex RH / Adiantamento NÃO
 //   entram: são descontos da medição, não custo de holerite.
 //
-// VA, VT e Extras são sempre rateados pelo percentual do ponto, em qualquer regime.
+// VA, VT, Extras e EPI são sempre rateados pelo percentual do ponto, em qualquer regime.
 // O regime (Produção/Holerite) é derivado de participa_producao.
+//
+// EPI: custo das retiradas feitas no mês (pela DATA da retirada) = quantidade × valor do item.
+// O valor é o copiado na retirada; retiradas feitas antes de existir valor (NULL) usam o valor
+// ATUAL do item. Retirada sem nenhum valor custa 0 e é contada em `epi_sem_preco` para a tela avisar.
 async function calcularCustosMes(mes) {
-  const [itens, extras, holerites, producao, diarias, colabs] = await Promise.all([
+  const [itens, extras, holerites, producao, diarias, colabs, epis] = await Promise.all([
     db.all(
       `SELECT i.colaborador_id, i.categoria, SUM(i.valor) AS valor
        FROM gastos_colaborador_itens i JOIN gastos_lotes l ON l.id = i.lote_id
@@ -110,7 +114,17 @@ async function calcularCustosMes(mes) {
     db.all('SELECT colaborador_id, total AS valor FROM diarias WHERE mes_ciclo = ?', mes),
     db.all(
       `SELECT c.id, c.nome, c.funcao, c.tipo, c.obra_id, c.participa_producao, c.ativo, o.nome AS obra_nome
-       FROM colaboradores c LEFT JOIN obras o ON o.id = c.obra_id`)
+       FROM colaboradores c LEFT JOIN obras o ON o.id = c.obra_id`),
+    db.all(
+      `SELECT r.colaborador_id,
+              SUM(ri.quantidade * COALESCE(ri.valor_unitario, ei.valor_unitario, 0)) AS valor,
+              COUNT(*) FILTER (WHERE COALESCE(ri.valor_unitario, ei.valor_unitario, 0) <= 0)::int AS sem_preco
+       FROM epi_retirada_itens ri
+       JOIN epi_retiradas r ON r.id = ri.retirada_id
+       JOIN epi_itens ei ON ei.id = ri.epi_item_id
+       WHERE r.data_retirada >= (?::text || '-01')::date
+         AND r.data_retirada < ((?::text || '-01')::date + INTERVAL '1 month')
+       GROUP BY r.colaborador_id`, mes, mes)
   ]);
 
   const va = somaPor(itens.filter(i => i.categoria === 'VA'));
@@ -120,8 +134,10 @@ async function calcularCustosMes(mes) {
   const hol = somaPor(holerites);
   const prod = somaPor(producao);
   const diar = somaPor(diarias);
+  const epi = somaPor(epis);
+  const epiSemPreco = new Map(epis.map(e => [e.colaborador_id, e.sem_preco]));
 
-  const ids = new Set([...va.keys(), ...vt.keys(), ...ext.keys(), ...hol.keys()]);
+  const ids = new Set([...va.keys(), ...vt.keys(), ...ext.keys(), ...hol.keys(), ...[...epi].filter(([, v]) => v > 0).map(([k]) => k)]);
   const pessoas = colabs.filter(c => ids.has(c.id));
   const rateios = await carregarRateios(mes, pessoas);
 
@@ -129,7 +145,7 @@ async function calcularCustosMes(mes) {
   const acumular = (obraId, obraNome, campo, valor) => {
     const chave = obraId || 0;
     if (!porObra.has(chave)) {
-      porObra.set(chave, { obra_id: obraId || null, obra: obraNome || SEM_OBRA, va: 0, vt: 0, extras: 0, holerite: 0 });
+      porObra.set(chave, { obra_id: obraId || null, obra: obraNome || SEM_OBRA, va: 0, vt: 0, extras: 0, holerite: 0, epi: 0 });
     }
     porObra.get(chave)[campo] += valor;
   };
@@ -138,6 +154,7 @@ async function calcularCustosMes(mes) {
     const valorVa = arredondar(va.get(c.id));
     const valorVt = arredondar(vt.get(c.id));
     const valorExtras = arredondar(ext.get(c.id));
+    const valorEpi = arredondar(epi.get(c.id));
     const recebido = Math.max(arredondar(hol.get(c.id)), 0);
     const produzido = arredondar((prod.get(c.id) || 0) + (diar.get(c.id) || 0));
     const excedente = arredondar(Math.max(recebido - produzido, 0));
@@ -148,10 +165,11 @@ async function calcularCustosMes(mes) {
       va: ratearCentavos(valorVa, pesos),
       vt: ratearCentavos(valorVt, pesos),
       extras: ratearCentavos(valorExtras, pesos),
-      holerite: ratearCentavos(excedente, pesos)
+      holerite: ratearCentavos(excedente, pesos),
+      epi: ratearCentavos(valorEpi, pesos)
     };
     rateio.itens.forEach((it, idx) => {
-      for (const campo of ['va', 'vt', 'extras', 'holerite']) acumular(it.obra_id, it.obra_nome, campo, partes[campo][idx]);
+      for (const campo of ['va', 'vt', 'extras', 'holerite', 'epi']) acumular(it.obra_id, it.obra_nome, campo, partes[campo][idx]);
     });
 
     return {
@@ -161,24 +179,27 @@ async function calcularCustosMes(mes) {
       ativo: c.ativo,
       regime: c.participa_producao ? 'PRODUCAO' : 'HOLERITE',
       rateio_origem: rateio.origem,
-      rateio: rateio.itens.map((it, idx) => ({ ...it, valor: arredondar(partes.va[idx] + partes.vt[idx] + partes.extras[idx] + partes.holerite[idx]) })),
+      rateio: rateio.itens.map((it, idx) => ({ ...it, valor: arredondar(partes.va[idx] + partes.vt[idx] + partes.extras[idx] + partes.holerite[idx] + partes.epi[idx]) })),
       // Quanto de CADA categoria cai em cada obra (base da saúde financeira).
       distribuicao: rateio.itens.map((it, idx) => ({
         obra_id: it.obra_id, obra_nome: it.obra_nome,
-        va: partes.va[idx], vt: partes.vt[idx], extras: partes.extras[idx], holerite: partes.holerite[idx]
+        va: partes.va[idx], vt: partes.vt[idx], extras: partes.extras[idx], holerite: partes.holerite[idx], epi: partes.epi[idx]
       })),
       va: valorVa,
       vt: valorVt,
       extras: valorExtras,
+      epi: valorEpi,
       qtd_extras: qtdExtras.get(c.id) || 0,
       holerite_recebido: recebido,
       producao_diarias: produzido,
       holerite_custo: excedente,
-      total: arredondar(valorVa + valorVt + valorExtras + excedente)
+      total: arredondar(valorVa + valorVt + valorExtras + valorEpi + excedente)
     };
   }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
-  return { colaboradores: resultado, porObra };
+  // Retiradas do mês sem valor (de qualquer pessoa): o EPI delas custa 0 até o preço ser informado.
+  const retiradasSemPreco = [...epiSemPreco.values()].reduce((s, n) => s + n, 0);
+  return { colaboradores: resultado, porObra, epiSemPreco: retiradasSemPreco };
 }
 
 // Consolidação por obra: soma o que veio dos colaboradores com os lançamentos DIRETOS da obra
@@ -187,7 +208,7 @@ async function calcularCustosMes(mes) {
 // Lançamentos manuais de VA/VT do mês que já tem lote importado dessa categoria NÃO são somados
 // (contariam duas vezes). Ficam em "conflitos_manuais" para a tela pedir a conferência.
 async function montarResumo(mes) {
-  const { colaboradores, porObra } = await calcularCustosMes(mes);
+  const { colaboradores, porObra, epiSemPreco } = await calcularCustosMes(mes);
 
   const lotes = await db.all(
     "SELECT tipo, id, arquivo_nome, total_valor, total_registros, confirmado_em FROM gastos_lotes WHERE status = 'ATIVO' AND mes_referencia = ?", mes
@@ -203,12 +224,12 @@ async function montarResumo(mes) {
   const obras = new Map();
   const linhaObra = (id, nome) => {
     const chave = id || 0;
-    if (!obras.has(chave)) obras.set(chave, { obra_id: id || null, obra: nome || SEM_OBRA, va: 0, vt: 0, cafe: 0, extras: 0, holerite: 0, outros: 0 });
+    if (!obras.has(chave)) obras.set(chave, { obra_id: id || null, obra: nome || SEM_OBRA, va: 0, vt: 0, cafe: 0, extras: 0, holerite: 0, epi: 0, outros: 0 });
     return obras.get(chave);
   };
   for (const o of porObra.values()) {
     const l = linhaObra(o.obra_id, o.obra);
-    l.va += o.va; l.vt += o.vt; l.extras += o.extras; l.holerite += o.holerite;
+    l.va += o.va; l.vt += o.vt; l.extras += o.extras; l.holerite += o.holerite; l.epi += o.epi;
   }
 
   const conflitos = [];
@@ -228,9 +249,9 @@ async function montarResumo(mes) {
     const linha = {
       ...l,
       va: arredondar(l.va), vt: arredondar(l.vt), cafe: arredondar(l.cafe),
-      extras: arredondar(l.extras), holerite: arredondar(l.holerite), outros: arredondar(l.outros)
+      extras: arredondar(l.extras), holerite: arredondar(l.holerite), epi: arredondar(l.epi), outros: arredondar(l.outros)
     };
-    linha.total = arredondar(linha.va + linha.vt + linha.cafe + linha.extras + linha.holerite + linha.outros);
+    linha.total = arredondar(linha.va + linha.vt + linha.cafe + linha.extras + linha.holerite + linha.epi + linha.outros);
     return linha;
   }).sort((a, b) => {
     if (!a.obra_id !== !b.obra_id) return a.obra_id ? -1 : 1; // "Sem obra definida" sempre por último
@@ -238,9 +259,9 @@ async function montarResumo(mes) {
   });
 
   const totais = lista.reduce((acc, l) => {
-    for (const k of ['va', 'vt', 'cafe', 'extras', 'holerite', 'outros', 'total']) acc[k] = arredondar(acc[k] + l[k]);
+    for (const k of ['va', 'vt', 'cafe', 'extras', 'holerite', 'epi', 'outros', 'total']) acc[k] = arredondar(acc[k] + l[k]);
     return acc;
-  }, { va: 0, vt: 0, cafe: 0, extras: 0, holerite: 0, outros: 0, total: 0 });
+  }, { va: 0, vt: 0, cafe: 0, extras: 0, holerite: 0, epi: 0, outros: 0, total: 0 });
 
   const semObra = colaboradores.filter(c => c.rateio_origem === 'SEM_OBRA');
   return {
@@ -250,7 +271,9 @@ async function montarResumo(mes) {
     lotes,
     avisos: {
       conflitos_manuais: conflitos,
-      colaboradores_sem_obra: semObra.map(c => ({ colaborador_id: c.colaborador_id, nome: c.nome, total: c.total }))
+      colaboradores_sem_obra: semObra.map(c => ({ colaborador_id: c.colaborador_id, nome: c.nome, total: c.total })),
+      // Itens de EPI retirados no mês que ainda não têm valor: custam 0 até o preço ser informado.
+      epi_sem_preco: epiSemPreco
     }
   };
 }

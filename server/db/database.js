@@ -1176,6 +1176,20 @@ async function migrate() {
     await pool.query('ALTER TABLE financeiro_gastos ADD COLUMN manter_com_lote INTEGER NOT NULL DEFAULT 0');
   }
 
+  // Custo do EPI.
+  //
+  // epi_itens.valor_unitario: quanto custa UMA unidade do item (0 = ainda não informado).
+  // epi_retirada_itens.valor_unitario: o valor da época, copiado do item no momento da retirada
+  //   (mesmo princípio de descricao e ca, que também são copiados). NULL = retirada feita antes
+  //   de existir valor: nesse caso o custo usa o valor ATUAL do item, para o histórico já
+  //   lançado (ex.: outubro) poder ser custeado assim que o preço for informado.
+  if (!(await colunaExiste('epi_itens', 'valor_unitario'))) {
+    await pool.query('ALTER TABLE epi_itens ADD COLUMN valor_unitario DOUBLE PRECISION NOT NULL DEFAULT 0');
+  }
+  if (!(await colunaExiste('epi_retirada_itens', 'valor_unitario'))) {
+    await pool.query('ALTER TABLE epi_retirada_itens ADD COLUMN valor_unitario DOUBLE PRECISION');
+  }
+
   // Migração idempotente: "obra atual" do colaborador (colaboradores.obra_id).
   //
   // POR QUÊ: há gente — tipicamente ajudantes e quem é pago pelo salário da carteira — que NÃO

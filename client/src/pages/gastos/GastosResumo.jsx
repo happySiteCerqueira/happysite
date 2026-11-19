@@ -9,6 +9,7 @@ const CATEGORIAS = [
   { chave: 'vt', rotulo: 'VT' },
   { chave: 'cafe', rotulo: 'Café' },
   { chave: 'extras', rotulo: 'Extras' },
+  { chave: 'epi', rotulo: 'EPI' },
   { chave: 'holerite', rotulo: 'Holerite/Salário' }
 ];
 
@@ -116,10 +117,18 @@ export default function GastosResumo({ mes, renderLancamentos }) {
 function Avisos({ avisos }) {
   const conflitos = avisos.conflitos_manuais || [];
   const semObra = avisos.colaboradores_sem_obra || [];
-  if (conflitos.length === 0 && semObra.length === 0) return null;
+  const epiSemPreco = avisos.epi_sem_preco || 0;
+  if (conflitos.length === 0 && semObra.length === 0 && epiSemPreco === 0) return null;
 
   return (
     <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', fontSize: 13 }}>
+      {epiSemPreco > 0 && (
+        <div style={{ marginBottom: (conflitos.length || semObra.length) ? 10 : 0 }}>
+          <strong>🦺 {epiSemPreco} item(ns) de EPI retirados neste mês estão sem valor</strong> e custam R$ 0,00 por enquanto.
+          Informe o valor unitário em <strong>EPI → Estoque</strong>: o custo é recalculado sozinho, inclusive
+          para as retiradas já feitas.
+        </div>
+      )}
       {conflitos.length > 0 && (
         <div style={{ marginBottom: semObra.length ? 10 : 0 }}>
           <strong>⚠️ {conflitos.length} lançamento(s) manual(is) de VA/VT não foram somados</strong> porque o mês já tem

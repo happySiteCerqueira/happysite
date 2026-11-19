@@ -215,6 +215,7 @@ function AbaCadastrar() {
   const [ca, setCa] = useState('');
   const [quantidade, setQuantidade] = useState('');
   const [estoqueMinimo, setEstoqueMinimo] = useState('');
+  const [valorUnitario, setValorUnitario] = useState('');
   const [erro, setErro] = useState('');
   const [msg, setMsg] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -234,6 +235,7 @@ function AbaCadastrar() {
     setItemSelecionadoId(item.id);
     setBuscaTexto(item.descricao);
     setCa(item.ca || '');
+    setValorUnitario(item.valor_unitario > 0 ? String(item.valor_unitario) : '');
     setMostrarSugestoes(false);
   }
 
@@ -241,6 +243,7 @@ function AbaCadastrar() {
     setItemSelecionadoId(null);
     setBuscaTexto('');
     setCa('');
+    setValorUnitario('');
   }
 
   function abrirCriarNovo() {
@@ -267,9 +270,9 @@ function AbaCadastrar() {
 
     setSalvando(true);
     try {
-      await api.post('/epi/itens', { descricao: descricaoFinal, ca, quantidade, estoque_minimo: estoqueMinimo });
+      await api.post('/epi/itens', { descricao: descricaoFinal, ca, quantidade, estoque_minimo: estoqueMinimo, valor_unitario: valorUnitario });
       setMsg(quantidade ? 'Item cadastrado / estoque atualizado com sucesso!' : 'Item cadastrado com sucesso! (sem entrada em estoque)');
-      setQuantidade(''); setEstoqueMinimo('');
+      setQuantidade(''); setEstoqueMinimo(''); setValorUnitario('');
       if (criandoNovo) { setCriandoNovo(false); setDescricao(''); setCa(''); }
       else { limparSelecao(); }
       carregarItens();
@@ -346,6 +349,12 @@ function AbaCadastrar() {
         <label style={{ fontSize: 12 }}>Quantidade a adicionar (opcional)</label>
         <input type="number" min="0" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="Deixe vazio para não dar entrada agora" />
 
+        <label style={{ fontSize: 12 }}>Valor unitário (R$) — custo de 1 unidade</label>
+        <input type="number" min="0" step="0.01" value={valorUnitario} onChange={e => setValorUnitario(e.target.value)} placeholder="Ex: 12,50 (deixe vazio para manter o valor atual)" />
+        <span style={{ fontSize: 11, color: '#9ca3af' }}>
+          Cada retirada vira custo da obra do colaborador (Financeiro → Gastos e Centro de Custo).
+        </span>
+
         <label style={{ fontSize: 12 }}>Estoque mínimo (opcional, alerta)</label>
         <input type="number" min="0" value={estoqueMinimo} onChange={e => setEstoqueMinimo(e.target.value)} />
 
@@ -357,6 +366,36 @@ function AbaCadastrar() {
   );
 }
 
+
+// Valor unitário editável direto na tabela de estoque: preencher os preços de todos os itens
+// fica rápido (digita e sai do campo para salvar). Retiradas antigas sem valor passam a usar o
+// valor atual do item; retiradas novas guardam o valor do dia.
+function CampoValorUnitario({ item, onSalvo }) {
+  const [valor, setValor] = useState(item.valor_unitario > 0 ? String(item.valor_unitario) : '');
+  const [salvando, setSalvando] = useState(false);
+  useEffect(() => { setValor(item.valor_unitario > 0 ? String(item.valor_unitario) : ''); }, [item.valor_unitario]);
+
+  async function salvar() {
+    const atual = item.valor_unitario > 0 ? item.valor_unitario : 0;
+    const novo = Number(valor) || 0;
+    if (novo === atual) return;
+    setSalvando(true);
+    try {
+      await api.put(`/epi/itens/${item.id}`, { valor_unitario: novo });
+      onSalvo();
+    } catch (e) {
+      alert(e.response?.data?.erro || 'Não foi possível salvar o valor.');
+      setValor(atual > 0 ? String(atual) : '');
+    }
+    setSalvando(false);
+  }
+
+  return (
+    <input type="number" min="0" step="0.01" value={valor} disabled={salvando} placeholder="0,00"
+      style={{ width: 90, borderColor: valor === '' ? '#f59e0b' : undefined }}
+      onChange={e => setValor(e.target.value)} onBlur={salvar} />
+  );
+}
 
 // ---- ABA ESTOQUE ----
 function AbaEstoque() {
@@ -380,11 +419,20 @@ function AbaEstoque() {
     carregar();
   }
 
+  const semValor = itens.filter(i => !(i.valor_unitario > 0)).length;
+
   return (
     <div className="card" style={{ overflowX: 'auto' }}>
       <h3>Estoque de EPIs</h3>
+      {semValor > 0 && (
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: 8, fontSize: 12, marginBottom: 10 }}>
+          ⚠️ <strong>{semValor} item(ns) sem valor unitário.</strong> Informe o valor na coluna <strong>Valor unit.</strong>:
+          cada retirada vira custo da obra do colaborador (Financeiro → Centro de Custo). Retiradas já feitas
+          sem valor passam a custar pelo valor informado.
+        </div>
+      )}
       <table>
-        <thead><tr><th>Descrição</th><th>C.A.</th><th>Quantidade</th><th>Estoque mínimo</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Descrição</th><th>C.A.</th><th>Quantidade</th><th>Estoque mínimo</th><th>Valor unit. (R$)</th><th>Ações</th></tr></thead>
         <tbody>
           {itens.map(item => (
             <tr key={item.id} style={item.estoque_minimo > 0 && item.quantidade <= item.estoque_minimo ? { background: '#fef2f2' } : undefined}>
@@ -397,13 +445,14 @@ function AbaEstoque() {
                 )}
               </td>
               <td>{item.estoque_minimo}</td>
+              <td><CampoValorUnitario item={item} onSalvo={carregar} /></td>
               <td style={{ display: 'flex', gap: 6 }}>
                 <button className="btn-secondary btn-sm" onClick={() => setEditando({ ...item })}>✏️ Editar</button>
                 <button className="btn-danger btn-sm" onClick={() => excluir(item)}>🗑️</button>
               </td>
             </tr>
           ))}
-          {itens.length === 0 && <tr><td colSpan={5} style={{ color: '#9ca3af' }}>Nenhum item cadastrado.</td></tr>}
+          {itens.length === 0 && <tr><td colSpan={6} style={{ color: '#9ca3af' }}>Nenhum item cadastrado.</td></tr>}
         </tbody>
       </table>
 
@@ -419,9 +468,13 @@ function AbaEstoque() {
               <label style={{ fontSize: 12 }}>C.A.</label>
               <input value={editando.ca || ''} onChange={e => setEditando({ ...editando, ca: e.target.value })} />
             </div>
-            <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
+            <div className="flex-col gap-2" style={{ marginBottom: 8 }}>
               <label style={{ fontSize: 12 }}>Estoque mínimo</label>
               <input type="number" min="0" value={editando.estoque_minimo} onChange={e => setEditando({ ...editando, estoque_minimo: e.target.value })} />
+            </div>
+            <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12 }}>Valor unitário (R$)</label>
+              <input type="number" min="0" step="0.01" value={editando.valor_unitario || ''} onChange={e => setEditando({ ...editando, valor_unitario: e.target.value })} />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn-primary" onClick={salvarEdicao} style={{ flex: 1 }}>Salvar</button>

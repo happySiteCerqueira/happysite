@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.119** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.120** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -107,7 +107,7 @@ daquele mês (produção, diárias, antecipados).
 | **📥 Receita** | O que a obra faturou. Campo **"com nota"** desconta 11% automaticamente |
 | **📄 Holerite** | Importa o PDF de holerites da contabilidade e mostra **Vale, INSS, Taxa e Pagto** por pessoa/mês (editável) |
 | **🧾 Pagtos. Antecipados** | Só lançamentos internos, em abas separadas: **PF** (Vale Extra e Vale Ex RH) e **PJ** (Adiantamento) |
-| **💸 Gastos** | Custos por colaborador rateados por obra (VA, VT, Extras, Holerite) + Café direto da obra. Ver abaixo |
+| **💸 Gastos** | Custos por colaborador rateados por obra (VA, VT, Extras, EPI, Holerite) + Café direto da obra. Ver abaixo |
 | **🏗️ Centro de Custo** | O que entrou × o que saiu de cada obra: saldo e margem (antiga "Saúde financeira") |
 | **📈 Relatórios** | Produção × Pagamentos por colaborador |
 | **📊 Resumo** | Gráficos de receita por mês/obra/serviço (só ADM) |
@@ -121,7 +121,7 @@ Três sub-abas, sempre sobre o mês de apuração do topo:
 
 - **Resumo** — custo por obra: *Total geral* ou *Detalhado por categoria* (VA, VT, Café, Extras,
   Holerite/Salário). Os lançamentos manuais de Café e outros ficam abaixo, como sempre foram.
-- **Detalhado** — uma linha por colaborador: regime, obras e % de rateio, VA, VT, Extras, custo de
+- **Detalhado** — uma linha por colaborador: regime, obras e % de rateio, VA, VT, Extras, EPI, custo de
   holerite e total. Ações: **+ Extra** e **% Rateio** (ajuste manual, que vale só naquele mês).
 - **Dados** — cards de importação (Caju, VT, Ponto, Café), cada um com a sua competência e a
   confirmação dela. Fluxo: **prévia** → **De-Para** dos vínculos pendentes → **confirmar**.
@@ -157,7 +157,7 @@ Custo de holerite rateado = máx(H − P, 0)
   até o usuário decidir (manter = soma junto; remover = exclusão lógica). A importação pede essa
   decisão; o aviso aparece no Resumo.
 - **Centro de Custo** (antiga "Saúde financeira") usa exatamente esta conta: excedente do holerite
-  + VA + VT + Extras, rateados pelo ponto, somados à produção, diárias e gastos diretos (Café).
+  + VA + VT + Extras + EPI, rateados pelo ponto, somados à produção, diárias e gastos diretos (Café).
 
 #### Centro de Custo — o relatório mais importante
 
@@ -168,7 +168,7 @@ trocado para **Todo o histórico** ou **Outro mês ou intervalo**. Cruza o que *
 
 ```
 Entrou = receita LÍQUIDA (já com a nota descontada)
-Pagou  = produção + diárias rateadas + excedente do holerite + VA + VT + Extras + gastos diretos (Café)
+Pagou  = produção + diárias rateadas + excedente do holerite + VA + VT + Extras + EPI + gastos diretos (Café)
 Saldo  = Entrou − Pagou
 Margem = Saldo ÷ Entrou × 100
 ```
@@ -207,7 +207,7 @@ por último, semelhança ≥ 92%.
 | Módulo | Função |
 |---|---|
 | **📇 Prestadores** | Lista de colaboradores e PJ, com histórico e edição do cadastro |
-| **🦺 EPI** | Estoque e entrega de equipamentos, com termo assinado |
+| **🦺 EPI** | Estoque e entrega de equipamentos, com termo assinado. Cada item tem **valor unitário**; cada retirada vira custo do colaborador (competência = mês da data da retirada), rateado entre as obras como VA/VT. A retirada guarda o valor da época; retiradas antigas sem valor usam o valor atual do item |
 | **🩺 ASO** | Controle de exames ocupacionais e vencimentos |
 | **🗓️ Agenda** | Compromissos com lembretes por notificação push |
 | **⚠️ Advertência** | Emissão de termos com assinatura digital |

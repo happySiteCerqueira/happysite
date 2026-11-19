@@ -118,7 +118,7 @@ function SaudeObras() {
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
           <strong>Entrou</strong> = receita lançada na obra, já <strong>descontada a nota</strong>.{' '}
           <strong>Pagou</strong> = produção + diárias + o que o holerite excede a produção + VA, VT,
-          Extras (rateados pelo ponto) + gastos diretos da obra (Café). Vale Extra e Vale Ex RH não
+          Extras e EPI (rateados pelo ponto) + gastos diretos da obra (Café). Vale Extra e Vale Ex RH não
           entram: são descontos da Medição.
         </div>
 
@@ -155,7 +155,7 @@ function CartoesSaude({ totais }) {
   const cartoes = [
     { rotulo: 'Entrou (líquido)', valor: totais.entrada_liquida, cor: '#2563eb',
       ajuda: `Bruto ${formatarMoeda(totais.entrada_bruta)} − nota ${formatarMoeda(totais.desconto_nota)}` },
-    { rotulo: 'Pagou (custo total)', valor: totais.saida, cor: '#d97706', ajuda: 'Produção, diárias, holerite, VA, VT, extras e café' },
+    { rotulo: 'Pagou (custo total)', valor: totais.saida, cor: '#d97706', ajuda: 'Produção, diárias, holerite, VA, VT, extras, EPI e café' },
     { rotulo: 'Saldo', valor: totais.saldo, cor: corDoSaldo(totais.saldo), ajuda: 'Entrou − Pagou' },
     { rotulo: 'Margem', texto: totais.margem === null ? '-' : `${totais.margem}%`,
       cor: corDoSaldo(totais.saldo), ajuda: 'Quanto sobra de cada R$ 100 que entraram' }

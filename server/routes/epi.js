@@ -29,6 +29,14 @@ router.get('/itens', async (req, res) => {
   res.json(itens);
 });
 
+// Converte o valor informado na tela ("12,50", "12.5", "") em número >= 0.
+// undefined = não informado (mantém o que já existe); null = valor inválido.
+function lerValorUnitario(bruto) {
+  if (bruto === undefined || bruto === '') return undefined;
+  const numero = Number(String(bruto).replace(',', '.'));
+  return Number.isFinite(numero) && numero >= 0 ? Math.round(numero * 100) / 100 : null;
+}
+
 // Cadastrar/entrada: soma quantidade se já existir item com a mesma descrição (case-insensitive), senão cria.
 // A quantidade é opcional: pode-se cadastrar/atualizar um item (descrição, C.A., estoque mínimo) sem
 // necessariamente dar entrada em estoque agora. Se quantidade vier vazia/zero, nenhum movimento é gerado.
@@ -38,18 +46,22 @@ router.post('/itens', async (req, res) => {
   if (!descricao || !descricao.trim()) return res.status(400).json({ erro: 'Descrição é obrigatória' });
   const qtd = Number(quantidade) || 0;
   if (qtd < 0) return res.status(400).json({ erro: 'Quantidade não pode ser negativa' });
+  const valorUnitario = lerValorUnitario(req.body.valor_unitario);
+  if (valorUnitario === null) return res.status(400).json({ erro: 'Valor unitário inválido' });
 
   const existente = await db.get('SELECT * FROM epi_itens WHERE LOWER(descricao) = LOWER(?) AND ativo = 1', descricao.trim());
 
   let itemId;
   if (existente) {
-    await db.run('UPDATE epi_itens SET quantidade = quantidade + ?, ca = COALESCE(?, ca), estoque_minimo = COALESCE(?, estoque_minimo) WHERE id = ?',
-      qtd, ca || null, estoque_minimo !== undefined && estoque_minimo !== '' ? Number(estoque_minimo) : null, existente.id);
+    // valor_unitario vazio mantém o valor já cadastrado.
+    await db.run('UPDATE epi_itens SET quantidade = quantidade + ?, ca = COALESCE(?, ca), estoque_minimo = COALESCE(?, estoque_minimo), valor_unitario = COALESCE(?, valor_unitario) WHERE id = ?',
+      qtd, ca || null, estoque_minimo !== undefined && estoque_minimo !== '' ? Number(estoque_minimo) : null,
+      valorUnitario === undefined ? null : valorUnitario, existente.id);
     itemId = existente.id;
   } else {
     const info = await db.run(
-      'INSERT INTO epi_itens (descricao, ca, quantidade, estoque_minimo) VALUES (?,?,?,?)',
-      descricao.trim(), ca || null, qtd, Number(estoque_minimo) || 0
+      'INSERT INTO epi_itens (descricao, ca, quantidade, estoque_minimo, valor_unitario) VALUES (?,?,?,?,?)',
+      descricao.trim(), ca || null, qtd, Number(estoque_minimo) || 0, valorUnitario || 0
     );
     itemId = info.lastInsertRowid;
   }
@@ -59,7 +71,7 @@ router.post('/itens', async (req, res) => {
       itemId, 'ENTRADA', qtd, req.usuario.id);
   }
 
-  await registrar(req.usuario.id, 'ENTRADA_EPI', 'epi_itens', itemId, { descricao, quantidade: qtd, ca });
+  await registrar(req.usuario.id, 'ENTRADA_EPI', 'epi_itens', itemId, { descricao, quantidade: qtd, ca, valor_unitario: valorUnitario });
   res.json({ ok: true, id: itemId });
 });
 
@@ -87,9 +99,15 @@ router.put('/itens/:id', async (req, res) => {
     return res.status(400).json({ erro: 'Estoque mínimo inválido' });
   }
 
-  await db.run('UPDATE epi_itens SET descricao = ?, ca = ?, estoque_minimo = ? WHERE id = ?',
-    descricaoFinal, ca !== undefined ? (ca || null) : item.ca, estoqueMinimoFinal, req.params.id);
-  await registrar(req.usuario.id, 'EDITAR_ITEM_EPI', 'epi_itens', req.params.id, { descricao: descricaoFinal, ca, estoque_minimo: estoqueMinimoFinal });
+  const valorLido = lerValorUnitario(req.body.valor_unitario);
+  if (valorLido === null) return res.status(400).json({ erro: 'Valor unitário inválido' });
+  const valorFinal = valorLido === undefined ? item.valor_unitario : valorLido;
+
+  await db.run('UPDATE epi_itens SET descricao = ?, ca = ?, estoque_minimo = ?, valor_unitario = ? WHERE id = ?',
+    descricaoFinal, ca !== undefined ? (ca || null) : item.ca, estoqueMinimoFinal, valorFinal, req.params.id);
+  await registrar(req.usuario.id, 'EDITAR_ITEM_EPI', 'epi_itens', req.params.id, {
+    descricao: descricaoFinal, ca, estoque_minimo: estoqueMinimoFinal, valor_unitario: { de: item.valor_unitario, para: valorFinal }
+  });
   res.json({ ok: true });
 });
 
@@ -139,9 +157,11 @@ router.post('/retiradas', async (req, res) => {
         const item = await trx.get('SELECT * FROM epi_itens WHERE id = ?', it.epi_item_id);
         const qtd = Number(it.quantidade) || 0;
 
+        // O valor da época é copiado para a retirada (0 = ainda sem valor → NULL, para poder ser
+        // custeada pelo valor atual quando o preço for informado).
         await trx.run(
-          'INSERT INTO epi_retirada_itens (retirada_id, epi_item_id, descricao, ca, quantidade) VALUES (?,?,?,?,?)',
-          retiradaId, item.id, item.descricao, item.ca, qtd
+          'INSERT INTO epi_retirada_itens (retirada_id, epi_item_id, descricao, ca, quantidade, valor_unitario) VALUES (?,?,?,?,?,?)',
+          retiradaId, item.id, item.descricao, item.ca, qtd, item.valor_unitario > 0 ? item.valor_unitario : null
         );
         await trx.run('UPDATE epi_itens SET quantidade = quantidade - ? WHERE id = ?', qtd, item.id);
         await trx.run('INSERT INTO epi_movimentos (epi_item_id, tipo, quantidade, retirada_id, criado_por) VALUES (?,?,?,?,?)',

@@ -78,6 +78,7 @@ export default function GastosDetalhado({ mes }) {
                   <th style={{ textAlign: 'right' }}>VA (Caju)</th>
                   <th style={{ textAlign: 'right' }}>VT</th>
                   <th style={{ textAlign: 'right' }}>Extras</th>
+                  <th style={{ textAlign: 'right' }}>EPI</th>
                   <th style={{ textAlign: 'right' }}>Custo Holerite</th>
                   <th style={{ textAlign: 'right' }}>Total</th>
                   {podeEditar && <th></th>}
@@ -104,6 +105,7 @@ export default function GastosDetalhado({ mes }) {
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{moeda(i.va)}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{moeda(i.vt)}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{moeda(i.extras)}</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{moeda(i.epi)}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {moeda(i.holerite_custo)}
                       {i.holerite_recebido > 0 && (
@@ -128,6 +130,7 @@ export default function GastosDetalhado({ mes }) {
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.va)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.vt)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.extras)}</td>
+                  <td style={{ textAlign: 'right' }}>{moeda(dados.totais.epi)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.holerite_custo)}</td>
                   <td style={{ textAlign: 'right' }}>R$ {moeda(dados.totais.total)}</td>
                   {podeEditar && <td></td>}

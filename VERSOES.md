@@ -50,6 +50,19 @@ git checkout v2.111
 
 ## Versões
 
+### 2.120 — Custo do EPI entra nos gastos e no Centro de Custo
+
+- Cada item de **EPI** tem agora um **valor unitário** (cadastro, modal de edição e **direto na
+  tabela de Estoque**, onde dá para preencher todos rapidamente).
+- Cada **retirada** vira custo do colaborador: quantidade × valor, na competência do **mês da data
+  da retirada**, e é **rateada entre as obras** como VA e VT (ponto → ajuste manual → obra padrão →
+  "Sem obra definida"). Aparece em **Gastos → Resumo/Detalhado** (coluna EPI) e no **Centro de
+  Custo**.
+- A retirada guarda o **valor da época**. Retiradas feitas antes de existir valor (como as de
+  outubro) usam o valor **atual** do item, então basta informar os preços para o histórico ser
+  custeado. Itens retirados sem valor custam R$ 0,00 e geram um aviso no Resumo.
+- Banco (aditivo): `epi_itens.valor_unitario` e `epi_retirada_itens.valor_unitario`.
+
 ### 2.119 — Centro de Custo abre no mês de apuração
 
 - O **Centro de Custo** agora abre, por padrão, no **mês de apuração** do seletor do topo (e

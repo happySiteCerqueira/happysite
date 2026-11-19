@@ -36,9 +36,9 @@ router.get('/detalhado', async (req, res) => {
   const { colaboradores } = await calcularCustosMes(mes);
 
   const totais = colaboradores.reduce((acc, c) => {
-    for (const k of ['va', 'vt', 'extras', 'holerite_custo', 'total']) acc[k] = arredondar(acc[k] + c[k]);
+    for (const k of ['va', 'vt', 'extras', 'epi', 'holerite_custo', 'total']) acc[k] = arredondar(acc[k] + c[k]);
     return acc;
-  }, { va: 0, vt: 0, extras: 0, holerite_custo: 0, total: 0 });
+  }, { va: 0, vt: 0, extras: 0, epi: 0, holerite_custo: 0, total: 0 });
 
   res.json({ mes, itens: colaboradores, totais });
 });

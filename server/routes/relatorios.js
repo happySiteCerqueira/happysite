@@ -255,7 +255,7 @@ async function mesesDoPeriodo(mesInicio, mesFim) {
 }
 
 // Devolve, por colaborador/mês/obra, o excedente de holerite (`folha`) e os benefícios
-// (`beneficios`: VA, Vale Transporte e Extras), já rateados.
+// (`beneficios`: VA, Vale Transporte, Extras e EPI), já rateados.
 async function buscarCustosColaboradores(mesInicio, mesFim) {
   const folha = [];
   const beneficios = new Map();
@@ -270,7 +270,7 @@ async function buscarCustosColaboradores(mesInicio, mesFim) {
             folha: c.holerite_recebido, produzido: c.producao_diarias, diferenca: d.holerite
           });
         }
-        for (const [campo, rotulo] of [['va', 'VA'], ['vt', 'Vale Transporte'], ['extras', 'Extras']]) {
+        for (const [campo, rotulo] of [['va', 'VA'], ['vt', 'Vale Transporte'], ['extras', 'Extras'], ['epi', 'EPI']]) {
           if (!d[campo]) continue;
           const chave = `${d.obra_id || 0}|${rotulo}`;
           if (!beneficios.has(chave)) {
@@ -445,7 +445,7 @@ router.get('/saude-obras', async (req, res) => {
     buscarCustosColaboradores(mes_inicio, mes_fim),
     buscarCustoGastos(mes_inicio, mes_fim)
   ]);
-  // Excedente de holerite e benefícios (VA, VT, Extras) já rateados por obra; os gastos
+  // Excedente de holerite e benefícios (VA, VT, Extras, EPI) já rateados por obra; os gastos
   // diretos (Café e outros manuais) são somados na mesma lista, por obra + tipo.
   const folha = custosColab.folha;
   const gastos = [...gastosDiretos];
