@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import PagamentosAntecipados from './PagamentosAntecipados';
 import GastosCustos from './gastos/GastosCustos';
-import CentroCusto from './CentroCusto';
+import CentroCusto from './centrocusto/CentroCusto';
 
 
 
@@ -288,8 +288,20 @@ function Gastos({ mesExterno, onAlterado }) {
   );
 }
 
+// Tipos com opção própria no formulário (Café e Ferramentas têm bloco próprio nos relatórios).
+// "Outros" abre um campo de texto livre para descrever o tipo.
+const TIPOS_PADRAO_GASTO = ['Café', 'Ferramentas', 'VA', 'Vale Transporte'];
+const OPCAO_OUTROS = '__outros__';
+
 // Formulário de lançamento/edição de um gasto.
 function FormularioGasto({ form, setForm, obras, tipos, editandoId, salvando, erro, onSalvar, onCancelar }) {
+  const tiposFixos = tipos.length ? tipos : TIPOS_PADRAO_GASTO;
+  const [outroAberto, setOutroAberto] = useState(false);
+  // Um tipo que não está na lista (lançamento antigo em texto livre) é tratado como "Outros".
+  const tipoSelecionado = tiposFixos.includes(form.tipo)
+    ? form.tipo
+    : (outroAberto || form.tipo ? OPCAO_OUTROS : '');
+
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <h4 style={{ marginTop: 0 }}>{editandoId ? '✏️ Editar gasto' : '➕ Lançar gasto'}</h4>
@@ -301,13 +313,19 @@ function FormularioGasto({ form, setForm, obras, tipos, editandoId, salvando, er
         </div>
         <div className="flex-col gap-2">
           <label style={{ fontSize: 12 }}>Tipo</label>
-          {/* Lista com sugestões, mas aceita texto livre: amanhã pode surgir "Cesta básica"
-              ou "Alojamento" sem precisar mexer no código nem migrar o banco. */}
-          <input list="tipos-gasto" value={form.tipo} placeholder="Café, VA, Vale Transporte..."
-            onChange={e => setForm({ ...form, tipo: e.target.value })} />
-          <datalist id="tipos-gasto">
-            {tipos.map(t => <option key={t} value={t} />)}
-          </datalist>
+          <select value={tipoSelecionado} onChange={e => {
+            const v = e.target.value;
+            setOutroAberto(v === OPCAO_OUTROS);
+            setForm({ ...form, tipo: v === OPCAO_OUTROS ? (tiposFixos.includes(form.tipo) ? '' : form.tipo) : v });
+          }}>
+            <option value="">— Escolha —</option>
+            {tiposFixos.map(t => <option key={t} value={t}>{t}</option>)}
+            <option value={OPCAO_OUTROS}>Outros</option>
+          </select>
+          {tipoSelecionado === OPCAO_OUTROS && (
+            <input value={form.tipo} placeholder="Descreva o tipo (ex.: Cesta básica)"
+              onChange={e => setForm({ ...form, tipo: e.target.value })} />
+          )}
         </div>
         <div className="flex-col gap-2">
           <label style={{ fontSize: 12 }}>Obra</label>

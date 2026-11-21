@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.130** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.131** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -166,8 +166,14 @@ Custo de holerite rateado = máx(H − P, 0)       (os três somados, nunca aval
   **Medição desconta 5,5 mil** (sobram 2,5 mil a pagar) e o Centro de Custo **não lança excedente**.
 - Vale Extra, Vale Ex RH e Adiantamento **não** entram no H: são descontos da Medição.
 - **Admissão (ASO R$ 75 + Treinamento R$ 150 = R$ 225)**: automática, no mês da **data de admissão** do
-  cadastro, atribuída **inteira à obra do cadastro** (não é dividida pelo ponto). Sem obra no cadastro,
-  cai em "Sem obra definida" com aviso.
+  cadastro. **Nasce na obra do cadastro** e, quando o **ponto** (ou o rateio manual) do mês mostra que
+  a pessoa trabalhou principalmente em **outra obra**, os R$ 225 são **transferidos inteiros** para a obra
+  principal do mês (a de maior %; em empate, a do cadastro) — nunca são divididos. Sem ponto, fica na obra do
+  cadastro; sem obra, cai em "Sem obra definida" com aviso. A regra aplicada aparece no Centro de Custo
+  ("Direto na obra do cadastro" ou "Transferido via Ponto").
+- **Gastos diretos por obra** (formulário ➕ Lançar gasto): tipos **Café**, **Ferramentas**, **VA**,
+  **Vale Transporte** e **Outros** (texto livre). Vão 100% para a obra escolhida. Ferramentas tem coluna
+  própria no Resumo e bloco próprio no Centro de Custo.
 - **VA, VT e Extras** são sempre rateados pelo % do ponto.
 - **Regime** é derivado de `participa_producao`: marcado = Produção, desmarcado = Holerite.
 - **Rateio:** ajuste manual > ponto eletrônico > obra padrão do cadastro > "Sem obra definida".
@@ -181,28 +187,40 @@ Custo de holerite rateado = máx(H − P, 0)       (os três somados, nunca aval
 
 #### Centro de Custo — o relatório mais importante
 
-Fica em **Financeiro → Centro de Custo** (antes era um botão dentro de Relatórios; usa a mesma
-permissão `financeiro.relatorios`). Abre no **mês de apuração** do topo; o período pode ser
-trocado para **Todo o histórico** ou **Outro mês ou intervalo**. Cruza o que **entrou** com o que
-**saiu** em cada obra:
+Fica em **Financeiro → Centro de Custo** (usa a permissão `financeiro.relatorios`). Abre no **mês de
+apuração** do topo; o período pode ser trocado para **Outro mês ou intervalo** ou **Todo o histórico**.
+No topo há duas alternâncias: **🏢 Empresa (Consolidado) | 🏗️ Por Obra** (com botões das obras) e os
+**3 níveis de profundidade**:
+
+1. **Resumo Executivo** — 4 cartões (**Receita Líquida / Entrou**, **Custo Total / Saiu**, **Saldo** e
+   **Margem**), gráfico **Entradas × Saídas por obra** (em "Por Obra", um gráfico do custo por tópico) e a
+   tabela das obras. Clicar numa obra (no consolidado) abre só ela.
+2. **Totais por Tópico** — entradas (**Bruto, Desconto da nota 11%, Líquido**) e o total de cada bloco de
+   saída: *Produção, Diárias, Excedente de Folha (Salário + Férias + 13º), VA, VT, Extras, EPI, Admissão,
+   DCTF, DAS, Ferramentas, Café/Outros*, com **R$** e **% sobre a receita**. Clicar num tópico abre o
+   nível 3 já filtrado nele.
+3. **Detalhado Individual** — todos os lançamentos (data/competência, obra, categoria, colaborador/item,
+   descrição, **regra aplicada** — ex.: *Rateio Ponto 66,67%*, *Transferido via Ponto*, *Proporcional
+   CLT*, *Receita c/ Nota 12m*, *Direto na obra* — e valor), com busca, filtro por categoria e botão
+   **Exportar Excel** (.xlsx, com uma aba de totais por categoria).
+
+Cruza o que **entrou** com o que **saiu** em cada obra:
 
 ```
 Entrou = receita LÍQUIDA (já com a nota descontada)
-Pagou  = produção + diárias rateadas + excedente do holerite + VA + VT + Extras + EPI + gastos diretos (Café)
-Saldo  = Entrou − Pagou
+Saiu   = produção + diárias rateadas + excedente de folha + VA + VT + Extras + EPI + admissão + DCTF + DAS
+         + gastos diretos (Ferramentas, Café e outros)
+Saldo  = Entrou − Saiu
 Margem = Saldo ÷ Entrou × 100
 ```
 
-**Excedente do holerite** merece explicação. Por pessoa e por mês, com `P` = produção + diárias e
-`H` = Vale + INSS + Taxa + Pagto:
+**Excedente de folha** merece explicação. Por pessoa e por mês, com `P` = produção + diárias e
+`H` = salário + férias + 13º (cada um = Vale + INSS + Taxa + Pagto):
 
 - Se **H ≤ P** → não soma nada (o holerite é adiantamento do que produziu; somar contaria o
   mesmo dinheiro duas vezes)
 - Se **H > P** → a diferença é custo real e é **rateada pelo ponto eletrônico** do mês
 - Sem ponto → obra atual do cadastro; sem obra → linha **"Sem obra definida"**, visível, nunca descartado
-
-Duas visões: **Geral** (uma linha por obra) e **Detalhada** (abre a composição dos dois lados
-por tipo de serviço).
 
 ### 🧮 Conciliação
 

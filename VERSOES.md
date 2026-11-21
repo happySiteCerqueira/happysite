@@ -50,6 +50,23 @@ git checkout v2.111
 
 ## Versões
 
+### 2.131 — Centro de Custo em 3 níveis, Ferramentas e admissão via ponto
+
+- **Centro de Custo redesenhado** (Financeiro → Centro de Custo), com alternância **🏢 Empresa
+  (Consolidado) | 🏗️ Por Obra** (botões das obras) e período (mês de apuração, intervalo ou todo o
+  histórico), em 3 níveis: **1 · Resumo Executivo** (cartões Receita Líquida, Custo Total, Saldo e Margem,
+  gráfico Entradas × Saídas e tabela das obras); **2 · Totais por Tópico** (bruto, desconto da nota e
+  líquido + cada bloco de saída em R$ e % da receita; clicar abre o nível 3 filtrado); **3 · Detalhado
+  Individual** (todos os lançamentos com a **regra aplicada**, busca, filtro por categoria e **Exportar
+  Excel**). Os totais são os mesmos de antes; só muda a forma de ver.
+- **Ferramentas** nos gastos diretos: o formulário **Lançar gasto** agora tem a lista **Café |
+  Ferramentas | VA | Vale Transporte | Outros**. Ferramentas vai 100% para a obra escolhida e tem coluna
+  própria no Resumo e bloco próprio no Centro de Custo.
+- **Admissão via ponto**: o custo de admissão (R$ 225) nasce na obra do cadastro e, se o ponto (ou o
+  rateio manual) do mês mostrar que a pessoa trabalhou principalmente em outra obra, é **transferido
+  inteiro** para ela (sem dividir). Aparece como "Transferido via Ponto".
+- Nova rota `GET /relatorios/centro-custo/linhas`; cada saída de `/relatorios/saude-obras` passou a ter `categoria`.
+
 ### 2.130 — Admissão, Férias/13º, DCTF/DAS e nova regra de ponto
 
 - **Custo de Admissão automático**: quem tem **data de admissão** no mês gera ASO (R$ 75) + Treinamento

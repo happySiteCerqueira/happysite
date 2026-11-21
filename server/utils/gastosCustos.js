@@ -26,6 +26,7 @@ function chaveTexto(texto) {
 function classificarTipoGasto(tipo) {
   const t = chaveTexto(tipo);
   if (t.startsWith('cafe')) return 'CAFE';
+  if (t.startsWith('ferramenta')) return 'FERRAMENTAS';
   if (t === 'va' || t.startsWith('vale alimentacao') || t.startsWith('auxilio alimentacao')) return 'VA';
   if (t === 'vt' || t.startsWith('vale transporte')) return 'VT';
   return 'OUTROS';
@@ -100,7 +101,11 @@ async function ratearImpostos(mes, impostos, colabs) {
   const montar = (valor, mapa) => {
     const lista = [...mapa.values()];
     const valores = ratearCentavos(valor, lista.map(l => l.peso));
-    return lista.map((l, i) => ({ obra_id: l.obra_id, obra_nome: l.obra_nome, valor: valores[i] }));
+    const somaPesos = lista.reduce((s, l) => s + l.peso, 0) || 1;
+    return lista.map((l, i) => ({
+      obra_id: l.obra_id, obra_nome: l.obra_nome, valor: valores[i],
+      percentual: Math.round((l.peso / somaPesos) * 10000) / 100
+    }));
   };
 
   const dctf = valorDe('DCTF');
@@ -151,6 +156,26 @@ async function ratearImpostos(mes, impostos, colabs) {
     partes.das = montar(das, pesos);
   }
   return { partes, avisos };
+}
+
+// Obra que recebe o custo de admissão (ASO + Treinamento), sempre INTEIRO e sem dividir:
+//   • nasce na obra do cadastro;
+//   • se o ponto (ou o rateio manual) do mês mostra que a pessoa trabalhou principalmente em
+//     OUTRA obra, o custo é transferido para a obra principal do mês (a de maior percentual;
+//     em empate, a do cadastro). Sem ponto, fica na obra do cadastro.
+function destinoAdmissao(c, rateio) {
+  const cadastro = { obra_id: c.obra_id || null, obra_nome: c.obra_nome || SEM_OBRA, via: 'CADASTRO' };
+  if (!rateio || (rateio.origem !== 'PONTO' && rateio.origem !== 'MANUAL')) return cadastro;
+
+  let melhor = null;
+  for (const it of rateio.itens) {
+    if (!it.obra_id) continue;
+    const maior = !melhor || it.percentual > melhor.percentual + 1e-9;
+    const empateNoCadastro = melhor && Math.abs(it.percentual - melhor.percentual) <= 1e-9 && it.obra_id === c.obra_id;
+    if (maior || empateNoCadastro) melhor = it;
+  }
+  if (!melhor || melhor.obra_id === c.obra_id) return cadastro;
+  return { obra_id: melhor.obra_id, obra_nome: melhor.obra_nome, via: rateio.origem };
 }
 
 const somaPor = (linhas, chave = 'valor') => {
@@ -280,8 +305,10 @@ async function calcularCustosMes(mes) {
     rateio.itens.forEach((it, idx) => {
       for (const campo of ['va', 'vt', 'extras', 'holerite', 'epi']) acumular(it.obra_id, it.obra_nome, campo, partes[campo][idx]);
     });
-    // A admissão não é rateada: vai inteira para a obra do cadastro.
-    if (valorAdmissao > 0) acumular(c.obra_id, c.obra_nome, 'admissao', valorAdmissao);
+    // A admissão não é rateada: vai inteira para UMA obra (a do cadastro ou, se o ponto mostrar
+    // outra obra principal no mês, para ela).
+    const destino = destinoAdmissao(c, rateio);
+    if (valorAdmissao > 0) acumular(destino.obra_id, destino.obra_nome, 'admissao', valorAdmissao);
 
     return {
       colaborador_id: c.id,
@@ -301,7 +328,10 @@ async function calcularCustosMes(mes) {
       extras: valorExtras,
       epi: valorEpi,
       admissao: valorAdmissao,
-      admissao_obra: valorAdmissao > 0 ? (c.obra_nome || SEM_OBRA) : null,
+      admissao_obra: valorAdmissao > 0 ? destino.obra_nome : null,
+      admissao_obra_id: valorAdmissao > 0 ? destino.obra_id : null,
+      // CADASTRO = ficou na obra do cadastro; PONTO/MANUAL = transferida para a obra principal do mês.
+      admissao_via: valorAdmissao > 0 ? destino.via : null,
       qtd_extras: qtdExtras.get(c.id) || 0,
       holerite_salario: salario,
       holerite_ferias: valorFerias,
@@ -326,7 +356,8 @@ async function calcularCustosMes(mes) {
     porObra,
     epiSemPreco: retiradasSemPreco,
     impostos: { dctf: valorImposto('DCTF'), das: valorImposto('DAS'), avisos: avisosImpostos },
-    admissaoSemObra: resultado.filter(c => c.admissao > 0 && !pessoas.find(p => p.id === c.colaborador_id).obra_id).length
+    impostosPartes: partesImpostos,
+    admissaoSemObra: resultado.filter(c => c.admissao > 0 && !c.admissao_obra_id).length
   };
 }
 
@@ -352,7 +383,7 @@ async function montarResumo(mes) {
   const obras = new Map();
   const linhaObra = (id, nome) => {
     const chave = id || 0;
-    if (!obras.has(chave)) obras.set(chave, { obra_id: id || null, obra: nome || SEM_OBRA, va: 0, vt: 0, cafe: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, dctf: 0, das: 0, outros: 0 });
+    if (!obras.has(chave)) obras.set(chave, { obra_id: id || null, obra: nome || SEM_OBRA, va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, dctf: 0, das: 0, outros: 0 });
     return obras.get(chave);
   };
   for (const o of porObra.values()) {
@@ -370,18 +401,18 @@ async function montarResumo(mes) {
       continue;
     }
     const l = linhaObra(g.obra_id, g.obra_nome);
-    const campo = { CAFE: 'cafe', VA: 'va', VT: 'vt', OUTROS: 'outros' }[classe];
+    const campo = { CAFE: 'cafe', FERRAMENTAS: 'ferramentas', VA: 'va', VT: 'vt', OUTROS: 'outros' }[classe];
     l[campo] += Number(g.valor) || 0;
   }
 
   const lista = [...obras.values()].map(l => {
     const linha = {
       ...l,
-      va: arredondar(l.va), vt: arredondar(l.vt), cafe: arredondar(l.cafe),
+      va: arredondar(l.va), vt: arredondar(l.vt), cafe: arredondar(l.cafe), ferramentas: arredondar(l.ferramentas),
       extras: arredondar(l.extras), holerite: arredondar(l.holerite), epi: arredondar(l.epi), outros: arredondar(l.outros),
       admissao: arredondar(l.admissao), dctf: arredondar(l.dctf), das: arredondar(l.das)
     };
-    linha.total = arredondar(linha.va + linha.vt + linha.cafe + linha.extras + linha.holerite + linha.epi + linha.outros + linha.admissao + linha.dctf + linha.das);
+    linha.total = arredondar(linha.va + linha.vt + linha.cafe + linha.ferramentas + linha.extras + linha.holerite + linha.epi + linha.outros + linha.admissao + linha.dctf + linha.das);
     return linha;
   }).sort((a, b) => {
     if (!a.obra_id !== !b.obra_id) return a.obra_id ? -1 : 1; // "Sem obra definida" sempre por último
@@ -389,9 +420,9 @@ async function montarResumo(mes) {
   });
 
   const totais = lista.reduce((acc, l) => {
-    for (const k of ['va', 'vt', 'cafe', 'extras', 'holerite', 'epi', 'admissao', 'dctf', 'das', 'outros', 'total']) acc[k] = arredondar(acc[k] + l[k]);
+    for (const k of ['va', 'vt', 'cafe', 'ferramentas', 'extras', 'holerite', 'epi', 'admissao', 'dctf', 'das', 'outros', 'total']) acc[k] = arredondar(acc[k] + l[k]);
     return acc;
-  }, { va: 0, vt: 0, cafe: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, dctf: 0, das: 0, outros: 0, total: 0 });
+  }, { va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, dctf: 0, das: 0, outros: 0, total: 0 });
 
   const semObra = colaboradores.filter(c => c.rateio_origem === 'SEM_OBRA');
   return {

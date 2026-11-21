@@ -427,7 +427,7 @@ router.get('/resumo/configuravel', permitir('ADM'), async (req, res) => {
 // Os tipos abaixo são apenas as SUGESTÕES da tela. O campo é texto livre de propósito: amanhã
 // pode surgir "Cesta básica", "EPI" ou "Alojamento" sem precisar de alteração no código nem
 // migração no banco.
-const TIPOS_GASTO_SUGERIDOS = ['Café', 'VA', 'Vale Transporte'];
+const TIPOS_GASTO_SUGERIDOS = ['Café', 'Ferramentas', 'VA', 'Vale Transporte'];
 
 function parseGasto(g) {
   if (!g) return g;

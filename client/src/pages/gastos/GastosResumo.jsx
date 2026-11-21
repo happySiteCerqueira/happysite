@@ -8,6 +8,7 @@ const CATEGORIAS = [
   { chave: 'va', rotulo: 'VA' },
   { chave: 'vt', rotulo: 'VT' },
   { chave: 'cafe', rotulo: 'Café' },
+  { chave: 'ferramentas', rotulo: 'Ferramentas' },
   { chave: 'extras', rotulo: 'Extras' },
   { chave: 'epi', rotulo: 'EPI' },
   { chave: 'admissao', rotulo: 'Admissão' },

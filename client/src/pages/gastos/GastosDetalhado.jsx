@@ -57,7 +57,7 @@ export default function GastosDetalhado({ mes }) {
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
           O regime vem do cadastro (<em>participa de produção</em>). O custo de holerite é só o que
           <strong> excede a produção</strong> do mês, somando salário + férias + 13º. A admissão (ASO R$ 75 +
-          Treinamento R$ 150) vai inteira para a obra do cadastro. O Café não entra aqui: é custo direto da obra.
+                    Treinamento R$ 150) nasce na obra do cadastro e passa inteira para a obra principal do ponto, se for outra. O Café não entra aqui: é custo direto da obra.
         </div>
       </div>
 
@@ -111,7 +111,9 @@ export default function GastosDetalhado({ mes }) {
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {moeda(i.admissao)}
                       {i.admissao > 0 && (
-                        <div style={{ fontSize: 10, color: '#6b7280' }}>obra: {i.admissao_obra}</div>
+                        <div style={{ fontSize: 10, color: '#6b7280' }}>
+                          obra: {i.admissao_obra}{i.admissao_via && i.admissao_via !== 'CADASTRO' ? ' (transferida via ponto)' : ''}
+                        </div>
                       )}
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>

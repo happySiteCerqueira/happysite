@@ -120,6 +120,30 @@ function arredondar(valor) {
   return Math.round((Number(valor) || 0) * 100) / 100;
 }
 
+// Blocos de SAÍDA do Centro de Custo, na ordem em que a tela os mostra. Cada saída carrega a
+// sua `categoria` (uma destas chaves), e é com ela que a tela agrupa os "Totais por Tópico".
+const CATEGORIAS_SAIDA = [
+  { chave: 'PRODUCAO', rotulo: 'Produção' },
+  { chave: 'DIARIAS', rotulo: 'Diárias' },
+  { chave: 'FOLHA', rotulo: 'Excedente de Folha (Salário + Férias + 13º)' },
+  { chave: 'VA', rotulo: 'VA (Vale Alimentação)' },
+  { chave: 'VT', rotulo: 'VT (Vale Transporte)' },
+  { chave: 'EXTRAS', rotulo: 'Extras' },
+  { chave: 'EPI', rotulo: 'EPI' },
+  { chave: 'ADMISSAO', rotulo: 'Admissão (ASO + Treinamento)' },
+  { chave: 'DCTF', rotulo: 'DCTF' },
+  { chave: 'DAS', rotulo: 'DAS' },
+  { chave: 'FERRAMENTAS', rotulo: 'Ferramentas' },
+  { chave: 'OUTROS', rotulo: 'Café / Outros' }
+];
+
+// Gasto direto lançado à mão (financeiro_gastos): VA, VT e Ferramentas têm bloco próprio;
+// Café e qualquer outro tipo caem em "Café / Outros".
+function categoriaDoGasto(tipo) {
+  const classe = classificarTipoGasto(tipo);
+  return { VA: 'VA', VT: 'VT', FERRAMENTAS: 'FERRAMENTAS' }[classe] || 'OUTROS';
+}
+
 // Receitas do período, agrupadas por obra + serviço (Pintura, Produção, Diárias, Reforma...).
 // O filtro de período usa data_medicao, que é a data de referência do lançamento na Receita.
 async function buscarEntradas(dataInicio, dataFim) {
@@ -267,11 +291,11 @@ async function buscarCustosColaboradores(mesInicio, mesFim) {
     // Custos que pertencem à obra e não à pessoa: admissão (ASO + Treinamento, na obra do
     // cadastro), DCTF e DAS (rateados). Entram junto dos benefícios, por obra e tipo.
     for (const o of porObra.values()) {
-      for (const [campo, rotulo] of [['admissao', 'Admissão (ASO + Treinamento)'], ['dctf', 'DCTF'], ['das', 'DAS']]) {
+      for (const [campo, rotulo, categoria] of [['admissao', 'Admissão (ASO + Treinamento)', 'ADMISSAO'], ['dctf', 'DCTF', 'DCTF'], ['das', 'DAS', 'DAS']]) {
         if (!o[campo]) continue;
         const chave = `${o.obra_id || 0}|${rotulo}`;
         if (!beneficios.has(chave)) {
-          beneficios.set(chave, { obra_id: o.obra_id, obra_nome: o.obra_id ? o.obra : null, tipo: rotulo, valor: 0, qtd: 0 });
+          beneficios.set(chave, { obra_id: o.obra_id, obra_nome: o.obra_id ? o.obra : null, tipo: rotulo, categoria, valor: 0, qtd: 0 });
         }
         const linha = beneficios.get(chave);
         linha.valor += o[campo];
@@ -287,11 +311,11 @@ async function buscarCustosColaboradores(mesInicio, mesFim) {
             folha: c.holerite_recebido, produzido: c.producao_diarias, diferenca: d.holerite
           });
         }
-        for (const [campo, rotulo] of [['va', 'VA'], ['vt', 'Vale Transporte'], ['extras', 'Extras'], ['epi', 'EPI']]) {
+        for (const [campo, rotulo, categoria] of [['va', 'VA', 'VA'], ['vt', 'Vale Transporte', 'VT'], ['extras', 'Extras', 'EXTRAS'], ['epi', 'EPI', 'EPI']]) {
           if (!d[campo]) continue;
           const chave = `${d.obra_id || 0}|${rotulo}`;
           if (!beneficios.has(chave)) {
-            beneficios.set(chave, { obra_id: d.obra_id, obra_nome: d.obra_id ? d.obra_nome : null, tipo: rotulo, valor: 0, qtd: 0 });
+            beneficios.set(chave, { obra_id: d.obra_id, obra_nome: d.obra_id ? d.obra_nome : null, tipo: rotulo, categoria, valor: 0, qtd: 0 });
           }
           const linha = beneficios.get(chave);
           linha.valor += d[campo];
@@ -333,7 +357,7 @@ async function buscarCustoGastos(mesInicio, mesFim) {
     if (duplica && !g.manter_com_lote) continue;
 
     const chave = `${g.obra_id || 0}|${g.tipo}`;
-    if (!agrupado.has(chave)) agrupado.set(chave, { obra_id: g.obra_id, obra_nome: g.obra_nome, tipo: g.tipo, valor: 0, qtd: 0 });
+    if (!agrupado.has(chave)) agrupado.set(chave, { obra_id: g.obra_id, obra_nome: g.obra_nome, tipo: g.tipo, categoria: categoriaDoGasto(g.tipo), valor: 0, qtd: 0 });
     const item = agrupado.get(chave);
     item.valor += Number(g.valor) || 0;
     item.qtd += 1;
@@ -467,7 +491,7 @@ router.get('/saude-obras', async (req, res) => {
   const folha = custosColab.folha;
   const gastos = [...gastosDiretos];
   for (const b of custosColab.beneficios) {
-    const existente = gastos.find(g => (g.obra_id || 0) === (b.obra_id || 0) && g.tipo === b.tipo);
+    const existente = gastos.find(g => (g.obra_id || 0) === (b.obra_id || 0) && g.tipo === b.tipo && g.categoria === b.categoria);
     if (existente) { existente.valor += b.valor; existente.qtd += b.qtd; } else gastos.push(b);
   }
 
@@ -508,7 +532,7 @@ router.get('/saude-obras', async (req, res) => {
     const registro = obterObra(mapa, chaveNome, linha.obra_nome);
     registro.obra_id = linha.obra_id;
     const valor = arredondar(linha.valor);
-    registro.saidas.push({ tipo: 'PRODUCAO', servico: linha.servico, valor, qtd: linha.qtd });
+    registro.saidas.push({ tipo: 'PRODUCAO', categoria: 'PRODUCAO', servico: linha.servico, valor, qtd: linha.qtd });
     registro.total_saida = arredondar(registro.total_saida + valor);
   }
 
@@ -520,6 +544,7 @@ router.get('/saude-obras', async (req, res) => {
     const valor = arredondar(linha.valor);
     registro.saidas.push({
       tipo: 'DIARIA',
+      categoria: 'DIARIAS',
       servico: 'Diárias',
       valor,
       quantidade: arredondar(linha.quantidade)
@@ -540,7 +565,7 @@ router.get('/saude-obras', async (req, res) => {
     else registro.obra_id = linha.obra_id;
 
     const valor = arredondar(linha.valor);
-    registro.saidas.push({ tipo: 'GASTO', servico: linha.tipo, valor, qtd: linha.qtd });
+    registro.saidas.push({ tipo: 'GASTO', categoria: linha.categoria || 'OUTROS', servico: linha.tipo, valor, qtd: linha.qtd });
     registro.total_saida = arredondar(registro.total_saida + valor);
   }
 
@@ -576,6 +601,7 @@ router.get('/saude-obras', async (req, res) => {
     grupo.pessoas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     registro.saidas.push({
       tipo: 'FOLHA',
+      categoria: 'FOLHA',
       servico: 'Folha (holerite acima da produção)',
       valor: grupo.valor,
       pessoas: grupo.pessoas
@@ -583,7 +609,197 @@ router.get('/saude-obras', async (req, res) => {
     registro.total_saida = arredondar(registro.total_saida + grupo.valor);
   }
 
-  res.json(montarResposta(mapa, { data_inicio, data_fim }, diariasSemObra));
+  res.json({ ...montarResposta(mapa, { data_inicio, data_fim }, diariasSemObra), categorias: CATEGORIAS_SAIDA });
+});
+
+// ===========================================================================================
+// CENTRO DE CUSTO — LINHAS DETALHADAS (Nível 3)
+// ===========================================================================================
+//
+// Devolve TODAS as linhas que compõem o relatório (entradas e saídas), uma por lançamento, com a
+// regra aplicada. Os totais por obra e por categoria destas linhas batem com /saude-obras (os dois
+// usam as mesmas fontes e a mesma engine de rateio) — a tela usa /saude-obras para os níveis 1 e 2
+// e estas linhas para o nível 3 e para a exportação.
+const fmtPct = v => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+const fmtMoeda = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const CHAVE_SEM_OBRA_LINHA = '__SEM_OBRA__';
+
+function chaveDaObra(nome, obraId) {
+  if (!obraId && (!nome || nome === 'Sem obra definida')) return CHAVE_SEM_OBRA_LINHA;
+  return normalizarNomeObra(nome);
+}
+
+function regraDoRateio(origem, pct) {
+  if (origem === 'PONTO') return `Rateio Ponto ${fmtPct(pct)}%`;
+  if (origem === 'MANUAL') return `Rateio manual ${fmtPct(pct)}%`;
+  if (origem === 'PADRAO') return 'Obra padrão do cadastro (100%)';
+  return 'Sem obra definida';
+}
+
+async function buscarLinhasDetalhadas({ data_inicio, data_fim, mes_inicio, mes_fim }) {
+  const linhas = [];
+  const add = l => linhas.push({
+    colaborador: '', descricao: '', valor_bruto: null, desconto_nota: null, ...l, valor: arredondar(l.valor)
+  });
+  const filtroMes = (coluna, params) => {
+    let sql = '';
+    if (mes_inicio) { sql += ` AND ${coluna} >= ?`; params.push(mes_inicio); }
+    if (mes_fim) { sql += ` AND ${coluna} <= ?`; params.push(mes_fim); }
+    return sql;
+  };
+
+  // ---- Entradas: uma linha por receita lançada ----
+  const pRec = [];
+  let sqlRec = `SELECT id, to_char(data_medicao, 'YYYY-MM-DD') AS data, obra_nome, servico, com_nota,
+                       valor_bruto, valor_liquido, status
+                FROM financeiro_receitas WHERE excluido = 0`;
+  if (data_inicio) { sqlRec += ' AND data_medicao >= ?'; pRec.push(data_inicio); }
+  if (data_fim) { sqlRec += ' AND data_medicao <= ?'; pRec.push(data_fim); }
+  for (const r of await db.all(`${sqlRec} ORDER BY data_medicao`, ...pRec)) {
+    const bruto = arredondar(r.valor_bruto);
+    const liquido = arredondar(r.valor_liquido);
+    add({
+      tipo: 'ENTRADA', categoria: 'ENTRADA', categoria_rotulo: 'Entrada (Receita)',
+      obra_chave: chaveDaObra(r.obra_nome, true), obra: r.obra_nome,
+      competencia: r.data.slice(0, 7), data: r.data,
+      item: r.servico, descricao: `${r.servico} · ${r.status === 'PAGO' ? 'pago' : r.status === 'CONFIRMADO' ? 'confirmado' : 'em análise'}`,
+      regra: r.com_nota ? 'Receita c/ nota (desconto 11%)' : 'Receita s/ nota',
+      valor: liquido, valor_bruto: bruto, desconto_nota: bruto - liquido
+    });
+  }
+
+  // ---- Produção: por obra, mês, colaborador e serviço ----
+  const pProd = [];
+  const prod = await db.all(
+    `SELECT o.id AS obra_id, o.nome AS obra_nome, cel.mes_ciclo, c.nome AS colaborador, os.nome AS servico,
+            SUM(cel.valor) AS valor, COUNT(*)::int AS qtd
+     FROM obra_servico_celulas cel
+     JOIN obra_servicos os ON os.id = cel.obra_servico_id
+     JOIN obras o ON o.id = os.obra_id
+     LEFT JOIN colaboradores c ON c.id = cel.colaborador_id
+     WHERE os.excluido = 0${filtroMes('cel.mes_ciclo', pProd)}
+     GROUP BY o.id, o.nome, cel.mes_ciclo, c.nome, os.nome
+     ORDER BY cel.mes_ciclo, o.nome, c.nome`, ...pProd
+  );
+  for (const p of prod) {
+    add({
+      tipo: 'SAIDA', categoria: 'PRODUCAO', categoria_rotulo: 'Produção',
+      obra_chave: chaveDaObra(p.obra_nome, p.obra_id), obra: p.obra_nome, competencia: p.mes_ciclo, data: null,
+      colaborador: p.colaborador || '(sem colaborador)', item: p.servico,
+      descricao: `${p.servico} · ${p.qtd} marcação(ões)`, regra: 'Direto na obra (produção marcada)', valor: p.valor
+    });
+  }
+
+  // ---- Diárias: por obra, mês e colaborador ----
+  const pDia = [];
+  const dias = await db.all(
+    `SELECT o.id AS obra_id, o.nome AS obra_nome, dobra.mes_ciclo, c.nome AS colaborador,
+            SUM(dobra.quantidade) AS quantidade, SUM(dobra.quantidade * d.valor_unitario_usado) AS valor
+     FROM diaria_obras dobra
+     JOIN obras o ON o.id = dobra.obra_id
+     JOIN diarias d ON d.colaborador_id = dobra.colaborador_id AND d.mes_ciclo = dobra.mes_ciclo
+     JOIN colaboradores c ON c.id = dobra.colaborador_id
+     WHERE dobra.excluido = 0${filtroMes('dobra.mes_ciclo', pDia)}
+     GROUP BY o.id, o.nome, dobra.mes_ciclo, c.nome
+     ORDER BY dobra.mes_ciclo, o.nome, c.nome`, ...pDia
+  );
+  for (const d of dias) {
+    add({
+      tipo: 'SAIDA', categoria: 'DIARIAS', categoria_rotulo: 'Diárias',
+      obra_chave: chaveDaObra(d.obra_nome, d.obra_id), obra: d.obra_nome, competencia: d.mes_ciclo, data: null,
+      colaborador: d.colaborador, item: 'Diárias', descricao: `${fmtPct(d.quantidade)} diária(s) rateada(s) na obra`,
+      regra: 'Direto na obra (diárias rateadas)', valor: d.valor
+    });
+  }
+
+  // ---- Gastos diretos da obra (Café, Ferramentas, VA/VT manuais, outros) ----
+  const pGas = [];
+  const gastos = await db.all(
+    `SELECT g.id, g.obra_id, o.nome AS obra_nome, g.tipo, g.mes_ciclo, g.descricao, g.manter_com_lote, g.valor
+     FROM financeiro_gastos g LEFT JOIN obras o ON o.id = g.obra_id
+     WHERE g.excluido = 0${filtroMes('g.mes_ciclo', pGas)}
+     ORDER BY g.mes_ciclo, o.nome, g.tipo`, ...pGas
+  );
+  const lotes = await db.all("SELECT tipo, mes_referencia FROM gastos_lotes WHERE status = 'ATIVO' AND tipo IN ('CAJU', 'VT')");
+  const ativos = new Set(lotes.map(l => `${l.tipo}|${l.mes_referencia}`));
+  const rotuloCategoria = Object.fromEntries(CATEGORIAS_SAIDA.map(c => [c.chave, c.rotulo]));
+  for (const g of gastos) {
+    const classe = classificarTipoGasto(g.tipo);
+    const duplica = (classe === 'VA' && ativos.has(`CAJU|${g.mes_ciclo}`)) || (classe === 'VT' && ativos.has(`VT|${g.mes_ciclo}`));
+    if (duplica && !g.manter_com_lote) continue;
+    const categoria = categoriaDoGasto(g.tipo);
+    add({
+      tipo: 'SAIDA', categoria, categoria_rotulo: rotuloCategoria[categoria],
+      obra_chave: chaveDaObra(g.obra_nome, g.obra_id), obra: g.obra_nome || 'Sem obra definida',
+      competencia: g.mes_ciclo, data: null, item: g.tipo, descricao: g.descricao || g.tipo, regra: 'Direto na obra', valor: g.valor
+    });
+  }
+
+  // ---- Custos por colaborador, admissão e impostos: vêm da engine, mês a mês ----
+  const rotuloImposto = { dctf: 'DCTF', das: 'DAS' };
+  for (const mes of await mesesDoPeriodo(mes_inicio, mes_fim)) {
+    const { colaboradores, impostosPartes } = await calcularCustosMes(mes);
+
+    for (const c of colaboradores) {
+      for (const d of c.distribuicao) {
+        const item = c.rateio.find(r => (r.obra_id || 0) === (d.obra_id || 0));
+        const regra = regraDoRateio(c.rateio_origem, item ? item.percentual : 100);
+        const base = {
+          tipo: 'SAIDA', obra_chave: chaveDaObra(d.obra_nome, d.obra_id),
+          obra: d.obra_id ? d.obra_nome : 'Sem obra definida', competencia: mes, data: null, colaborador: c.nome, regra
+        };
+        if (d.holerite > 0) {
+          const partes = [`salário ${fmtMoeda(c.holerite_salario)}`];
+          if (c.holerite_ferias > 0) partes.push(`férias ${fmtMoeda(c.holerite_ferias)}`);
+          if (c.holerite_13 > 0) partes.push(`13º ${fmtMoeda(c.holerite_13)}`);
+          add({
+            ...base, categoria: 'FOLHA', categoria_rotulo: rotuloCategoria.FOLHA, item: 'Excedente de folha',
+            descricao: `Recebeu ${fmtMoeda(c.holerite_recebido)} (${partes.join(' + ')}) − produziu ${fmtMoeda(c.producao_diarias)} = excedente ${fmtMoeda(c.holerite_custo)}`,
+            valor: d.holerite
+          });
+        }
+        for (const [campo, categoria, rotulo] of [['va', 'VA', 'VA (Caju)'], ['vt', 'VT', 'Vale Transporte'], ['extras', 'EXTRAS', 'Extras'], ['epi', 'EPI', 'EPI']]) {
+          if (!d[campo]) continue;
+          add({ ...base, categoria, categoria_rotulo: rotuloCategoria[categoria], item: rotulo, descricao: `${rotulo} do mês de ${c.nome}`, valor: d[campo] });
+        }
+      }
+      if (c.admissao > 0) {
+        add({
+          tipo: 'SAIDA', categoria: 'ADMISSAO', categoria_rotulo: rotuloCategoria.ADMISSAO,
+          obra_chave: chaveDaObra(c.admissao_obra, c.admissao_obra_id), obra: c.admissao_obra_id ? c.admissao_obra : 'Sem obra definida',
+          competencia: mes, data: null, colaborador: c.nome, item: 'Admissão',
+          descricao: 'ASO R$ 75,00 + Treinamento R$ 150,00',
+          regra: c.admissao_via === 'CADASTRO' ? 'Direto na obra do cadastro' : (c.admissao_via === 'MANUAL' ? 'Transferido via rateio manual' : 'Transferido via Ponto'),
+          valor: c.admissao
+        });
+      }
+    }
+
+    for (const [campo, regraBase, descricaoBase] of [
+      ['dctf', 'Proporcional CLT', 'DCTF do mês'],
+      ['das', 'Receita c/ Nota 12m', 'DAS do mês']
+    ]) {
+      for (const p of impostosPartes[campo] || []) {
+        if (!p.valor) continue;
+        add({
+          tipo: 'SAIDA', categoria: campo.toUpperCase(), categoria_rotulo: rotuloCategoria[campo.toUpperCase()],
+          obra_chave: chaveDaObra(p.obra_nome, p.obra_id), obra: p.obra_id ? p.obra_nome : 'Sem obra definida',
+          competencia: mes, data: null, item: rotuloImposto[campo], descricao: descricaoBase,
+          regra: `${regraBase} ${fmtPct(p.percentual)}%`, valor: p.valor
+        });
+      }
+    }
+  }
+
+  linhas.sort((a, b) => (a.competencia || '').localeCompare(b.competencia || '')
+    || (a.obra || '').localeCompare(b.obra || '', 'pt-BR') || a.categoria.localeCompare(b.categoria)
+    || (a.colaborador || '').localeCompare(b.colaborador || '', 'pt-BR'));
+  return linhas;
+}
+
+router.get('/centro-custo/linhas', async (req, res) => {
+  const linhas = await buscarLinhasDetalhadas(req.query);
+  res.json({ categorias: CATEGORIAS_SAIDA, linhas });
 });
 
 module.exports = router;

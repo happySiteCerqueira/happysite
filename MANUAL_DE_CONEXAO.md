@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.130**
+> **Versão do sistema: 2.131**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.130** (tag `v2.130`) |
+| **Versão atual** | **2.131** (tag `v2.131`) |
 
 ### Stack
 
@@ -184,7 +184,7 @@ HappySite/
 | ↳ Pagamentos (antes "Gastos"; custo por colaborador/obra; permissão `financeiro.gastos`) | `gastos/` (`GastosCustos`, `GastosResumo`, `GastosDetalhado`, `GastosDados`, `PainelPrevia`, `EditorCaju`) + `utils/cajuOcr.js` + lançamentos manuais em `Financeiro.jsx` | `gastosCustos.js` (telas), `gastosImportacao.js` (lotes/De-Para) · `utils/gastosCustos.js` (motor), `parserVt.js`, `parserPonto.js`, `pontoRateio.js`, `pdfLinhas.js` |
 | ↳ Holerite | `PagamentosAntecipados.jsx` (`modo="holerite"`); importação do PDF no card Holerite de `gastos/GastosDados.jsx`, que reusa `Conciliacao.jsx` (`modoFixo="importar"`, `mesExterno`) | `conciliacao.js`, `pagamentos-antecipados.js` |
 | ↳ Pagtos. Antecipados | `PagamentosAntecipados.jsx` | `pagamentos-antecipados.js` |
-| ↳ Centro de Custo (antiga Saúde financeira) | `CentroCusto.jsx` | `relatorios.js` (`GET /relatorios/saude-obras`) |
+| ↳ Centro de Custo (antiga Saúde financeira) | `centrocusto/` (`CentroCusto.jsx`, `NivelResumo`, `NivelTopicos`, `NivelDetalhado`, `AvisosCentroCusto`, `util.js` com a exportação Excel) | `relatorios.js` (`GET /relatorios/saude-obras` para os níveis 1–2 e `GET /relatorios/centro-custo/linhas` para o nível 3; as duas têm totais idênticos por obra/categoria, e cada saída carrega `categoria`) |
 | Conciliação | `Conciliacao.jsx` | `conciliacao.js` |
 | Controle de ASO | `Aso.jsx` | `aso.js` |
 | Agenda | `Agenda.jsx` | `agenda.js` |
@@ -276,7 +276,8 @@ INSS + Taxa + Pagto; férias/13º ficam em `holerite_complementar`, somados em c
 nunca avaliados separadamente). A Medição (`routes/medicoes.js`) desconta o mesmo `H` inteiro. A produção
 já está nas obras pela marcação; somar o holerite inteiro contaria duas vezes. Vale Extra, Vale Ex
 RH e Adiantamento **não** fazem parte de `H`. Admissão (ASO 75 + Treinamento 150, constantes em
-`gastosCustos.js`) vai inteira para a obra do cadastro; DCTF/DAS são rateados em `ratearImpostos`.
+`gastosCustos.js`) vai inteira para UMA obra: a do cadastro ou, se o ponto/rateio manual do mês mostrar outra
+obra principal, para ela (`destinoAdmissao`); DCTF/DAS são rateados em `ratearImpostos`.
 O percentual do ponto (`calcularDiasPorObra` em `parserPonto.js`) percorre todos os dias do mês e
 carrega a última obra nos dias sem batida. **Não altere sem rever o Centro de Custo**, que
 precisa usar a mesma regra — e usa: `routes/relatorios.js` chama `calcularCustosMes` de
@@ -498,7 +499,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.130).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.131).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -529,7 +530,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.130** |
+| Versão | **2.131** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |
