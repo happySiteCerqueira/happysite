@@ -4,6 +4,7 @@ const db = require('../db/database');
 const { autenticar } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar } = require('../utils/auditoria');
+const { condicaoVisivelNoMes } = require('../utils/colaboradoresMes');
 const { extrairHolerites, normalizarNome, normalizarCpf } = require('../utils/parserHolerite');
 const { extrairMedicao } = require('../utils/parserMedicao');
 const { conciliar, cruzar, LIMIAR_SIMILARIDADE } = require('../utils/conciliadorFolha');
@@ -194,13 +195,16 @@ function arredondar(valor) {
   return Math.round((Number(valor) || 0) * 100) / 100;
 }
 
-// Monta a lista de colaboradores CLT ativos do cadastro no formato que o motor de cruzamento
-// espera. Aqui NÃO se filtra por lançamento existente (ao contrário de buscarLancamentosDoMes):
-// o objetivo da importação é justamente preencher quem ainda está sem valores.
-async function buscarColaboradoresParaImportar() {
+// Monta a lista de colaboradores CLT do cadastro no formato que o motor de cruzamento espera:
+// ativos, desligados na carência de 35 dias e desligados com lançamento no mês — o holerite de
+// quem acabou de sair costuma chegar depois do desligamento. Aqui NÃO se filtra por lançamento
+// existente (ao contrário de buscarLancamentosDoMes): o objetivo da importação é justamente
+// preencher quem ainda está sem valores.
+async function buscarColaboradoresParaImportar(mes) {
+  const filtro = condicaoVisivelNoMes(mes);
   const linhas = await db.all(
-    `SELECT id, nome, documento, funcao FROM colaboradores
-     WHERE tipo = 'CPF' AND ativo = 1 ORDER BY nome`
+    `SELECT c.id, c.nome, c.documento, c.funcao FROM colaboradores c
+     WHERE c.tipo = 'CPF' AND ${filtro.sql} ORDER BY c.nome`, ...filtro.params
   );
   return linhas.map(l => ({
     colaborador_id: l.id,
@@ -226,7 +230,7 @@ router.post('/importar/previa', upload.single('holerite'), async (req, res) => {
       });
     }
 
-    const pessoas = await buscarColaboradoresParaImportar();
+    const pessoas = await buscarColaboradoresParaImportar(mes);
     const { pares, sobraHolerite } = cruzar(pessoas, holerites, LIMIAR_SIMILARIDADE);
 
     // Lançamentos já existentes no mês: servem para mostrar o valor atual ao lado do novo e

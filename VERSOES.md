@@ -50,6 +50,18 @@ git checkout v2.111
 
 ## Versões
 
+### 2.124 — Desligados continuam consultáveis nos meses em que trabalharam
+
+- Quem foi **desligado/arquivado** não some mais do histórico. Nas listas do mês de apuração
+  (**Diárias, Pagamentos Antecipados, Holerite, Prestadores → Ativos** e na **importação do PDF
+  de holerite**) a pessoa aparece se for ativa, **ou** estiver na **carência de 35 dias** após o
+  desligamento, **ou** tiver **lançamento naquele mês** (holerite/pagamento antecipado, diária,
+  produção ou medição). Passada a carência, no mês seguinte ao último lançamento ela deixa de
+  aparecer.
+- Quem aparece já desligado ganha a etiqueta **(desligado)**. Em Prestadores a aba Ativos usa o
+  mês do topo, e o botão vira **Reativar** para essas pessoas.
+- Regra única em `server/utils/colaboradoresMes.js`. Medição já listava por lançamento e não mudou.
+
 ### 2.123 — Painel: aniversário de empresa só com 1 ano ou mais
 
 - O quadro **Aniversário de empresa** do Painel listava também quem foi **admitido no próprio

@@ -141,7 +141,7 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
           <tbody>
             {itens.map(item => (
               <tr key={item.colaborador_id} style={item.bloqueado ? { background: '#fef2f2' } : undefined}>
-                <td>{item.nome}</td>
+                <td>{item.nome}{item.ativo === 0 && <span style={{ marginLeft: 6, fontSize: 11, color: '#b45309', fontWeight: 600 }}>(desligado)</span>}</td>
                 <td style={{ color: '#6b7280' }}>{item.funcao || '-'}</td>
                 <td style={{ color: '#6b7280' }}>{item.documento}</td>
                 {colunas.map(c => (

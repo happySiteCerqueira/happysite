@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.123** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.124** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -263,9 +263,19 @@ nome (maiúsculas, sem acento). Nomes que não casam **aparecem com aviso**, nun
 Já causou duplicata no filtro (`Ajudante` vs `AJUDANTE` = duas opções, gente dividida). Hoje é
 normalizado na gravação e os filtros comparam ignorando maiúsculas.
 
-### 3.8 Desligado continua disponível por 35 dias
-Quem é desligado some das listas, mas continua a aparecer nos lançamentos durante 35 dias —
-porque o pagamento é feito no mês seguinte ao trabalho.
+### 3.8 Quem aparece em cada mês: carência de 35 dias + meses com lançamento
+Para uma pessoa **desligada**, as listas do mês (Diárias, Pagamentos Antecipados, Holerite,
+Prestadores → Ativos e a importação de holerite) seguem esta regra
+(`server/utils/colaboradoresMes.js`):
+
+1. **Até 35 dias após o desligamento** ela continua aparecendo como se fosse ativa — o holerite é
+   lançado no fim do mês, às vezes depois da saída;
+2. **Passados os 35 dias** ela aparece **somente nos meses em que tem lançamento** (holerite ou
+   qualquer pagamento antecipado, diária, produção ou medição) — olhando o mês de apuração do topo.
+   No mês seguinte ao último lançamento ela deixa de aparecer.
+
+Desligados com mais de 35 dias continuam sempre na aba *Desligados / Arquivados* de Prestadores
+(para consultar ou reativar). Desligamentos antigos sem data só entram pela regra 2.
 
 ### 3.9 Exclusão é lógica
 Tabelas críticas usam `excluido = 1` em vez de `DELETE`. O registro some das telas mas continua

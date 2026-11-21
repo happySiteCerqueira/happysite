@@ -3,6 +3,7 @@ const db = require('../db/database');
 const { autenticar } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
 const { rotuloCelula } = require('../utils/celulasLabel');
+const { condicaoVisivelNoMes } = require('../utils/colaboradoresMes');
 
 const router = express.Router();
 
@@ -10,16 +11,23 @@ router.use(autenticar, permissaoModulo('prestadores'));
 
 
 router.get('/', async (req, res) => {
-  const { busca, status } = req.query; // status: 'ativos' (default) | 'arquivados' | 'todos'
-  let sql = 'SELECT * FROM colaboradores WHERE 1=1';
+  const { busca, status, mes } = req.query; // status: 'ativos' (default) | 'arquivados' | 'todos'
+  let sql = 'SELECT c.* FROM colaboradores c WHERE 1=1';
   const params = [];
-  if (status === 'arquivados') sql += ' AND ativo = 0';
-  else if (status !== 'todos') sql += ' AND ativo = 1';
+  if (status === 'arquivados') sql += ' AND c.ativo = 0';
+  else if (status !== 'todos') {
+    // Aba "Ativos": ativos + desligados ainda na carência de 35 dias + (se vier ?mes=YYYY-MM)
+    // desligados que têm lançamento naquele mês. Assim, com o mês de apuração do topo em um
+    // mês antigo, quem saiu depois dele continua aparecendo.
+    const filtro = condicaoVisivelNoMes(/^\d{4}-\d{2}$/.test(mes || '') ? mes : null);
+    sql += ` AND ${filtro.sql}`;
+    params.push(...filtro.params);
+  }
   if (busca) {
-    sql += ' AND (nome ILIKE ? OR documento ILIKE ?)';
+    sql += ' AND (c.nome ILIKE ? OR c.documento ILIKE ?)';
     params.push(`%${busca}%`, `%${busca}%`);
   }
-  sql += ' ORDER BY tipo, nome';
+  sql += ' ORDER BY c.tipo, c.nome';
   res.json(await db.all(sql, ...params));
 });
 

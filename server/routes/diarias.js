@@ -4,6 +4,7 @@ const { autenticar } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar, registrarSnapshot } = require('../utils/auditoria');
 const { recalcularDiariasEmSegundoPlano } = require('../utils/recalculoAutomatico');
+const { condicaoVisivelNoMes } = require('../utils/colaboradoresMes');
 
 const router = express.Router();
 
@@ -50,7 +51,13 @@ router.get('/planilha', async (req, res) => {
   const { mes } = req.query;
   if (!mes) return res.status(400).json({ erro: 'mes (YYYY-MM) é obrigatório' });
 
-  const pessoas = await db.all("SELECT * FROM colaboradores WHERE ativo = 1 ORDER BY tipo, nome");
+  // Ativos, em carência de desligamento (35 dias) ou com lançamento neste mês — ver
+  // utils/colaboradoresMes.js. Quem saiu e já passou a carência só aparece nos meses em que
+  // tem lançamento, então o histórico dele continua consultável.
+  const filtro = condicaoVisivelNoMes(mes);
+  const pessoas = await db.all(
+    `SELECT c.* FROM colaboradores c WHERE ${filtro.sql} ORDER BY c.tipo, c.nome`, ...filtro.params
+  );
   const lancamentos = await db.all('SELECT * FROM diarias WHERE mes_ciclo = ?', mes);
   const porPessoa = {};
   lancamentos.forEach(l => { porPessoa[l.colaborador_id] = l; });
@@ -78,6 +85,7 @@ router.get('/planilha', async (req, res) => {
       colaborador_id: p.id,
       nome: p.nome,
       tipo: p.tipo,
+      ativo: p.ativo,
       documento: p.documento,
       // Empreiteiros (PJ) não têm "função"; mostram o contato responsável no lugar, mesmo padrão
       // já usado em Medição e Prestadores.

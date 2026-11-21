@@ -3,6 +3,7 @@ const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar, registrarSnapshot } = require('../utils/auditoria');
+const { condicaoVisivelNoMes } = require('../utils/colaboradoresMes');
 const { calcularCustosMes, montarResumo, arredondar } = require('../utils/gastosCustos');
 
 const router = express.Router();
@@ -46,7 +47,9 @@ router.get('/detalhado', async (req, res) => {
 // Lista enxuta de colaboradores ativos para o seletor de "Lançar Extra" (qualquer pessoa pode
 // receber extra, mesmo sem custo no mês). Fica aqui para não depender da permissão de Prestadores.
 router.get('/colaboradores', async (req, res) => {
-  res.json(await db.all('SELECT id, nome FROM colaboradores WHERE ativo = 1 ORDER BY nome'));
+  // Ativos + desligados na carência de 35 dias (um extra pode ser lançado logo após a saída).
+  const filtro = condicaoVisivelNoMes(null);
+  res.json(await db.all(`SELECT c.id, c.nome FROM colaboradores c WHERE ${filtro.sql} ORDER BY c.nome`));
 });
 
 // ---- Extras manuais por colaborador -------------------------------------------------------

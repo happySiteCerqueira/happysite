@@ -104,9 +104,11 @@ function ListaPrestadores() {
   }, []);
 
   function carregarLista() {
-    api.get('/prestadores', { params: { busca, status: aba } }).then(res => setLista(res.data));
+    // O mês de apuração do topo define quem aparece em "Ativos": desligados com lançamento nesse
+    // mês continuam visíveis (e somem dos meses seguintes ao último lançamento).
+    api.get('/prestadores', { params: { busca, status: aba, mes } }).then(res => setLista(res.data));
   }
-  useEffect(carregarLista, [busca, aba]);
+  useEffect(carregarLista, [busca, aba, mes]);
 
   // Lista de funções distintas já cadastradas (para o dropdown de filtro), calculada a partir
   // do que já está na tela (independe de status ativo/arquivado consultado no momento).
@@ -305,7 +307,7 @@ function ListaPrestadores() {
             {listaFiltrada.map(p => (
               <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => abrirHistorico(p)}>
                 <td><span style={{ width: 12, height: 12, background: p.cor, borderRadius: 3, display: 'inline-block' }}></span></td>
-                <td><strong>{p.nome}</strong></td>
+                <td><strong>{p.nome}</strong>{p.ativo === 0 && <span style={{ marginLeft: 6, fontSize: 11, color: '#b45309', fontWeight: 600 }}>(desligado)</span>}</td>
                 <td>{p.tipo === 'PJ' ? 'Empreiteiro (PJ)' : 'Colaborador (PF)'}</td>
                 <td style={{ color: '#6b7280' }}>{p.documento || '-'}</td>
                 <td style={{ color: '#6b7280' }}>{p.telefone || '-'}</td>
@@ -327,7 +329,7 @@ function ListaPrestadores() {
                       </button>
                     )}
                     {temPermissao('RH') && (
-                      aba === 'ativos' ? (
+                      aba === 'ativos' && p.ativo !== 0 ? (
                         <button
                           disabled={processando === p.id}
                           onClick={e => desligar(p.id, e)}

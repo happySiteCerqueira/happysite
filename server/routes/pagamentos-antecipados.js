@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
 const { registrar } = require('../utils/auditoria');
+const { condicaoVisivelNoMes } = require('../utils/colaboradoresMes');
 
 const router = express.Router();
 
@@ -22,7 +23,10 @@ router.get('/planilha', async (req, res) => {
   const { mes } = req.query;
   if (!mes) return res.status(400).json({ erro: 'mes (YYYY-MM) é obrigatório' });
 
-  const pessoas = await db.all('SELECT * FROM colaboradores WHERE ativo = 1 ORDER BY tipo, nome');
+  const filtro = condicaoVisivelNoMes(mes);
+  const pessoas = await db.all(
+    `SELECT c.* FROM colaboradores c WHERE ${filtro.sql} ORDER BY c.tipo, c.nome`, ...filtro.params
+  );
   const lancamentos = await db.all('SELECT * FROM pagamentos_antecipados WHERE mes_ciclo = ?', mes);
   const porPessoa = {};
   lancamentos.forEach(l => { porPessoa[l.colaborador_id] = l; });
@@ -39,6 +43,7 @@ router.get('/planilha', async (req, res) => {
     resultado[p.tipo].push({
       colaborador_id: p.id,
       nome: p.nome,
+      ativo: p.ativo,
       funcao: p.tipo === 'PJ' ? (p.contato_responsavel || '') : (p.funcao || ''),
       documento: p.documento,
       vale: l.vale || 0,
