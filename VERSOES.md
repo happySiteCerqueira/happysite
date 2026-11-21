@@ -50,6 +50,12 @@ git checkout v2.111
 
 ## Versões
 
+### 2.128 — "Dados" vira "Cadastrar" e passa para a primeira posição
+
+- Em **Financeiro → Pagamentos**, a sub-aba **📥 Dados** agora se chama **📥 Cadastrar** e vem antes
+  de **Resumo** e **Detalhado**. Só mudou o nome e a ordem; a tela que abre ao entrar continua sendo
+  o Resumo, e nada mudou no banco nem nos cálculos.
+
 ### 2.127 — Segurança: sessões, login, senhas e comprovantes
 
 Correções de uma auditoria de segurança:

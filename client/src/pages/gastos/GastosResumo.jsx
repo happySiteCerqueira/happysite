@@ -55,7 +55,7 @@ export default function GastosResumo({ mes, renderLancamentos }) {
 
             {dados.obras.length === 0 ? (
               <div style={{ fontSize: 13, color: '#6b7280' }}>
-                Nenhum custo lançado em {rotuloMes(mes)}. Importe os PDFs na aba <strong>Dados</strong> ou
+                Nenhum custo lançado em {rotuloMes(mes)}. Importe os PDFs na aba <strong>Cadastrar</strong> ou
                 lance extras na aba <strong>Detalhado</strong>.
               </div>
             ) : (

@@ -210,7 +210,7 @@ function AvisosSaude({ avisos }) {
             São custos de colaboradores (holerite acima da produção, VA, VT, Extras) que não têm{' '}
             <strong>ponto eletrônico</strong> no mês e estão <strong>sem “Obra atual”</strong> no
             cadastro. O valor aparece na última linha, como <strong>“Sem obra definida”</strong>.
-            Importe o ponto em <strong>Financeiro → Pagamentos → Dados</strong>, ajuste o rateio no
+            Importe o ponto em <strong>Financeiro → Pagamentos → Cadastrar</strong>, ajuste o rateio no
             Detalhado, ou informe a obra de cada pessoa em <strong>Prestadores</strong>.
           </div>
         </div>

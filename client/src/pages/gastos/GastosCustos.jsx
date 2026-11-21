@@ -6,16 +6,16 @@ import GastosDetalhado from './GastosDetalhado';
 import GastosDados from './GastosDados';
 
 // Financeiro > Gastos. Três sub-abas sobre o mesmo mês de apuração (seletor global do topo):
+//   Cadastrar → importação dos PDFs (Caju, VT, Ponto, Holerite, Café) e vínculos De-Para (chave 'dados');
 //   Resumo    → custo consolidado por obra;
-//   Detalhado → custo por colaborador, com rateio entre obras e lançamento de extras;
-//   Dados     → importação dos PDFs (Caju, VT, Ponto, Café) e vínculos De-Para.
+//   Detalhado → custo por colaborador, com rateio entre obras e lançamento de extras.
 //
 // O Café é custo DIRETO da obra (empresa terceirizada); VA, VT, Holerite e Extras são custo do
 // colaborador e chegam às obras pelo rateio do ponto eletrônico.
 const SUBABAS = [
+  { chave: 'dados', rotulo: '📥 Cadastrar' },
   { chave: 'resumo', rotulo: '📊 Resumo' },
-  { chave: 'detalhado', rotulo: '👷 Detalhado' },
-  { chave: 'dados', rotulo: '📥 Dados' }
+  { chave: 'detalhado', rotulo: '👷 Detalhado' }
 ];
 
 export default function GastosCustos({ renderLancamentos }) {
