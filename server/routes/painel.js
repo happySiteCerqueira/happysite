@@ -42,6 +42,7 @@ function parseSeString(v) {
 router.get('/', async (req, res) => {
   const mes = req.query.mes || mesAtualStr(); // formato YYYY-MM
   const mesNumero = Number(mes.split('-')[1]);
+  const anoDoMes = Number(mes.split('-')[0]);
   const mesesGrafico = ultimosMeses(mes, 6);
 
   // ---- 1) Obras com totais de serviços medidos no mês selecionado + config visual (Visão Geral) ----
@@ -169,9 +170,12 @@ router.get('/', async (req, res) => {
     }
     const a = diaMesDe(p.data_admissao);
     if (a && a.mes === mesNumero) {
-      const anoAtual = new Date().getFullYear();
-      const anos = anoAtual - a.ano;
-      aniversariantesEmpresa.push({ id: p.id, nome: p.nome, cor: p.cor, dia: a.dia, anos });
+      // Anos de casa no mês consultado (e não no ano de hoje). Quem foi admitido neste mesmo
+      // ano tem 0 ano(s): é contratação recente, não aniversário de empresa — fica de fora.
+      const anos = anoDoMes - a.ano;
+      if (anos >= 1) {
+        aniversariantesEmpresa.push({ id: p.id, nome: p.nome, cor: p.cor, dia: a.dia, anos });
+      }
     }
   });
 

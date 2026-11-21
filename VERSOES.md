@@ -50,6 +50,14 @@ git checkout v2.111
 
 ## Versões
 
+### 2.123 — Painel: aniversário de empresa só com 1 ano ou mais
+
+- O quadro **Aniversário de empresa** do Painel listava também quem foi **admitido no próprio
+  mês** (aparecia "0 ano(s)"). Agora só aparece quem **completa 1 ano ou mais** de casa no mês
+  consultado.
+- Corrigido junto: os anos de casa eram contados com o **ano de hoje**, mesmo ao consultar outro
+  mês no filtro; agora usam o **ano do mês selecionado**.
+
 ### 2.122 — Relatórios passa de Financeiro para Medição
 
 - O relatório **Produção × Pagamentos** saiu de **Financeiro** e agora é a aba **📈 Relatórios**
