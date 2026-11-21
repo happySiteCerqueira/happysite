@@ -50,6 +50,13 @@ git checkout v2.111
 
 ## Versões
 
+### 2.122 — Relatórios passa de Financeiro para Medição
+
+- O relatório **Produção × Pagamentos** saiu de **Financeiro** e agora é a aba **📈 Relatórios**
+  dentro de **Medição** (ao lado de "Medição Mensal"). A tela e os dados são os mesmos.
+- A permissão continua `financeiro.relatorios` e o backend segue exigindo ADM, FINANCEIRO ou RH:
+  quem não tem acesso não vê a aba. O **Centro de Custo** continua em Financeiro.
+
 ### 2.121 — Sinalização de recebimento em atraso (Financeiro → Receita)
 
 - Na aba **Receita**, a **Data Pagamento** é o limite que o cliente tem para pagar. Passada essa

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import api from '../api/api';
 import { exportarMedicaoExcel, exportarMedicaoPdf, exportarMedicaoDetalhadoExcel, exportarMedicaoDetalhadoPdf } from '../utils/medicaoExport';
 import { useApuracao } from '../context/ApuracaoContext';
+import { useAuth } from '../context/AuthContext';
+import Relatorios from './Relatorios';
 
 // Formata valores no padrão brasileiro: "." como separador de milhar/milhão e "," para os centavos
 // (ex: 1234567.8 -> "1.234.567,80"), usado em toda a tela de Medição.
@@ -10,6 +12,31 @@ function formatarValorBR(valor) {
 }
 
 export default function Medicao() {
+  const { usuario, temAcessoSubaba } = useAuth();
+  // O relatório Produção x Pagamentos veio de Financeiro. Continua com a mesma permissão
+  // (financeiro.relatorios) e o backend segue exigindo ADM, FINANCEIRO ou RH.
+  const podeVerRelatorios = temAcessoSubaba('financeiro.relatorios')
+    && ['ADM', 'FINANCEIRO', 'RH'].includes(usuario?.perfil);
+  const [aba, setAba] = useState('medicao');
+
+  return (
+    <div>
+      {podeVerRelatorios && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button className={aba === 'medicao' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('medicao')}>
+            💰 Medição Mensal
+          </button>
+          <button className={aba === 'relatorios' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('relatorios')}>
+            📈 Relatórios
+          </button>
+        </div>
+      )}
+      {aba === 'relatorios' && podeVerRelatorios ? <Relatorios /> : <MedicaoMensal />}
+    </div>
+  );
+}
+
+function MedicaoMensal() {
   // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
   const { mes, setMes } = useApuracao();
   const [obras, setObras] = useState([]);

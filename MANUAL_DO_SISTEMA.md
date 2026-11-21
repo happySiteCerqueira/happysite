@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.121** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.122** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -79,6 +79,9 @@ Medição como produção normal.
 
 ### 💰 Medição
 
+A tela tem duas abas: **Medição Mensal** e **📈 Relatórios** (Produção × Pagamentos por
+colaborador; antes ficava em Financeiro; mesma permissão `financeiro.relatorios`).
+
 Consolida **tudo o que cada pessoa tem a receber no mês**:
 
 ```
@@ -109,7 +112,7 @@ daquele mês (produção, diárias, antecipados).
 | **🧾 Pagtos. Antecipados** | Só lançamentos internos, em abas separadas: **PF** (Vale Extra e Vale Ex RH) e **PJ** (Adiantamento) |
 | **💸 Gastos** | Custos por colaborador rateados por obra (VA, VT, Extras, EPI, Holerite) + Café direto da obra. Ver abaixo |
 | **🏗️ Centro de Custo** | O que entrou × o que saiu de cada obra: saldo e margem (antiga "Saúde financeira") |
-| **📈 Relatórios** | Produção × Pagamentos por colaborador |
+| **📈 Relatórios** | Mudou para a tela de **Medição** (aba Relatórios) |
 | **📊 Resumo** | Gráficos de receita por mês/obra/serviço (só ADM) |
 
 > Holerite e Pagamentos Antecipados são **a mesma planilha** (`pagamentos_antecipados`) vista por

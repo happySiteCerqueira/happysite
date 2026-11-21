@@ -8,7 +8,6 @@ import {
 import PagamentosAntecipados from './PagamentosAntecipados';
 import Conciliacao from './Conciliacao';
 import GastosCustos from './gastos/GastosCustos';
-import Relatorios from './Relatorios';
 import CentroCusto from './CentroCusto';
 
 
@@ -98,9 +97,8 @@ export default function Financeiro() {
   const podeImportarHolerite = temAcessoSubaba('conciliacao');
   const mostrarGastos = temAcessoSubaba('financeiro.gastos');
   const mostrarRelatorios = temAcessoSubaba('financeiro.relatorios');
-  // O Centro de Custo (antiga Saúde financeira, que vivia dentro de Relatórios) reaproveita a
-  // permissão de Relatórios: quem já via a Saúde financeira continua vendo, sem reconfigurar
-  // o Controle de Acesso.
+  // A permissão "financeiro.relatorios" agora governa o Centro de Custo (aqui) e o relatório
+  // Produção x Pagamentos, que mudou para a tela de Medição.
   const mostrarCentroCusto = mostrarRelatorios;
   const mostrarResumo = temAcessoSubaba('financeiro.resumo');
 
@@ -109,7 +107,6 @@ export default function Financeiro() {
     : mostrarPagamentos ? 'pagamentos'
     : mostrarGastos ? 'gastos'
     : mostrarCentroCusto ? 'centrocusto'
-    : mostrarRelatorios ? 'relatorios'
     : mostrarResumo ? 'resumo' : null;
   const [subAba, setSubAba] = useState(primeiraDisponivel);
   // Incrementado após importar o PDF do holerite para a tabela da aba recarregar os valores.
@@ -147,11 +144,6 @@ export default function Financeiro() {
             🏗️ Centro de Custo
           </button>
         )}
-        {mostrarRelatorios && (
-          <button className={subAba === 'relatorios' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('relatorios')}>
-            📈 Relatórios
-          </button>
-        )}
         {mostrarResumo && (
           <button className={subAba === 'resumo' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('resumo')}>
             📊 Resumo
@@ -171,7 +163,6 @@ export default function Financeiro() {
         <GastosCustos renderLancamentos={(mesLancamentos, aoAlterar) => <Gastos mesExterno={mesLancamentos} onAlterado={aoAlterar} />} />
       )}
       {subAba === 'centrocusto' && mostrarCentroCusto && <CentroCusto />}
-      {subAba === 'relatorios' && mostrarRelatorios && <Relatorios />}
       {subAba === 'resumo' && mostrarResumo && <Resumo />}
     </div>
   );
