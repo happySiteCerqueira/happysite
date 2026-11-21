@@ -20,7 +20,7 @@ const SUBABAS_POR_MODULO = {
   financeiro: [
     { chave: 'financeiro.receita', rotulo: '📥 Receita' },
     { chave: 'financeiro.pagamentos', rotulo: '🧾 Pagtos. Antecipados' },
-    { chave: 'financeiro.gastos', rotulo: '💸 Gastos' },
+    { chave: 'financeiro.gastos', rotulo: '💸 Pagamentos' },
     { chave: 'financeiro.relatorios', rotulo: '📈 Relatórios' },
     { chave: 'financeiro.resumo', rotulo: '📊 Resumo' }
   ],

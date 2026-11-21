@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.125** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.126** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -109,9 +109,9 @@ daquele mês (produção, diárias, antecipados).
 | Sub-aba | Função |
 |---|---|
 | **📥 Receita** | O que a obra faturou. Campo **"com nota"** desconta 11% automaticamente. A **Data Pagamento** é o limite do cliente: vencida e não paga, a linha fica em vermelho com "ATRASADO · N dias" (some ao marcar Pago) |
-| **📄 Holerite** | Mostra e permite ajustar **Vale, INSS, Taxa e Pagto** por pessoa/mês. O PDF da contabilidade é importado em **Gastos → Dados** |
+| **📄 Holerite** | Mostra e permite ajustar **Vale, INSS, Taxa e Pagto** por pessoa/mês. O PDF da contabilidade é importado em **Pagamentos → Dados** |
 | **🧾 Pagtos. Antecipados** | Só lançamentos internos, em abas separadas: **PF** (Vale Extra e Vale Ex RH) e **PJ** (Adiantamento) |
-| **💸 Gastos** | Custos por colaborador rateados por obra (VA, VT, Extras, EPI, Holerite) + Café direto da obra. Ver abaixo |
+| **💸 Pagamentos** (antes "Gastos"; permissão `financeiro.gastos`) | Custos por colaborador rateados por obra (VA, VT, Extras, EPI, Holerite) + Café direto da obra. Ver abaixo |
 | **🏗️ Centro de Custo** | O que entrou × o que saiu de cada obra: saldo e margem (antiga "Saúde financeira") |
 | **📈 Relatórios** | Mudou para a tela de **Medição** (aba Relatórios) |
 | **📊 Resumo** | Gráficos de receita por mês/obra/serviço (só ADM) |
@@ -119,7 +119,7 @@ daquele mês (produção, diárias, antecipados).
 > Holerite e Pagamentos Antecipados são **a mesma planilha** (`pagamentos_antecipados`) vista por
 > duas abas. Nada mudou no banco — só os nomes na tela ficaram certos.
 
-#### Gastos — custo por colaborador rateado entre as obras
+#### Pagamentos (antes "Gastos") — custo por colaborador rateado entre as obras
 
 Três sub-abas, sempre sobre o mês de apuração do topo:
 
@@ -201,7 +201,7 @@ Confere o PDF de holerites da contabilidade (layout *SCI*) contra o sistema, com
 | Pagto | `SALÁRIO LÍQUIDO` |
 
 A tela só **confere** (compara o PDF com o que está lançado). A **importação** do PDF, que
-preenche o Holerite com revisão antes de gravar, fica em **Financeiro → Gastos → Dados** (card
+preenche o Holerite com revisão antes de gravar, fica em **Financeiro → Pagamentos → Dados** (card
 *Holerite*, com a sua própria competência).
 
 O cruzamento é pelo **nome normalizado** (sem acento, maiúsculas), com CPF como desempate e,

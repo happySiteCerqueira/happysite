@@ -50,6 +50,12 @@ git checkout v2.111
 
 ## Versões
 
+### 2.126 — Aba "Gastos" passa a se chamar "Pagamentos"
+
+- Em **Financeiro**, a aba **💸 Gastos** agora se chama **💸 Pagamentos** (e os textos que a citam,
+  como "Financeiro → Pagamentos → Dados", foram ajustados). Só mudou o nome exibido: permissões
+  (`financeiro.gastos`), rotas, tabelas e cálculos continuam iguais.
+
 ### 2.125 — Importação do holerite passa para Gastos → Dados
 
 - A **importação do PDF de holerites** saiu de **Conciliação** e da aba **Holerite** e agora é um

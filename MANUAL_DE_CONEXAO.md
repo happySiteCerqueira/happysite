@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.125**
+> **Versão do sistema: 2.126**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.125** (tag `v2.125`) |
+| **Versão atual** | **2.126** (tag `v2.126`) |
 
 ### Stack
 
@@ -177,7 +177,7 @@ HappySite/
 | Prestadores | `Prestadores.jsx` | `prestadores.js` |
 | EPI | `Epi.jsx` | `epi.js` |
 | Financeiro | `Financeiro.jsx` (Receita, Holerite, Resumo) | `financeiro.js` |
-| ↳ Gastos (custo por colaborador/obra) | `gastos/` (`GastosCustos`, `GastosResumo`, `GastosDetalhado`, `GastosDados`, `PainelPrevia`, `EditorCaju`) + `utils/cajuOcr.js` + lançamentos manuais em `Financeiro.jsx` | `gastosCustos.js` (telas), `gastosImportacao.js` (lotes/De-Para) · `utils/gastosCustos.js` (motor), `parserVt.js`, `parserPonto.js`, `pontoRateio.js`, `pdfLinhas.js` |
+| ↳ Pagamentos (antes "Gastos"; custo por colaborador/obra; permissão `financeiro.gastos`) | `gastos/` (`GastosCustos`, `GastosResumo`, `GastosDetalhado`, `GastosDados`, `PainelPrevia`, `EditorCaju`) + `utils/cajuOcr.js` + lançamentos manuais em `Financeiro.jsx` | `gastosCustos.js` (telas), `gastosImportacao.js` (lotes/De-Para) · `utils/gastosCustos.js` (motor), `parserVt.js`, `parserPonto.js`, `pontoRateio.js`, `pdfLinhas.js` |
 | ↳ Holerite | `PagamentosAntecipados.jsx` (`modo="holerite"`); importação do PDF no card Holerite de `gastos/GastosDados.jsx`, que reusa `Conciliacao.jsx` (`modoFixo="importar"`, `mesExterno`) | `conciliacao.js`, `pagamentos-antecipados.js` |
 | ↳ Pagtos. Antecipados | `PagamentosAntecipados.jsx` | `pagamentos-antecipados.js` |
 | ↳ Centro de Custo (antiga Saúde financeira) | `CentroCusto.jsx` | `relatorios.js` (`GET /relatorios/saude-obras`) |
@@ -470,7 +470,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.125).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.126).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -501,7 +501,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.125** |
+| Versão | **2.126** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |

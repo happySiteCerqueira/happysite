@@ -217,7 +217,7 @@ export default function Conciliacao({ modoFixo = null, onImportado = null, mesEx
         Holerite do sistema em <strong>{rotuloMes(mes)}</strong>. Conferidos:
         Vale (953), INSS (91005), Taxa (441) e Pagto (Salário Líquido).
         Para <strong>importar</strong> o PDF e preencher o Holerite, use{' '}
-        <strong>Financeiro → Gastos → Dados</strong>.
+        <strong>Financeiro → Pagamentos → Dados</strong>.
       </p>
         </>
       )}

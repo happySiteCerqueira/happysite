@@ -196,8 +196,8 @@ function AvisosSaude({ avisos }) {
         <div style={{ marginBottom: 8 }}>
           🧾 <strong>Gastos sem obra definida:</strong> {formatarMoeda(folhaSolta.gastos)}.
           <div style={{ color: '#6b7280', marginTop: 2 }}>
-            Lançamentos da aba <strong>Gastos</strong> (Café, VA, Vale Transporte...) feitos sem
-            escolher a obra. Abra <strong>Financeiro → Gastos</strong>, edite o lançamento e
+            Lançamentos da aba <strong>Pagamentos</strong> (Café, VA, Vale Transporte...) feitos sem
+            escolher a obra. Abra <strong>Financeiro → Pagamentos</strong>, edite o lançamento e
             informe a obra para o valor abater a receita dela.
           </div>
         </div>
@@ -210,7 +210,7 @@ function AvisosSaude({ avisos }) {
             São custos de colaboradores (holerite acima da produção, VA, VT, Extras) que não têm{' '}
             <strong>ponto eletrônico</strong> no mês e estão <strong>sem “Obra atual”</strong> no
             cadastro. O valor aparece na última linha, como <strong>“Sem obra definida”</strong>.
-            Importe o ponto em <strong>Financeiro → Gastos → Dados</strong>, ajuste o rateio no
+            Importe o ponto em <strong>Financeiro → Pagamentos → Dados</strong>, ajuste o rateio no
             Detalhado, ou informe a obra de cada pessoa em <strong>Prestadores</strong>.
           </div>
         </div>
@@ -429,7 +429,7 @@ function BlocoSaidas({ saidas, total }) {
                   <div style={{ fontSize: 11, color: '#9ca3af' }}>
                     {item.tipo === 'DIARIA' && `${item.quantidade} diária(s) rateada(s)`}
                     {item.tipo === 'PRODUCAO' && `${item.qtd} marcação(ões) de produção`}
-                    {item.tipo === 'GASTO' && `${item.qtd} lançamento(s) na aba Gastos`}
+                    {item.tipo === 'GASTO' && `${item.qtd} lançamento(s) na aba Pagamentos`}
                     {/* A linha de folha é a única que vale a pena abrir por pessoa: é ela que
                         responde "de quem é este custo que não veio de produção?". */}
                     {item.tipo === 'FOLHA' && `${item.pessoas.length} pagamento(s) acima da produção`}

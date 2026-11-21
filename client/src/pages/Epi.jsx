@@ -352,7 +352,7 @@ function AbaCadastrar() {
         <label style={{ fontSize: 12 }}>Valor unitário (R$) — custo de 1 unidade</label>
         <input type="number" min="0" step="0.01" value={valorUnitario} onChange={e => setValorUnitario(e.target.value)} placeholder="Ex: 12,50 (deixe vazio para manter o valor atual)" />
         <span style={{ fontSize: 11, color: '#9ca3af' }}>
-          Cada retirada vira custo da obra do colaborador (Financeiro → Gastos e Centro de Custo).
+          Cada retirada vira custo da obra do colaborador (Financeiro → Pagamentos e Centro de Custo).
         </span>
 
         <label style={{ fontSize: 12 }}>Estoque mínimo (opcional, alerta)</label>

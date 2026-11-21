@@ -132,7 +132,7 @@ export default function Financeiro() {
         )}
         {mostrarGastos && (
           <button className={subAba === 'gastos' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('gastos')}>
-            💸 Gastos
+            💸 Pagamentos
           </button>
         )}
         {mostrarCentroCusto && (
@@ -152,7 +152,7 @@ export default function Financeiro() {
         <>
           <div className="card" style={{ marginBottom: 12, fontSize: 13, color: '#6b7280' }}>
             📥 Para <strong>importar o PDF de holerites</strong> da contabilidade, use{' '}
-            <strong>Gastos → Dados</strong>. Aqui você confere e ajusta os valores de cada pessoa.
+            <strong>Pagamentos → Dados</strong>. Aqui você confere e ajusta os valores de cada pessoa.
           </div>
           <PagamentosAntecipados modo="holerite" />
         </>
