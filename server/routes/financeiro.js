@@ -65,7 +65,7 @@ function parseReceita(r) {
 
 // ---- Nomes de obras já cadastradas (usado como sugestão/autocomplete no formulário) ----
 router.get('/obras-sugestoes', async (req, res) => {
-  const obras = await db.all('SELECT nome FROM obras ORDER BY nome');
+  const obras = await db.all('SELECT nome FROM obras WHERE eh_matriz = 0 ORDER BY nome');
   res.json(obras.map(o => o.nome));
 });
 

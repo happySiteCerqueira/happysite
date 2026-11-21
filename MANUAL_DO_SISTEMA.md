@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.132** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.133** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -222,6 +222,40 @@ Margem = Saldo ÷ Entrou × 100
 - Se **H > P** → a diferença é custo real e é **rateada pelo ponto eletrônico** do mês
 - Sem ponto → obra atual do cadastro; sem obra → linha **"Sem obra definida"**, visível, nunca descartado
 
+**🏢 CERQUEIRA (Matriz / Adm)** — o centro administrativo da empresa: sócios (pró-labore), equipe
+administrativa e despesas gerais (contabilidade, sistemas, escritório, combustível...). Não é prédio: fica
+**oculta** de Obras, Painel, Diárias, Medição e demais telas de engenharia, e **aparece** como
+**🏢 CERQUEIRA (Matriz / Adm)** em **Pagamentos → Cadastrar → Lançar gasto**, no **% Rateio** do Detalhado e no
+campo **Obra atual** do cadastro de colaboradores/prestadores. Para lançar custo nela: (1) vincule o
+colaborador (sócio/administrativo) à CERQUEIRA — folha/pró-labore, férias/13º, VA, VT, Extras, EPI e admissão
+dele caem nela; (2) lance gastos diretos escolhendo a CERQUEIRA como obra; (3) aponte o rateio manual de
+alguém para ela. Ela não pode ser editada nem excluída como obra.
+
+No Centro de Custo, o quadro **Incluir custos CERQUEIRA** controla o que se vê (a escolha fica guardada no
+navegador):
+
+- **Desmarcado** → as obras mostram só o balanço operacional; no consolidado a CERQUEIRA aparece em
+  **linha separada** (e como tópico próprio no Nível 2).
+- **Marcado** → cada obra de produção absorve a sua fatia, mês a mês, e o bloco
+  **🏢 CERQUEIRA (Rateio Matriz / Adm)** entra no Custo Total (Saiu), no Saldo, na Margem e no gráfico. O
+  total geral não muda: o rateio só move o custo da matriz para as obras. No Nível 3 cada item da matriz
+  aparece por obra, com a regra (ex.: *Rateio CERQUEIRA (Híbrido 50/50 (Custo + Receita)) — 34,20% de R$ 18.500,00*).
+
+**Critério de rateio** (seletor ao lado do quadro; padrão **Híbrido 50/50**):
+
+| Critério | Como divide |
+|---|---|
+| **Híbrido 50/50 (Custo + Receita)** | 50% pelo **Custo Direto Operacional** da obra no mês + 50% pela **Receita Líquida** da obra no mês |
+| **Qtd. Funcionários CLT** | pelos dias/colaboradores CLT (`tipo = CPF`) alocados em cada obra no mês (regra do ponto com carregamento de faltas) |
+| **Custo Direto Total** | 100% pelo Custo Direto Operacional |
+| **Receita Líquida** | 100% pela Receita Líquida |
+
+**Custo Direto Operacional** = produção + diárias + excedente de folha (salário + férias + 13º) + VA + VT +
+Extras + EPI + admissão + gastos diretos (Ferramentas, Café e outros), CLT e PJ juntos; **DCTF e DAS não entram**
+(são tributos). Sem base no mês (ex.: nenhuma receita) usa a outra base; sem nenhuma, o valor **permanece na
+CERQUEIRA** ("não rateado") com aviso. Cada item é dividido separadamente e o resto de centavos vai para a obra de
+maior peso, então a soma fecha exatamente com o valor da matriz.
+
 ### 🧮 Conciliação
 
 Confere o PDF de holerites da contabilidade (layout *SCI*) contra o sistema, com tolerância
@@ -328,7 +362,7 @@ PostgreSQL 16. Nomes de tabelas e colunas **em português**.
 |---|---|---|
 | `usuarios` | `login` | Quem acessa o sistema + perfil. `adm_master` = marca **ADM Master** (só quem tem edita o *Mês anterior* e a marca de outros; sempre há ao menos um) |
 | `colaboradores` | — | Pessoas e PJ. `tipo` = `CPF`/`PJ`, `funcao`, `obra_id` (obra atual), `participa_producao` |
-| `obras` | — | Geometria do prédio (blocos, pavimentos, apartamentos) |
+| `obras` | — | Geometria do prédio (blocos, pavimentos, apartamentos). `eh_matriz = 1` marca a **CERQUEIRA** (centro administrativo, uma só linha; não é prédio) |
 | `obra_servicos` | `(obra_id, nome)` | Serviços da obra. `valor_unitario`, `modo_medicao`, `valor_manual` |
 | **`obra_servico_celulas`** | `(obra_servico_id, celula_key, mes_ciclo, colaborador_id)` | ★ **O coração**: quem executou o quê, onde, em que mês |
 | `obra_servico_quantidades` | `(obra_servico_id, celula_key)` | Quantidade de cada local |

@@ -50,6 +50,23 @@ git checkout v2.111
 
 ## Versões
 
+### 2.133 — Centro administrativo CERQUEIRA e rateio no Centro de Custo
+
+- Nova **🏢 CERQUEIRA (Matriz / Adm)**: centro de custo da empresa (sócios, equipe administrativa e
+  despesas gerais). É uma linha de `obras` com `eh_matriz = 1`: **some** das telas de engenharia (Obras,
+  Painel, Diárias, Medição...) e **aparece** em **Lançar gasto**, no **% Rateio** do Detalhado e no **Obra
+  atual** do cadastro de colaboradores/prestadores. Não pode ser editada nem excluída como obra.
+- Todo custo vinculado a ela (colaborador administrativo/sócio, rateio manual, gasto direto) forma o bolo da
+  CERQUEIRA.
+- **Centro de Custo**: quadro **Incluir custos CERQUEIRA** + **Critério de rateio** (Híbrido 50/50 padrão,
+  Qtd. Funcionários CLT, Custo Direto Total, Receita Líquida). Desmarcado: obras só com o balanço operacional e a
+  CERQUEIRA em linha separada. Marcado: cada obra absorve a sua fatia (Custo Total, Saldo, Margem e gráfico
+  se ajustam), com o tópico **🏢 CERQUEIRA (Rateio Matriz / Adm)** no Nível 2 e o detalhe item a item, com a
+  regra aplicada, no Nível 3. O total geral não muda — o rateio só move o custo da matriz para as obras.
+- Sem base de rateio no mês (ex.: sem receita) usa a outra base; sem nenhuma, o valor fica na CERQUEIRA.
+- Coluna nova `obras.eh_matriz` (aditiva). Rotas `/relatorios/saude-obras` e `/centro-custo/linhas` aceitam
+  `incluir_cerqueira=1&criterio=`.
+
 ### 2.132 — Coluna "Mês anterior" nos Pagamentos Antecipados (e ADM Master)
 
 - Nova coluna **Mês anterior** em **Pagtos. Antecipados** (PF e PJ): quando alguém fica com a **Medição

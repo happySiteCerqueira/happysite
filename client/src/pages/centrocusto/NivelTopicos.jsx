@@ -42,9 +42,10 @@ export default function NivelTopicos({ totais, categorias, onAbrirTopico }) {
           </thead>
           <tbody>
             {categorias.map(c => (
-              <tr key={c.chave} onClick={() => onAbrirTopico(c.chave)} style={{ cursor: 'pointer' }}
+              <tr key={c.chave} onClick={() => onAbrirTopico(c.chave)}
+                style={{ cursor: 'pointer', background: c.chave === 'CERQUEIRA' ? '#fffbeb' : undefined, borderTop: c.chave === 'CERQUEIRA' ? '2px solid #fbbf24' : undefined }}
                 title="Clique para ver os lançamentos deste tópico">
-                <td style={{ fontWeight: 600, color: c.valor ? undefined : '#9ca3af' }}>{c.rotulo}</td>
+                <td style={{ fontWeight: c.chave === 'CERQUEIRA' ? 800 : 600, color: c.valor ? (c.chave === 'CERQUEIRA' ? '#92400e' : undefined) : '#9ca3af' }}>{c.rotulo}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap', color: c.valor ? undefined : '#9ca3af' }}>{formatarMoeda(c.valor)}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap', color: c.valor ? undefined : '#9ca3af' }}>{formatarPct(pct(c.valor))}</td>
                 <td>

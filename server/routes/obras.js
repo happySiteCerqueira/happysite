@@ -10,6 +10,16 @@ const router = express.Router();
 
 router.use(autenticar);
 
+// CERQUEIRA (matriz) é só um centro de custo: qualquer alteração em /obras/:id/... (editar,
+// finalizar, excluir, criar serviços, marcar células) é recusada. GET continua livre.
+router.use('/:id', async (req, res, next) => {
+  if (req.method === 'GET' || !/^\d+$/.test(req.params.id)) return next();
+  const obra = await db.get('SELECT eh_matriz FROM obras WHERE id = ?', req.params.id);
+  if (obra && obra.eh_matriz) {
+    return res.status(403).json({ erro: 'CERQUEIRA é o centro administrativo da matriz e não pode ser alterada como obra.' });
+  }
+  next();
+});
 // ---- Trava definitiva de ciclo pago ----
 //
 // Regra de negócio: um mês cujo pagamento já foi liquidado (medicoes.status = 'PAGO') não pode
@@ -106,13 +116,17 @@ function parseObra(o) {
     tem_caixa_dagua: !!o.tem_caixa_dagua,
     itens_terreo: JSON.parse(o.itens_terreo || '[]'),
     itens_cobertura: JSON.parse(o.itens_cobertura || '[]'),
-    blocos_pavimentos: JSON.parse(o.blocos_pavimentos || '[]')
+    blocos_pavimentos: JSON.parse(o.blocos_pavimentos || '[]'),
+    eh_matriz: !!o.eh_matriz
   };
 }
 
 router.get('/', async (req, res) => {
   const { status } = req.query; // status: 'ativas' (default) | 'finalizadas' | 'excluidas' | 'todas'
   let sql = 'SELECT * FROM obras WHERE 1=1';
+  // CERQUEIRA (matriz) não é prédio: só entra na lista quando a tela financeira pede (?matriz=1),
+  // para poder lançar custos nela. Telas de engenharia nunca a veem.
+  if (req.query.matriz !== '1') sql += ' AND eh_matriz = 0';
   if (status === 'finalizadas') sql += " AND status = 'FINALIZADA'";
   else if (status === 'excluidas') sql += " AND status = 'EXCLUIDA'";
   else if (status === 'todas') sql += '';

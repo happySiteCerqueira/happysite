@@ -8,6 +8,7 @@ import {
 import PagamentosAntecipados from './PagamentosAntecipados';
 import GastosCustos from './gastos/GastosCustos';
 import CentroCusto from './centrocusto/CentroCusto';
+import { COM_MATRIZ, rotuloObra } from '../utils/obras';
 
 
 
@@ -193,7 +194,7 @@ function Gastos({ mesExterno, onAlterado }) {
   const [erro, setErro] = useState('');
 
   useEffect(() => {
-    api.get('/obras').then(res => setObras(res.data)).catch(() => setObras([]));
+    api.get('/obras', COM_MATRIZ).then(res => setObras(res.data)).catch(() => setObras([]));
     api.get('/financeiro/gastos/tipos').then(res => setTipos(res.data)).catch(() => setTipos([]));
   }, []);
 
@@ -331,7 +332,7 @@ function FormularioGasto({ form, setForm, obras, tipos, editandoId, salvando, er
           <label style={{ fontSize: 12 }}>Obra</label>
           <select value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>
             <option value="">— Sem obra definida —</option>
-            {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+            {obras.map(o => <option key={o.id} value={o.id}>{rotuloObra(o)}</option>)}
           </select>
         </div>
         <div className="flex-col gap-2">

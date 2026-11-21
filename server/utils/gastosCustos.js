@@ -93,6 +93,26 @@ function janelaDozeMeses(mes) {
 //   • DAS  → proporcional à receita COM NOTA (valor bruto) dos últimos 12 meses, até o mês
 //     lançado, de cada obra (receita liga à obra pelo NOME). Receita de obra sem cadastro vai
 //     para "Sem obra definida", para o total rateado ser sempre igual ao valor lançado.
+// Peso de cada obra para o DCTF e para o critério "Qtd. CLT" da CERQUEIRA: soma dos percentuais de
+// rateio (ponto/manual/padrão) de TODOS os colaboradores CLT (tipo CPF) do mês. Pelo ponto cada
+// pessoa tem o mês inteiro alocado, então o peso de cada pessoa é o seu percentual.
+async function pesosCltDoMes(mes, colabs) {
+  const filtro = condicaoVisivelNoMes(mes, 'c');
+  const clt = await db.all(`SELECT c.id FROM colaboradores c WHERE c.tipo = 'CPF' AND ${filtro.sql}`, ...filtro.params);
+  const ids = new Set(clt.map(x => x.id));
+  const pessoas = colabs.filter(c => ids.has(c.id));
+  const rateios = await carregarRateios(mes, pessoas);
+  const pesos = new Map();
+  for (const c of pessoas) {
+    for (const it of rateios.get(c.id).itens) {
+      const chave = it.obra_id || 0;
+      if (!pesos.has(chave)) pesos.set(chave, { obra_id: it.obra_id || null, obra_nome: it.obra_id ? it.obra_nome : SEM_OBRA, peso: 0 });
+      pesos.get(chave).peso += (Number(it.percentual) || 0) / 100;
+    }
+  }
+  return pesos;
+}
+
 async function ratearImpostos(mes, impostos, colabs) {
   const partes = { dctf: [], das: [] };
   const avisos = { das_sem_receita: false, dctf_sem_clt: false };
@@ -110,19 +130,7 @@ async function ratearImpostos(mes, impostos, colabs) {
 
   const dctf = valorDe('DCTF');
   if (dctf !== 0) {
-    const filtro = condicaoVisivelNoMes(mes, 'c');
-    const clt = await db.all(`SELECT c.id FROM colaboradores c WHERE c.tipo = 'CPF' AND ${filtro.sql}`, ...filtro.params);
-    const ids = new Set(clt.map(x => x.id));
-    const pessoas = colabs.filter(c => ids.has(c.id));
-    const rateios = await carregarRateios(mes, pessoas);
-    const pesos = new Map();
-    for (const c of pessoas) {
-      for (const it of rateios.get(c.id).itens) {
-        const chave = it.obra_id || 0;
-        if (!pesos.has(chave)) pesos.set(chave, { obra_id: it.obra_id || null, obra_nome: it.obra_id ? it.obra_nome : SEM_OBRA, peso: 0 });
-        pesos.get(chave).peso += (Number(it.percentual) || 0) / 100;
-      }
-    }
+    const pesos = await pesosCltDoMes(mes, colabs);
     if (pesos.size === 0) {
       avisos.dctf_sem_clt = true;
       pesos.set(0, { obra_id: null, obra_nome: SEM_OBRA, peso: 1 });
@@ -207,7 +215,7 @@ const somaPor = (linhas, chave = 'valor') => {
 // EPI: custo das retiradas feitas no mês (pela DATA da retirada) = quantidade × valor do item.
 // O valor é o copiado na retirada; retiradas feitas antes de existir valor (NULL) usam o valor
 // ATUAL do item. Retirada sem nenhum valor custa 0 e é contada em `epi_sem_preco` para a tela avisar.
-async function calcularCustosMes(mes) {
+async function calcularCustosMes(mes, opcoes = {}) {
   const [itens, extras, holerites, complementares, admitidos, impostos, producao, diarias, colabs, epis] = await Promise.all([
     db.all(
       `SELECT i.colaborador_id, i.categoria, SUM(i.valor) AS valor
@@ -357,6 +365,8 @@ async function calcularCustosMes(mes) {
     epiSemPreco: retiradasSemPreco,
     impostos: { dctf: valorImposto('DCTF'), das: valorImposto('DAS'), avisos: avisosImpostos },
     impostosPartes: partesImpostos,
+    // Só calculado quando a CERQUEIRA é rateada pelo critério "Qtd. CLT" (utils/cerqueira.js).
+    pesosClt: opcoes.comPesosClt ? await pesosCltDoMes(mes, colabs) : null,
     admissaoSemObra: resultado.filter(c => c.admissao > 0 && !c.admissao_obra_id).length
   };
 }

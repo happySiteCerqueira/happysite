@@ -46,7 +46,7 @@ router.get('/', async (req, res) => {
   const mesesGrafico = ultimosMeses(mes, 6);
 
   // ---- 1) Obras com totais de serviços medidos no mês selecionado + config visual (Visão Geral) ----
-  const obras = await db.all("SELECT * FROM obras WHERE status = 'ATIVA' ORDER BY nome");
+  const obras = await db.all("SELECT * FROM obras WHERE status = 'ATIVA' AND eh_matriz = 0 ORDER BY nome");
 
   const obrasComServicos = await Promise.all(obras.map(async o => {
     const servicos = await db.all(`

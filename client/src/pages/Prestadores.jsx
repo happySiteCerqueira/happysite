@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApuracao } from '../context/ApuracaoContext';
 import Cadastro from './Cadastro';
 import Modal from '../components/Modal';
+import { COM_MATRIZ, rotuloObra } from '../utils/obras';
 
 // Formata uma data (Date, string ISO ou 'YYYY-MM-DD') como dd/mm/aaaa, ignorando timezone
 // (usa os componentes UTC para evitar que colunas DATE do Postgres "voltem" um dia por fuso).
@@ -100,7 +101,7 @@ function ListaPrestadores() {
   // a lista muda pouco e o campo só aparece dentro do modal.
   const [obras, setObras] = useState([]);
   useEffect(() => {
-    api.get('/obras').then(res => setObras(res.data)).catch(() => setObras([]));
+    api.get('/obras', COM_MATRIZ).then(res => setObras(res.data)).catch(() => setObras([]));
   }, []);
 
   function carregarLista() {
@@ -430,7 +431,7 @@ function ListaPrestadores() {
                 <select value={editando.obra_id}
                   onChange={e => setEditando({ ...editando, obra_id: e.target.value })}>
                   <option value="">— Sem obra definida —</option>
-                  {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                  {obras.map(o => <option key={o.id} value={o.id}>{rotuloObra(o)}</option>)}
                 </select>
                 <span style={{ fontSize: 11, color: '#9ca3af' }}>
                   Altere sempre que a pessoa for transferida de obra.

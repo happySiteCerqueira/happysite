@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.132**
+> **Versão do sistema: 2.133**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.132** (tag `v2.132`) |
+| **Versão atual** | **2.133** (tag `v2.133`) |
 
 ### Stack
 
@@ -334,6 +334,17 @@ desconto da Medição (`routes/medicoes.js`) e na tela de Pagamentos Antecipados
 `H` do Centro de Custo** (é recuperação de adiantamento, como Vale Extra). `autenticar` expõe
 `req.usuario.adm_master` (marca válida só para perfil ADM).
 
+### 5.18 CERQUEIRA é uma "obra" que não é obra
+A CERQUEIRA é a linha de `obras` com `eh_matriz = 1` (criada na migração; promove uma obra de mesmo nome se
+existir). **`GET /obras` a omite** — só `?matriz=1` a devolve (use `COM_MATRIZ` de `client/src/utils/obras.js`
+apenas em telas financeiras e no "Obra atual" de pessoas). Novas consultas que listem `obras` para a
+engenharia devem filtrar `eh_matriz = 0` (Painel e Advertências já filtram). `router.use('/:id')` em
+`routes/obras.js` recusa qualquer escrita nela. O rateio (`utils/cerqueira.js`) é **item a item** e é a
+fonte única do `/relatorios/saude-obras` e do `/relatorios/centro-custo/linhas` (parâmetros
+`incluir_cerqueira=1&criterio=`): os dois descartam o que a matriz teria "naturalmente" e refazem a partir
+dos mesmos itens, para os totais baterem. O critério não é gravado no banco (vem na requisição e fica no
+`localStorage` do navegador).
+
 ---
 
 ## 6. FLUXO DE TRABALHO — siga na ordem
@@ -508,7 +519,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.132).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.133).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -539,7 +550,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.132** |
+| Versão | **2.133** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |

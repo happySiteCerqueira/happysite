@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/api';
+import { COM_MATRIZ, rotuloObra } from '../utils/obras';
 
 function baixarBlob(blob, nomeArquivo) {
   const url = window.URL.createObjectURL(blob);
@@ -37,6 +38,9 @@ function producaoPadraoDaFuncao(funcao) {
 export default function Cadastro() {
   const [menuAberto, setMenuAberto] = useState(null); // 'exportar' | 'modelo' | 'importar' | 'manual' | null
   const [obras, setObras] = useState([]);
+  // Lista com a CERQUEIRA (matriz), só para o campo "Obra atual" do colaborador: sócios e equipe
+  // administrativa são vinculados a ela. O seletor de obra dos serviços/preços usa só `obras`.
+  const [obrasComMatriz, setObrasComMatriz] = useState([]);
   const [obraSelecionada, setObraSelecionada] = useState('');
   const [msg, setMsg] = useState('');
   const [erro, setErro] = useState('');
@@ -57,6 +61,7 @@ export default function Cadastro() {
   const [salvandoPreco, setSalvandoPreco] = useState(false);
 
   useEffect(() => {
+    api.get('/obras', COM_MATRIZ).then(res => setObrasComMatriz(res.data)).catch(() => setObrasComMatriz([]));
     api.get('/obras').then(res => setObras(res.data));
     api.get('/colaboradores').then(res => setColaboradores(res.data));
   }, []);
@@ -316,7 +321,7 @@ export default function Cadastro() {
                   <select value={novoColab.obra_id}
                     onChange={e => setNovoColab({ ...novoColab, obra_id: e.target.value })}>
                     <option value="">— Sem obra definida —</option>
-                    {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                    {obrasComMatriz.map(o => <option key={o.id} value={o.id}>{rotuloObra(o)}</option>)}
                   </select>
                   <span style={{ fontSize: 11, color: '#9ca3af' }}>
                     Usada no Centro de Custo para alocar o pagamento de quem não tem

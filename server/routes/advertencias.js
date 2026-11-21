@@ -51,7 +51,7 @@ router.get('/colaboradores/:id', async (req, res) => {
 router.get('/obras', async (req, res) => {
   res.json(await db.all(
     `SELECT id, nome, endereco, cidade, estado FROM obras
-     WHERE status NOT IN ('FINALIZADA', 'EXCLUIDA') ORDER BY nome`
+     WHERE status NOT IN ('FINALIZADA', 'EXCLUIDA') AND eh_matriz = 0 ORDER BY nome`
   ));
 });
 

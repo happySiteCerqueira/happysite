@@ -3,6 +3,7 @@ import api from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
 import Modal from '../../components/Modal';
 import { moeda, rotuloMes, formatarPercentual, ROTULO_REGIME, ROTULO_ORIGEM_RATEIO } from './formatacao';
+import { COM_MATRIZ, rotuloObra } from '../../utils/obras';
 
 const COR_ORIGEM = { PONTO: '#166534', PADRAO: '#6b7280', MANUAL: '#1d4ed8', SEM_OBRA: '#b45309' };
 
@@ -270,7 +271,7 @@ function ModalRateio({ mes, item, onFechar, onSalvo }) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
-  useEffect(() => { api.get('/obras').then(res => setObras(res.data)).catch(() => setObras([])); }, []);
+  useEffect(() => { api.get('/obras', COM_MATRIZ).then(res => setObras(res.data)).catch(() => setObras([])); }, []);
 
   const soma = linhas.reduce((s, l) => s + (Number(l.percentual) || 0), 0);
   const fecha = Math.abs(soma - 100) <= 0.01;
@@ -309,7 +310,7 @@ function ModalRateio({ mes, item, onFechar, onSalvo }) {
         <div key={idx} className="flex gap-2" style={{ marginBottom: 6, alignItems: 'center' }}>
           <select value={l.obra_id} onChange={e => alterar(idx, 'obra_id', e.target.value)} style={{ flex: 1 }}>
             <option value="">— Obra —</option>
-            {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+            {obras.map(o => <option key={o.id} value={o.id}>{rotuloObra(o)}</option>)}
           </select>
           <input type="number" step="0.01" min="0" value={l.percentual} style={{ width: 90 }}
             onChange={e => alterar(idx, 'percentual', e.target.value)} />

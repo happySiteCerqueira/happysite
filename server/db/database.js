@@ -686,6 +686,24 @@ async function migrate() {
     await pool.query('ALTER TABLE obras ADD COLUMN estado TEXT');
   }
 
+  // CERQUEIRA: centro administrativo (matriz/sócios/equipe adm/despesas gerais). É uma linha de
+  // "obras" marcada com eh_matriz = 1 para poder receber custos como qualquer obra (colaborador
+  // vinculado, rateio manual, gasto direto), mas NÃO é um prédio: some de todas as telas
+  // operacionais de engenharia (GET /obras só a devolve com ?matriz=1) e não pode ser editada nem
+  // excluída. Seus custos são rateados entre as obras de produção no Centro de Custo
+  // (utils/cerqueira.js).
+  if (!(await colunaExiste('obras', 'eh_matriz'))) {
+    await pool.query('ALTER TABLE obras ADD COLUMN eh_matriz INTEGER NOT NULL DEFAULT 0');
+  }
+  const matrizExiste = await pool.query('SELECT 1 FROM obras WHERE eh_matriz = 1 LIMIT 1');
+  if (matrizExiste.rowCount === 0) {
+    // Se já existir uma obra chamada CERQUEIRA, ela é promovida em vez de duplicada.
+    const promovida = await pool.query("UPDATE obras SET eh_matriz = 1 WHERE LOWER(nome) = 'cerqueira'");
+    if (promovida.rowCount === 0) {
+      await pool.query("INSERT INTO obras (nome, status, eh_matriz) VALUES ('CERQUEIRA', 'ATIVA', 1)");
+    }
+  }
+
   // O endereço da obra é o "Local" do termo. Copiado junto com o nome, pelo mesmo motivo:
   // se a obra for editada depois, o documento já emitido continua reproduzindo o endereço
   // que valia na data do fato.

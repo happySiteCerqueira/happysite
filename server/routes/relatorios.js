@@ -3,6 +3,7 @@ const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
 const { rotuloCelula } = require('../utils/celulasLabel');
 const { calcularCustosMes, classificarTipoGasto } = require('../utils/gastosCustos');
+const { calcularCerqueira, criterioValido, CRITERIOS, obterMatriz, regraDoItemRateado } = require('../utils/cerqueira');
 
 const router = express.Router();
 
@@ -134,8 +135,16 @@ const CATEGORIAS_SAIDA = [
   { chave: 'DCTF', rotulo: 'DCTF' },
   { chave: 'DAS', rotulo: 'DAS' },
   { chave: 'FERRAMENTAS', rotulo: 'Ferramentas' },
-  { chave: 'OUTROS', rotulo: 'Café / Outros' }
+  { chave: 'OUTROS', rotulo: 'Café / Outros' },
+  // CERQUEIRA: custos da matriz (sócios, equipe administrativa, despesas gerais). Aparece como
+  // bloco próprio; com "Incluir custos CERQUEIRA" marcado, é o valor rateado absorvido por cada obra.
+  { chave: 'CERQUEIRA', rotulo: '🏢 CERQUEIRA (Matriz / Adm)' }
 ];
+
+function categoriasSaida(incluirCerqueira) {
+  return CATEGORIAS_SAIDA.map(c => (c.chave === 'CERQUEIRA' && incluirCerqueira
+    ? { ...c, rotulo: '🏢 CERQUEIRA (Rateio Matriz / Adm)' } : c));
+}
 
 // Gasto direto lançado à mão (financeiro_gastos): VA, VT e Ferramentas têm bloco próprio;
 // Café e qualquer outro tipo caem em "Café / Outros".
@@ -221,7 +230,9 @@ function obterObra(mapa, chave, nome) {
       sem_obra_cadastrada: false,
       // Linha coringa "Sem obra definida": agrupa o custo de folha de quem ainda não tem obra
       // no cadastro. Não é uma obra real, por isso a tela a destaca e não cobra margem dela.
-      sem_obra_definida: false
+      sem_obra_definida: false,
+      // CERQUEIRA (matriz): não é obra de produção; a tela a destaca em linha própria.
+      eh_matriz: false
     });
   }
   return mapa.get(chave);
@@ -418,6 +429,8 @@ function montarResposta(mapa, periodo, diariasSemObra) {
   // cadastro — ficaria no topo da lista de prejuízo e confundiria a leitura.
   obras.sort((a, b) => {
     if (a.sem_obra_definida !== b.sem_obra_definida) return a.sem_obra_definida ? 1 : -1;
+    // CERQUEIRA (matriz) fica logo antes de "Sem obra definida": é custo administrativo, não obra.
+    if (!!a.eh_matriz !== !!b.eh_matriz) return a.eh_matriz ? 1 : -1;
     return b.saldo - a.saldo;
   });
 
@@ -440,7 +453,7 @@ function montarResposta(mapa, periodo, diariasSemObra) {
     // Avisos agregados, para a tela destacar sem precisar varrer a lista inteira.
     avisos: {
       receitas_sem_obra_cadastrada: obras.filter(o => o.sem_obra_cadastrada).map(o => o.obra),
-      obras_sem_custo: obras.filter(o => o.sem_custo_lancado && !o.sem_entrada_lancada && !o.sem_obra_definida).map(o => o.obra),
+      obras_sem_custo: obras.filter(o => o.sem_custo_lancado && !o.sem_entrada_lancada && !o.sem_obra_definida && !o.eh_matriz).map(o => o.obra),
       // Custo real que ficou de fora do rateio por obra (ver buscarDiariasSemObra).
       diarias_sem_obra: diariasSemObra,
       // Folha de quem ainda não tem "Obra atual" no cadastro: valor que saiu mas não tem onde
@@ -609,7 +622,77 @@ router.get('/saude-obras', async (req, res) => {
     registro.total_saida = arredondar(registro.total_saida + grupo.valor);
   }
 
-  res.json({ ...montarResposta(mapa, { data_inicio, data_fim }, diariasSemObra), categorias: CATEGORIAS_SAIDA });
+  // ---- CERQUEIRA (matriz): custos administrativos ----
+  //
+  // Tudo que caiu na obra CERQUEIRA (colaborador vinculado, rateio, gasto direto) é refeito a
+  // partir dos itens de utils/cerqueira.js, para este relatório e o Nível 3 (/centro-custo/linhas)
+  // terem exatamente os mesmos números:
+  //   • sem "Incluir custos CERQUEIRA": ela aparece em linha própria, com os seus custos;
+  //   • com: cada obra de produção absorve a sua fatia (bloco "CERQUEIRA (Rateio Matriz / Adm)") e a
+  //     linha da matriz some (ou fica só com o que não teve base de rateio).
+  const incluirCerqueira = req.query.incluir_cerqueira === '1';
+  const cerq = await calcularCerqueira({ mes_inicio, mes_fim, criterio: req.query.criterio, ratear: incluirCerqueira });
+  if (cerq.matriz) {
+    const chaveMatriz = normalizarNomeObra(cerq.matriz.nome);
+    const existente = mapa.get(chaveMatriz);
+    if (existente) { existente.saidas = []; existente.total_saida = 0; }
+    const registroMatriz = () => {
+      const r = obterObra(mapa, chaveMatriz, cerq.matriz.nome);
+      r.obra_id = cerq.matriz.id;
+      r.eh_matriz = true;
+      return r;
+    };
+    const somarSaida = (registro, saida) => {
+      registro.saidas.push(saida);
+      registro.total_saida = arredondar(registro.total_saida + saida.valor);
+    };
+
+    if (!incluirCerqueira) {
+      const grupos = new Map();
+      for (const m of cerq.meses) {
+        for (const it of m.itens) {
+          const g = grupos.get(`${it.origem}|${it.item}`) || { item: it.item, valor: 0, qtd: 0 };
+          g.valor = arredondar(g.valor + it.valor);
+          g.qtd += 1;
+          grupos.set(`${it.origem}|${it.item}`, g);
+        }
+      }
+      for (const g of grupos.values()) {
+        somarSaida(registroMatriz(), { tipo: 'CERQUEIRA', categoria: 'CERQUEIRA', servico: g.item, valor: g.valor, qtd: g.qtd });
+      }
+    } else {
+      for (const p of cerq.porObra.values()) {
+        const registro = obterObra(mapa, normalizarNomeObra(p.obra_nome), p.obra_nome);
+        registro.obra_id = p.obra_id;
+        somarSaida(registro, {
+          tipo: 'CERQUEIRA', categoria: 'CERQUEIRA', servico: '🏢 CERQUEIRA (Rateio Matriz / Adm)', valor: p.valor, qtd: p.itens
+        });
+      }
+      if (cerq.naoRateado) {
+        somarSaida(registroMatriz(), {
+          tipo: 'CERQUEIRA', categoria: 'CERQUEIRA', servico: 'CERQUEIRA (não rateado — mês sem base de rateio)', valor: cerq.naoRateado, qtd: 1
+        });
+      }
+    }
+    const final = mapa.get(chaveMatriz);
+    if (final) { final.eh_matriz = true; final.obra_id = cerq.matriz.id; }
+    if (final && final.saidas.length === 0 && final.entradas.length === 0) mapa.delete(chaveMatriz);
+  }
+
+  const resposta = montarResposta(mapa, { data_inicio, data_fim }, diariasSemObra);
+  resposta.categorias = categoriasSaida(incluirCerqueira);
+  resposta.cerqueira = {
+    disponivel: !!cerq.matriz,
+    incluida: incluirCerqueira,
+    criterio: cerq.criterio,
+    rotulo_criterio: cerq.rotulo_criterio,
+    criterios: CRITERIOS,
+    total: cerq.total,
+    rateado: cerq.rateado,
+    nao_rateado: cerq.naoRateado,
+    por_mes: cerq.meses.map(m => ({ mes: m.mes, total: m.total, rotulo_criterio: m.rotulo_criterio }))
+  };
+  res.json(resposta);
 });
 
 // ===========================================================================================
@@ -636,7 +719,8 @@ function regraDoRateio(origem, pct) {
   return 'Sem obra definida';
 }
 
-async function buscarLinhasDetalhadas({ data_inicio, data_fim, mes_inicio, mes_fim }) {
+async function buscarLinhasDetalhadas(params) {
+  const { data_inicio, data_fim, mes_inicio, mes_fim } = params;
   const linhas = [];
   const add = l => linhas.push({
     colaborador: '', descricao: '', valor_bruto: null, desconto_nota: null, ...l, valor: arredondar(l.valor)
@@ -791,6 +875,41 @@ async function buscarLinhasDetalhadas({ data_inicio, data_fim, mes_inicio, mes_f
     }
   }
 
+  // ---- CERQUEIRA (matriz): os itens vêm de utils/cerqueira.js (mesma fonte do /saude-obras) ----
+  const incluirCerqueira = params.incluir_cerqueira === '1';
+  const cerq = await calcularCerqueira({ mes_inicio, mes_fim, criterio: params.criterio, ratear: incluirCerqueira });
+  if (cerq.matriz) {
+    const chaveMatriz = normalizarNomeObra(cerq.matriz.nome);
+    // As linhas "naturais" da matriz (folha, benefícios, gastos...) são descartadas e refeitas
+    // abaixo como categoria CERQUEIRA, para os totais baterem com o /saude-obras.
+    for (let i = linhas.length - 1; i >= 0; i--) {
+      if (linhas[i].tipo === 'SAIDA' && linhas[i].obra_chave === chaveMatriz) linhas.splice(i, 1);
+    }
+    const rotuloCerq = categoriasSaida(incluirCerqueira).find(c => c.chave === 'CERQUEIRA').rotulo;
+    const base = { tipo: 'SAIDA', categoria: 'CERQUEIRA', categoria_rotulo: rotuloCerq, data: null };
+    for (const m of cerq.meses) {
+      for (const it of m.itens) {
+        const comum = { ...base, competencia: m.mes, colaborador: it.colaborador, item: it.item, valor_matriz: it.valor };
+        if (!incluirCerqueira) {
+          add({ ...comum, obra_chave: chaveMatriz, obra: cerq.matriz.nome, descricao: it.descricao, regra: it.regra, valor: it.valor });
+          continue;
+        }
+        for (const a of it.aloc) {
+          add({
+            ...comum, obra_chave: normalizarNomeObra(a.obra_nome), obra: a.obra_nome, descricao: it.descricao,
+            regra: regraDoItemRateado(m.rotulo_criterio || cerq.rotulo_criterio, a, it), valor: a.valor
+          });
+        }
+        if (it.nao_rateado) {
+          add({
+            ...comum, obra_chave: chaveMatriz, obra: cerq.matriz.nome, descricao: it.descricao,
+            regra: 'Não rateado — mês sem base de rateio (permanece na CERQUEIRA)', valor: it.nao_rateado
+          });
+        }
+      }
+    }
+  }
+
   linhas.sort((a, b) => (a.competencia || '').localeCompare(b.competencia || '')
     || (a.obra || '').localeCompare(b.obra || '', 'pt-BR') || a.categoria.localeCompare(b.categoria)
     || (a.colaborador || '').localeCompare(b.colaborador || '', 'pt-BR'));
@@ -799,7 +918,7 @@ async function buscarLinhasDetalhadas({ data_inicio, data_fim, mes_inicio, mes_f
 
 router.get('/centro-custo/linhas', async (req, res) => {
   const linhas = await buscarLinhasDetalhadas(req.query);
-  res.json({ categorias: CATEGORIAS_SAIDA, linhas });
+  res.json({ categorias: categoriasSaida(req.query.incluir_cerqueira === '1'), linhas });
 });
 
 module.exports = router;

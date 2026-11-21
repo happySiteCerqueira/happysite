@@ -5,7 +5,7 @@ import AvisosCentroCusto from './AvisosCentroCusto';
 import NivelResumo from './NivelResumo';
 import NivelTopicos from './NivelTopicos';
 import NivelDetalhado from './NivelDetalhado';
-import { rotuloMes, somarObras, totaisPorCategoria, ultimoDiaDoMes } from './util';
+import { formatarMoeda, rotuloMes, somarObras, totaisPorCategoria, ultimoDiaDoMes } from './util';
 
 // Aba Financeiro → Centro de Custo, em 3 níveis de profundidade:
 //   1. Resumo Executivo  — KPIs, gráfico Entradas × Saídas e tabela das obras;
@@ -23,6 +23,19 @@ const NIVEIS = [
   { chave: 3, rotulo: '3 · Detalhado Individual' }
 ];
 
+// Critérios de rateio dos custos da CERQUEIRA (mesmas chaves de server/utils/cerqueira.js).
+const CRITERIOS_CERQUEIRA = [
+  { chave: 'HIBRIDO_50_50', rotulo: 'Híbrido 50/50 (Custo + Receita)' },
+  { chave: 'QTD_CLT', rotulo: 'Qtd. Funcionários CLT' },
+  { chave: 'CUSTO_DIRETO', rotulo: 'Custo Direto Total' },
+  { chave: 'RECEITA_LIQUIDA', rotulo: 'Receita Líquida' }
+];
+
+// A escolha de incluir a CERQUEIRA e do critério fica guardada neste navegador.
+function lerPreferencia(chave, padrao) {
+  try { return localStorage.getItem(chave) ?? padrao; } catch { return padrao; }
+}
+
 export default function CentroCusto() {
   const { mes: mesApuracao } = useApuracao();
   // Por padrão mostra o MÊS DE APURAÇÃO (seletor global do topo). 'tudo' = todo o histórico;
@@ -39,6 +52,19 @@ export default function CentroCusto() {
   const [obraSel, setObraSel] = useState(null);
   const [nivel, setNivel] = useState(1);
   const [filtroCategoria, setFiltroCategoria] = useState('SAIDAS');
+  // CERQUEIRA (matriz/administrativo): desmarcado = balanço operacional puro das obras;
+  // marcado = cada obra absorve a sua fatia dos custos da matriz, pelo critério escolhido.
+  const [incluirCerqueira, setIncluirCerqueira] = useState(() => lerPreferencia('hs_cc_cerqueira', '0') === '1');
+  const [criterio, setCriterio] = useState(() => lerPreferencia('hs_cc_criterio', 'HIBRIDO_50_50'));
+
+  function alternarCerqueira(marcado) {
+    setIncluirCerqueira(marcado);
+    try { localStorage.setItem('hs_cc_cerqueira', marcado ? '1' : '0'); } catch { /* sem armazenamento */ }
+  }
+  function escolherCriterio(novo) {
+    setCriterio(novo);
+    try { localStorage.setItem('hs_cc_criterio', novo); } catch { /* sem armazenamento */ }
+  }
 
   function escolherPeriodo(novo) {
     if (novo === 'intervalo') { setMesInicio(mesApuracao); setMesFim(mesApuracao); }
@@ -49,6 +75,7 @@ export default function CentroCusto() {
     setCarregando(true);
     setErro('');
     const params = {};
+    if (incluirCerqueira) { params.incluir_cerqueira = 1; params.criterio = criterio; }
     if (periodo !== 'tudo') {
       // A Receita tem uma DATA (data_medicao) e o custo tem o MÊS DE CICLO (YYYY-MM): o mesmo
       // período vai nos dois formatos para os dois lados compararem o mesmo intervalo.
@@ -66,7 +93,7 @@ export default function CentroCusto() {
       .then(([resumo, detalhe]) => { setDados(resumo.data); setLinhas(detalhe.data.linhas); })
       .catch(() => setErro('Não foi possível carregar o centro de custo das obras.'))
       .finally(() => setCarregando(false));
-  }, [periodo, mesInicio, mesFim, mesApuracao]);
+  }, [periodo, mesInicio, mesFim, mesApuracao, incluirCerqueira, criterio]);
 
   const todasObras = useMemo(() => (dados ? dados.obras : []), [dados]);
   // Se a obra escolhida não existe no período novo, volta ao consolidado.
@@ -149,6 +176,23 @@ export default function CentroCusto() {
               </div>
             </>
           )}
+          <div className="flex-col gap-2">
+            <label>CERQUEIRA (matriz / administrativo)</label>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 700, cursor: 'pointer', background: incluirCerqueira ? '#fef3c7' : '#f3f4f6', padding: '6px 10px', borderRadius: 6 }}>
+                <input type="checkbox" checked={incluirCerqueira} onChange={e => alternarCerqueira(e.target.checked)} />
+                Incluir custos CERQUEIRA
+              </label>
+              {incluirCerqueira && (
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+                  Critério de rateio:
+                  <select value={criterio} onChange={e => escolherCriterio(e.target.value)}>
+                    {CRITERIOS_CERQUEIRA.map(c => <option key={c.chave} value={c.chave}>{c.rotulo}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
+          </div>
         </div>
 
         {escopo === 'obra' && (
@@ -157,7 +201,7 @@ export default function CentroCusto() {
             {todasObras.map(o => (
               <button key={o.chave} className={obraSel === o.chave ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
                 style={{ borderRadius: 999 }} onClick={() => setObraSel(o.chave)}>
-                {o.sem_obra_definida ? '💰 ' : ''}{o.obra}
+                {o.eh_matriz ? '🏢 CERQUEIRA (Matriz / Adm)' : `${o.sem_obra_definida ? '💰 ' : ''}${o.obra}`}
               </button>
             ))}
           </div>
@@ -176,7 +220,18 @@ export default function CentroCusto() {
           <strong>Entrou</strong> = receita lançada, já <strong>descontada a nota</strong>. <strong>Saiu</strong> = produção + diárias +
           excedente de folha (salário + férias + 13º acima da produção) + VA, VT, Extras e EPI + admissão + DCTF e DAS +
           gastos diretos da obra (Ferramentas, Café e outros).
+          {dados && dados.cerqueira && dados.cerqueira.incluida
+            ? ' Os custos da CERQUEIRA (sócios, equipe administrativa e despesas gerais da matriz) estão incluídos, rateados entre as obras pelo critério escolhido.'
+            : ' Os custos da CERQUEIRA não estão incluídos nas obras; marque “Incluir custos CERQUEIRA” para ratear.'}
         </div>
+        {dados && dados.cerqueira && dados.cerqueira.incluida && dados.cerqueira.total > 0 && (
+          <div style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', borderRadius: 6, padding: '6px 10px', marginTop: 8 }}>
+            🏢 CERQUEIRA no período: <strong>{formatarMoeda(dados.cerqueira.total)}</strong> — rateado{' '}
+            <strong>{formatarMoeda(dados.cerqueira.rateado)}</strong> ({dados.cerqueira.rotulo_criterio})
+            {dados.cerqueira.nao_rateado > 0 && <> · <strong>{formatarMoeda(dados.cerqueira.nao_rateado)}</strong> sem base de rateio no mês (permanece na CERQUEIRA)</>}
+            {dados.cerqueira.por_mes.some(m => m.rotulo_criterio && m.rotulo_criterio.includes('—')) && ' · alguns meses usaram a base disponível (ver detalhes no Nível 3)'}.
+          </div>
+        )}
         {erro && <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>{erro}</div>}
       </div>
 

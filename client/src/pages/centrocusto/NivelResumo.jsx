@@ -16,7 +16,7 @@ export default function NivelResumo({ escopo, obras, totais, categorias, onAbrir
     { rotulo: 'Margem', valor: formatarPct(totais.margem), cor: corDoSaldo(totais.saldo), ajuda: 'Quanto sobra de cada R$ 100 que entraram' }
   ];
 
-  const porObra = obras.map(o => ({ nome: abreviar(o.obra), Entrou: o.total_entrada_liquida, Saiu: o.total_saida }));
+  const porObra = obras.map(o => ({ nome: o.eh_matriz ? '🏢 CERQUEIRA' : abreviar(o.obra), Entrou: o.total_entrada_liquida, Saiu: o.total_saida }));
   const porTopico = categorias.filter(c => c.valor > 0).map(c => ({ nome: abreviar(c.rotulo, 28), Valor: c.valor }));
 
   return (
@@ -79,14 +79,15 @@ export default function NivelResumo({ escopo, obras, totais, categorias, onAbrir
             </thead>
             <tbody>
               {obras.map(o => (
-                <tr key={o.chave} style={{ cursor: escopo === 'empresa' ? 'pointer' : 'default' }}
+                <tr key={o.chave} style={{ cursor: escopo === 'empresa' ? 'pointer' : 'default', background: o.eh_matriz ? '#fffbeb' : undefined, borderTop: o.eh_matriz ? '2px solid #fbbf24' : undefined }}
                   onClick={() => escopo === 'empresa' && onAbrirObra(o.chave)}
-                  title={escopo === 'empresa' ? 'Clique para ver só esta obra' : undefined}>
+                  title={escopo === 'empresa' ? 'Clique para ver só esta linha' : undefined}>
                   <td>
-                    {o.sem_obra_definida ? <em>{o.obra}</em> : o.obra}
+                    {o.eh_matriz ? <strong>🏢 CERQUEIRA (Matriz / Adm)</strong> : (o.sem_obra_definida ? <em>{o.obra}</em> : o.obra)}
+                    {o.eh_matriz && <div style={{ fontSize: 11, color: '#92400e' }}>custos administrativos da empresa — sem receita própria</div>}
                     {o.sem_obra_definida && <span title="Custos de quem ainda não tem obra definida" style={{ color: '#b45309' }}> 💰</span>}
                     {o.sem_obra_cadastrada && !o.sem_obra_definida && <span title="Nome não encontrado no cadastro de Obras" style={{ color: '#b45309' }}> ⚠️</span>}
-                    {o.sem_custo_lancado && !o.sem_entrada_lancada && !o.sem_obra_definida && <span title="Sem custo lançado no período" style={{ color: '#b45309' }}> ⚠️</span>}
+                    {o.sem_custo_lancado && !o.sem_entrada_lancada && !o.sem_obra_definida && !o.eh_matriz && <span title="Sem custo lançado no período" style={{ color: '#b45309' }}> ⚠️</span>}
                   </td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{formatarMoeda(o.total_entrada_liquida)}</td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{formatarMoeda(o.total_saida)}</td>
