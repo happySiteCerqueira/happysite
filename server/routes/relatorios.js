@@ -247,6 +247,9 @@ async function mesesDoPeriodo(mesInicio, mesFim) {
   const linhas = await db.all(
     `SELECT DISTINCT m FROM (
        SELECT mes_ciclo AS m FROM pagamentos_antecipados WHERE (vale + fgts + taxa + pagto) <> 0
+       UNION SELECT mes_ciclo FROM holerite_complementar
+       UNION SELECT mes_referencia FROM gastos_impostos WHERE excluido = 0
+       UNION SELECT to_char(data_admissao, 'YYYY-MM') FROM colaboradores WHERE data_admissao IS NOT NULL
        UNION SELECT mes_referencia FROM gastos_colaborador_itens
        UNION SELECT mes_referencia FROM gastos_extras WHERE excluido = 0
      ) t WHERE 1 = 1${filtro} ORDER BY m`, ...params
@@ -260,7 +263,21 @@ async function buscarCustosColaboradores(mesInicio, mesFim) {
   const folha = [];
   const beneficios = new Map();
   for (const mes of await mesesDoPeriodo(mesInicio, mesFim)) {
-    const { colaboradores } = await calcularCustosMes(mes);
+    const { colaboradores, porObra } = await calcularCustosMes(mes);
+    // Custos que pertencem à obra e não à pessoa: admissão (ASO + Treinamento, na obra do
+    // cadastro), DCTF e DAS (rateados). Entram junto dos benefícios, por obra e tipo.
+    for (const o of porObra.values()) {
+      for (const [campo, rotulo] of [['admissao', 'Admissão (ASO + Treinamento)'], ['dctf', 'DCTF'], ['das', 'DAS']]) {
+        if (!o[campo]) continue;
+        const chave = `${o.obra_id || 0}|${rotulo}`;
+        if (!beneficios.has(chave)) {
+          beneficios.set(chave, { obra_id: o.obra_id, obra_nome: o.obra_id ? o.obra : null, tipo: rotulo, valor: 0, qtd: 0 });
+        }
+        const linha = beneficios.get(chave);
+        linha.valor += o[campo];
+        linha.qtd += 1;
+      }
+    }
     for (const c of colaboradores) {
       for (const d of c.distribuicao) {
         if (d.holerite > 0) {

@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.129** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.130** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -128,32 +128,46 @@ Três sub-abas, sempre sobre o mês de apuração do topo (a primeira é **Cadas
   Reimportar o mesmo tipo/mês **substitui** o lote anterior (com confirmação; o antigo fica como
   histórico). Detalhes por tipo:
   - **VT** — só `Status = PAGO`; soma as linhas do mesmo colaborador (BILHETE + PIX…), guardando o canal.
-  - **Ponto** — batidas `Liberado`; cada dia vale 1, dividido entre as obras do dia (2 obras = 0,5
-    cada); o % do mês é dias da obra ÷ dias do colaborador. Rua → obra pelo **nome da rua**
+  - **Ponto** — batidas `Liberado`. Percorre **todos os dias do mês**: dia com batida vale 1, dividido
+    entre as obras do dia (2 obras = 0,5 cada); dia **sem batida** (falta/lacuna) é carregado para a
+    **última obra** em que a pessoa bateu antes dele (se vier antes da 1ª batida, vai para a 1ª obra).
+    Ex.: 2 dias na A, 13 de falta, 5 na A, 10 na B → A = 20 dias (66,67%), B = 10 (33,33%). Esse mesmo
+    % vale para VA, VT, Extras, EPI, Holerite/Férias/13º e DCTF. Rua → obra pelo **nome da rua**
     (sem número, acento ou "Rua/Av"), comparação exata; ruas extras da obra ficam em
     `obra_enderecos_alias`. Pendências podem ser resolvidas depois sem reenviar o PDF.
+  - **Holerite** — card com três botões: **Salário (Padrão) | Férias | 13º Salário**. Férias e 13º são
+    gravados à parte (`holerite_complementar`) e **nunca sobrescrevem** o salário do mês.
+  - **Impostos do mês (DCTF e DAS)** — valor total do mês, lançado à mão (ADM/Financeiro). **DCTF** é
+    rateado pelos dias de alocação de todos os colaboradores CLT (`tipo = CPF`, Produção ou Holerite)
+    em cada obra; **DAS** pela receita **com nota** (valor bruto) dos últimos 12 meses até o mês
+    lançado, casando a obra pelo nome. Valor vazio/zero remove o lançamento.
   - **Caju** — o PDF é imagem: OCR no navegador, linhas editáveis, conferência de CPF e do total
     do cabeçalho. Só o Auxílio Alimentação (Fixo + Flexível) é gravado; Mobilidade é descartada.
   - **Café** — card e tabela prontos; *parser pendente de layout PDF*.
   - **Lançamentos diretos por obra (Café e outros)** — no fim da aba: formulário **➕ Lançar gasto**
     (mês, obra, tipo, descrição, valor) e a lista do mês, para editar ou excluir. Antes ficava no Resumo.
-- **Resumo** — custo por obra: *Total geral* ou *Detalhado por categoria* (VA, VT, Café, Extras,
-  Holerite/Salário).
-- **Detalhado** — uma linha por colaborador: regime, obras e % de rateio, VA, VT, Extras, EPI, custo de
-  holerite e total. Ações: **+ Extra** e **% Rateio** (ajuste manual, que vale só naquele mês).
+- **Resumo** — custo por obra: *Total geral* ou *Detalhado por categoria* (VA, VT, Café, Extras, EPI,
+  Admissão, Holerite/Salário, DCTF, DAS).
+- **Detalhado** — uma linha por colaborador: regime, obras e % de rateio, VA, VT, Extras, EPI, Admissão,
+  custo de holerite e total. Ações: **+ Extra** e **% Rateio** (ajuste manual, que vale só naquele mês).
 
 **Regras de cálculo** (por pessoa, por mês):
 
 ```
 P = produção marcada nas obras + diárias        (já está nas obras certas, pela marcação)
-H = holerite recebido = Vale + INSS + Taxa + Pagto
-Custo de holerite rateado = máx(H − P, 0)
+H = holerite recebido no mês = salário + férias + 13º   (cada um = Vale + INSS + Taxa + Pagto)
+Custo de holerite rateado = máx(H − P, 0)       (os três somados, nunca avaliados separadamente)
 ```
 
 - Produziu 5 mil e recebeu 2 mil → nada do holerite entra (a produção já cobre).
 - Produziu 2 mil e recebeu 3,5 mil → entram **1,5 mil** pelo % do ponto; o custo total é 3,5 mil.
   A Medição dessa pessoa fica **negativa** (−1,5 mil), mas o custo da obra é o recebido.
+- Produziu 8 mil e recebeu 2,7 mil (salário) + 2,3 mil (férias) + 0,5 mil (13º) → H = 5,5 mil; a
+  **Medição desconta 5,5 mil** (sobram 2,5 mil a pagar) e o Centro de Custo **não lança excedente**.
 - Vale Extra, Vale Ex RH e Adiantamento **não** entram no H: são descontos da Medição.
+- **Admissão (ASO R$ 75 + Treinamento R$ 150 = R$ 225)**: automática, no mês da **data de admissão** do
+  cadastro, atribuída **inteira à obra do cadastro** (não é dividida pelo ponto). Sem obra no cadastro,
+  cai em "Sem obra definida" com aviso.
 - **VA, VT e Extras** são sempre rateados pelo % do ponto.
 - **Regime** é derivado de `participa_producao`: marcado = Produção, desmarcado = Holerite.
 - **Rateio:** ajuste manual > ponto eletrônico > obra padrão do cadastro > "Sem obra definida".
@@ -163,7 +177,7 @@ Custo de holerite rateado = máx(H − P, 0)
   até o usuário decidir (manter = soma junto; remover = exclusão lógica). A importação pede essa
   decisão; o aviso aparece no Resumo.
 - **Centro de Custo** (antiga "Saúde financeira") usa exatamente esta conta: excedente do holerite
-  + VA + VT + Extras + EPI, rateados pelo ponto, somados à produção, diárias e gastos diretos (Café).
+  + VA + VT + Extras + EPI + Admissão + DCTF + DAS, rateados conforme as regras acima, somados à produção, diárias e gastos diretos (Café).
 
 #### Centro de Custo — o relatório mais importante
 
@@ -312,6 +326,8 @@ PostgreSQL 16. Nomes de tabelas e colunas **em português**.
 | `ponto_eventos` | — | Batidas do ponto eletrônico (base do rateio) |
 | `gastos_rateio_mensal` | `(colaborador_id, mes_referencia, obra_id, origem)` | % por obra; `origem` = `PONTO` ou `MANUAL` |
 | `gastos_extras` | — | Extras manuais por colaborador/mês (exclusão lógica) |
+| `holerite_complementar` | `(colaborador_id, mes_ciclo, tipo)` | Holerite de `FERIAS` e `DECIMO_TERCEIRO` (vale, fgts = INSS, taxa, pagto); à parte do salário |
+| `gastos_impostos` | `(mes_referencia, tipo)` quando não excluído | DCTF/DAS do mês (valor total; o rateio é calculado) |
 | `colaborador_aliases` / `obra_enderecos_alias` | — | De-Para persistente de nomes e de ruas |
 | `perfil_permissoes` | `(perfil, modulo)` | O que cada perfil acessa |
 | `auditoria` | — | Trilha de alterações (`entidade`, `entidade_id`, `acao`, `detalhes`) |

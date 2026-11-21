@@ -5,6 +5,7 @@ import { interpretarTextoCaju, lerImagensCaju } from '../../utils/cajuOcr';
 import PainelPrevia, { BlocoPendencias } from './PainelPrevia';
 import EditorCaju from './EditorCaju';
 import Conciliacao from '../Conciliacao';
+import ImpostosCard from './ImpostosCard';
 import { useAuth } from '../../context/AuthContext';
 
 // Aba Dados: porta de entrada dos PDFs. Cada card tem a PRÓPRIA competência de referência,
@@ -30,12 +31,20 @@ const CARTOES = [
   }
 ];
 
+// Tipos de holerite do card de importação (Férias e 13º são gravados à parte do salário).
+const TIPOS_HOLERITE = [
+  { chave: 'SALARIO', rotulo: 'Salário (Padrão)' },
+  { chave: 'FERIAS', rotulo: 'Férias' },
+  { chave: 'DECIMO_TERCEIRO', rotulo: '13º Salário' }
+];
+
 export default function GastosDados({ mesGlobal, renderLancamentos }) {
   // O Holerite usa o módulo "Conciliação" no backend (rota /conciliacao/importar): só mostra o
   // card a quem tem essa permissão.
   const { temAcessoSubaba } = useAuth();
   const podeImportarHolerite = temAcessoSubaba('conciliacao');
   const [holeriteAberto, setHoleriteAberto] = useState(false);
+  const [tipoHolerite, setTipoHolerite] = useState('SALARIO');
   const [mesHolerite, setMesHolerite] = useState(mesGlobal);
   useEffect(() => { setMesHolerite(mesGlobal); }, [mesGlobal]);
   const [previa, setPrevia] = useState(null);
@@ -69,24 +78,34 @@ export default function GastosDados({ mesGlobal, renderLancamentos }) {
             <h4 style={{ margin: '0 0 6px' }}>📄 Holerite (contabilidade)</h4>
             <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
               PDF de holerites da contabilidade. Preenche Vale (953), INSS (91005), Taxa (441) e Pagto
-              (líquido) do Holerite de cada colaborador, depois de você conferir a prévia.
+              (líquido) de cada colaborador, depois de você conferir a prévia. Escolha o tipo antes de enviar:
+              Férias e 13º são gravados à parte e <strong>não sobrescrevem</strong> o salário do mês.
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {TIPOS_HOLERITE.map(t => (
+                <button key={t.chave} className={tipoHolerite === t.chave ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
+                  style={{ borderRadius: 999 }} onClick={() => setTipoHolerite(t.chave)}>
+                  {t.rotulo}
+                </button>
+              ))}
             </div>
             <div className="flex-col gap-2">
               <label style={{ fontSize: 12 }}>Mês/Ano de referência desta importação</label>
               <input type="month" value={mesHolerite}
                 onChange={e => { if (e.target.value) { setMesHolerite(e.target.value); setHoleriteAberto(false); } }} />
               <button className="btn-primary btn-sm" onClick={() => setHoleriteAberto(v => !v)}>
-                {holeriteAberto ? '▲ Fechar importação' : '📄 Importar PDF de holerites'}
+                {holeriteAberto ? '▲ Fechar importação' : `📄 Importar PDF de holerites (${TIPOS_HOLERITE.find(t => t.chave === tipoHolerite).rotulo})`}
               </button>
             </div>
           </div>
         )}
+        <ImpostosCard mesGlobal={mesGlobal} />
       </div>
 
       {holeriteAberto && podeImportarHolerite && (
         <div style={{ marginBottom: 16 }}>
-          <Conciliacao modoFixo="importar" mesExterno={mesHolerite}
-            onImportado={() => setMensagem(`✔ Holerite de ${rotuloMes(mesHolerite)} importado. Confira em Financeiro → Holerite.`)} />
+          <Conciliacao modoFixo="importar" mesExterno={mesHolerite} tipoHolerite={tipoHolerite}
+            onImportado={() => setMensagem(`✔ Holerite de ${TIPOS_HOLERITE.find(t => t.chave === tipoHolerite).rotulo} (${rotuloMes(mesHolerite)}) importado.`)} />
         </div>
       )}
 

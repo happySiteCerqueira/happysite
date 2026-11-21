@@ -148,7 +148,13 @@ router.get('/gerar', async (req, res) => {
        WHERE pa.mes_ciclo = ? AND c.participa_producao = TRUE
          AND (pa.vale + pa.fgts + pa.taxa + pa.pagto + pa.vale_extra + pa.adiantamento + pa.vale_ex_rh) <> 0`, mes
     );
-    colaboradoresExtras = [...diariasMes, ...antecipadosMes];
+    // Férias e 13º salário também descontam a Medição: quem só recebeu isso no mês entra na lista.
+    const complementaresMes = await db.all(
+      `SELECT DISTINCT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta, c.funcao, c.contato_responsavel
+       FROM holerite_complementar hc JOIN colaboradores c ON c.id = hc.colaborador_id
+       WHERE hc.mes_ciclo = ? AND c.participa_producao = TRUE AND (hc.vale + hc.fgts + hc.taxa + hc.pagto) <> 0`, mes
+    );
+    colaboradoresExtras = [...diariasMes, ...antecipadosMes, ...complementaresMes];
   }
 
 
@@ -220,7 +226,18 @@ router.get('/gerar', async (req, res) => {
   // (vale, FGTS, taxa, adiantamento etc.) que são descontos do valor líquido.
   const resultado = await Promise.all(Object.values(porPessoa).map(async p => {
     const l = await db.get('SELECT * FROM pagamentos_antecipados WHERE colaborador_id = ? AND mes_ciclo = ?', p.colaborador_id, mes);
-    const totalAntecipado = l ? (l.vale + l.fgts + l.taxa + l.pagto + l.vale_extra + l.adiantamento + (l.vale_ex_rh || 0)) : 0;
+    // Férias e 13º (holerites complementares) descontam da Medição exatamente como o holerite de
+    // salário: o desconto é o pacote total recebido no mês.
+    const complementares = await db.all(
+      'SELECT tipo, vale, fgts, taxa, pagto FROM holerite_complementar WHERE colaborador_id = ? AND mes_ciclo = ?', p.colaborador_id, mes
+    );
+    const somaCompl = tipo => complementares
+      .filter(c => c.tipo === tipo)
+      .reduce((s, c) => s + (c.vale || 0) + (c.fgts || 0) + (c.taxa || 0) + (c.pagto || 0), 0);
+    const totalFerias = somaCompl('FERIAS');
+    const totalDecimo = somaCompl('DECIMO_TERCEIRO');
+    const totalAntecipado = (l ? (l.vale + l.fgts + l.taxa + l.pagto + l.vale_extra + l.adiantamento + (l.vale_ex_rh || 0)) : 0)
+      + totalFerias + totalDecimo;
     const diaria = await db.get('SELECT * FROM diarias WHERE colaborador_id = ? AND mes_ciclo = ?', p.colaborador_id, mes);
     const totalDiarias = diaria ? diaria.total : 0;
 
@@ -261,14 +278,16 @@ router.get('/gerar', async (req, res) => {
     // Detalhamento do pagamento antecipado (usado na exportação "com detalhe"), abrindo cada
     // componente individual do desconto (Vale, FGTS, Taxa, Pagto, Vale Extra, Adiantamento),
     // em vez de mostrar apenas o total já somado.
-    const detalhePagamento = l ? {
-      vale: l.vale || 0,
-      fgts: l.fgts || 0,
-      taxa: l.taxa || 0,
-      pagto: l.pagto || 0,
-      vale_extra: l.vale_extra || 0,
-      adiantamento: l.adiantamento || 0,
-      vale_ex_rh: l.vale_ex_rh || 0
+    const detalhePagamento = (l || totalFerias || totalDecimo) ? {
+      vale: l ? l.vale || 0 : 0,
+      fgts: l ? l.fgts || 0 : 0,
+      taxa: l ? l.taxa || 0 : 0,
+      pagto: l ? l.pagto || 0 : 0,
+      vale_extra: l ? l.vale_extra || 0 : 0,
+      adiantamento: l ? l.adiantamento || 0 : 0,
+      vale_ex_rh: l ? l.vale_ex_rh || 0 : 0,
+      ferias: totalFerias,
+      decimo_terceiro: totalDecimo
     } : null;
 
     return {

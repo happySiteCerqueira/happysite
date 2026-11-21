@@ -17,6 +17,8 @@ const TABELAS_BACKUP = [
   // das tabelas que o referenciam. Sem isto o backup ignoraria o rateio e os De-Para em silêncio.
   'gastos_lotes', 'gastos_colaborador_itens', 'ponto_eventos', 'gastos_rateio_mensal',
   'gastos_extras', 'colaborador_aliases', 'obra_enderecos_alias',
+  // Férias/13º (holerite complementar) e DCTF/DAS mensais (v2.130).
+  'holerite_complementar', 'gastos_impostos',
   'epi_itens', 'epi_retiradas', 'epi_retirada_itens', 'epi_movimentos',
   'aso_historico',
   'advertencia_modelos', 'advertencias',

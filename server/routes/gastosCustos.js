@@ -37,11 +37,65 @@ router.get('/detalhado', async (req, res) => {
   const { colaboradores } = await calcularCustosMes(mes);
 
   const totais = colaboradores.reduce((acc, c) => {
-    for (const k of ['va', 'vt', 'extras', 'epi', 'holerite_custo', 'total']) acc[k] = arredondar(acc[k] + c[k]);
+    for (const k of ['va', 'vt', 'extras', 'epi', 'admissao', 'holerite_custo', 'total']) acc[k] = arredondar(acc[k] + c[k]);
     return acc;
-  }, { va: 0, vt: 0, extras: 0, epi: 0, holerite_custo: 0, total: 0 });
+  }, { va: 0, vt: 0, extras: 0, epi: 0, admissao: 0, holerite_custo: 0, total: 0 });
 
   res.json({ mes, itens: colaboradores, totais });
+});
+
+// ---- DCTF e DAS do mês ----------------------------------------------------------------------
+//
+// Valor total do mês, lançado à mão. O rateio por obra é calculado (utils/gastosCustos.js) e
+// aparece no Resumo e no Centro de Custo. Valor vazio/zero remove o lançamento (exclusão lógica).
+router.get('/impostos', async (req, res) => {
+  const mes = mesDaQuery(req, res);
+  if (!mes) return;
+  const linhas = await db.all(
+    'SELECT id, tipo, valor, observacao FROM gastos_impostos WHERE mes_referencia = ? AND excluido = 0', mes
+  );
+  const por = tipo => linhas.find(l => l.tipo === tipo);
+  const dctf = por('DCTF');
+  const das = por('DAS');
+  res.json({
+    mes,
+    dctf: dctf ? { valor: Number(dctf.valor) || 0, observacao: dctf.observacao || '' } : { valor: 0, observacao: '' },
+    das: das ? { valor: Number(das.valor) || 0, observacao: das.observacao || '' } : { valor: 0, observacao: '' }
+  });
+});
+
+router.put('/impostos', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
+  const { mes_referencia: mes, tipo } = req.body;
+  if (!mes || !MES_VALIDO.test(mes)) return res.status(400).json({ erro: 'Informe o mês (YYYY-MM).' });
+  if (!['DCTF', 'DAS'].includes(tipo)) return res.status(400).json({ erro: 'Tipo inválido (DCTF ou DAS).' });
+  const valor = req.body.valor === '' || req.body.valor == null ? 0 : Number(req.body.valor);
+  if (!Number.isFinite(valor) || valor < 0) return res.status(400).json({ erro: 'Informe um valor válido (zero ou maior).' });
+  const observacao = req.body.observacao ? String(req.body.observacao).trim() : null;
+
+  const atual = await db.get(
+    'SELECT * FROM gastos_impostos WHERE mes_referencia = ? AND tipo = ? AND excluido = 0', mes, tipo
+  );
+  if (valor === 0) {
+    if (atual) {
+      await registrarSnapshot(req, 'EXCLUIR', 'gastos_impostos', atual.id, atual, { excluido: 1 });
+      await db.run('UPDATE gastos_impostos SET excluido = 1, atualizado_em = NOW() WHERE id = ?', atual.id);
+    }
+    return res.json({ ok: true, valor: 0 });
+  }
+  if (atual) {
+    await registrarSnapshot(req, 'EDITAR', 'gastos_impostos', atual.id, atual, { valor, observacao });
+    await db.run(
+      'UPDATE gastos_impostos SET valor = ?, observacao = ?, atualizado_em = NOW() WHERE id = ?',
+      arredondar(valor), observacao, atual.id
+    );
+  } else {
+    const info = await db.run(
+      'INSERT INTO gastos_impostos (mes_referencia, tipo, valor, observacao, criado_por) VALUES (?,?,?,?,?)',
+      mes, tipo, arredondar(valor), observacao, req.usuario.id
+    );
+    await registrar(req.usuario.id, 'CRIAR', 'gastos_impostos', info.lastInsertRowid, { mes_referencia: mes, tipo, valor });
+  }
+  res.json({ ok: true, valor: arredondar(valor) });
 });
 
 // Lista enxuta de colaboradores ativos para o seletor de "Lançar Extra" (qualquer pessoa pode

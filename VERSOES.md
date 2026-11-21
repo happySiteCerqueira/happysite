@@ -50,6 +50,24 @@ git checkout v2.111
 
 ## Versões
 
+### 2.130 — Admissão, Férias/13º, DCTF/DAS e nova regra de ponto
+
+- **Custo de Admissão automático**: quem tem **data de admissão** no mês gera ASO (R$ 75) + Treinamento
+  (R$ 150) = R$ 225, atribuídos **inteiros à obra do cadastro** (sem dividir pelo ponto). Nova coluna
+  **Admissão** no Resumo e no Detalhado, e linha no Centro de Custo.
+- **Holerite de Férias e 13º Salário**: o card de holerite em **Pagamentos → Cadastrar** ganhou três
+  botões (**Salário | Férias | 13º**). Férias e 13º são gravados à parte e **não sobrescrevem** o salário.
+  O total do mês (**H = salário + férias + 13º**) **desconta na Medição** e, no Centro de Custo, o excedente
+  é `máx(H − produção, 0)` rateado pelo ponto.
+- **DCTF e DAS mensais**: novo card **Impostos do mês** em Cadastrar. DCTF é rateado pelos dias de todos
+  os colaboradores CLT (CPF) em cada obra; DAS pela receita **com nota** (bruta) dos últimos 12 meses.
+  Aparecem nas colunas **DCTF** e **DAS** do Resumo e no Centro de Custo.
+- **Nova regra do ponto (vale para todo o sistema)**: dias sem batida (faltas/lacunas) passam para a
+  **última obra** em que a pessoa bateu antes (ou a 1ª obra do mês, se a falta vier antes da 1ª batida).
+  Ex.: 2 dias na A, 13 de falta, 5 na A, 10 na B → A = 66,67%, B = 33,33%. Vale para VA, VT, Extras, EPI,
+  holerite, férias/13º e DCTF. Meses já importados só mudam ao recalcular o ponto do mês.
+- Novas tabelas `holerite_complementar` e `gastos_impostos` (adicionais; nada foi apagado).
+
 ### 2.129 — "Lançar gasto" passa do Resumo para Cadastrar
 
 - Os **lançamentos diretos por obra** (formulário **➕ Lançar gasto**, Café e outros, com a lista do

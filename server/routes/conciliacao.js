@@ -215,12 +215,25 @@ async function buscarColaboradoresParaImportar(mes) {
   }));
 }
 
+// Tipos de holerite que podem ser importados. SALARIO continua gravando em pagamentos_antecipados
+// (como sempre foi); FERIAS e DECIMO_TERCEIRO gravam em holerite_complementar, SEM tocar no
+// holerite de salário do mês. O total recebido no mês é a soma dos três.
+const TIPOS_HOLERITE = ['SALARIO', 'FERIAS', 'DECIMO_TERCEIRO'];
+const ROTULO_TIPO = { SALARIO: 'Salário', FERIAS: 'Férias', DECIMO_TERCEIRO: '13º Salário' };
+
+function tipoDoCorpo(valor) {
+  const tipo = String(valor || 'SALARIO').toUpperCase();
+  return TIPOS_HOLERITE.includes(tipo) ? tipo : null;
+}
+
 // Prévia da importação: lê o PDF, cruza com o cadastro e devolve o que SERIA gravado, para o
 // usuário conferir antes. Nada é persistido neste passo.
 router.post('/importar/previa', upload.single('holerite'), async (req, res) => {
   const mes = req.body.mes_ciclo;
+  const tipo = tipoDoCorpo(req.body.tipo);
   if (!req.file) return res.status(400).json({ erro: 'Envie o PDF dos Holerites no campo "holerite".' });
   if (!mes) return res.status(400).json({ erro: 'mes_ciclo (YYYY-MM) é obrigatório.' });
+  if (!tipo) return res.status(400).json({ erro: 'Tipo de holerite inválido (SALARIO, FERIAS ou DECIMO_TERCEIRO).' });
 
   try {
     const { colaboradores: holerites, info } = await extrairHolerites(req.file.buffer);
@@ -233,9 +246,11 @@ router.post('/importar/previa', upload.single('holerite'), async (req, res) => {
     const pessoas = await buscarColaboradoresParaImportar(mes);
     const { pares, sobraHolerite } = cruzar(pessoas, holerites, LIMIAR_SIMILARIDADE);
 
-    // Lançamentos já existentes no mês: servem para mostrar o valor atual ao lado do novo e
-    // para marcar a linha como "vai sobrescrever".
-    const existentes = await db.all('SELECT * FROM pagamentos_antecipados WHERE mes_ciclo = ?', mes);
+    // Lançamentos já existentes no mês DO MESMO TIPO: servem para mostrar o valor atual ao lado
+    // do novo e para marcar a linha como "vai sobrescrever".
+    const existentes = tipo === 'SALARIO'
+      ? await db.all('SELECT * FROM pagamentos_antecipados WHERE mes_ciclo = ?', mes)
+      : await db.all('SELECT * FROM holerite_complementar WHERE mes_ciclo = ? AND tipo = ?', mes, tipo);
     const porColaborador = new Map(existentes.map(l => [l.colaborador_id, l]));
 
     // Medições já PAGAS travam a edição — exatamente como no lançamento manual.
@@ -284,6 +299,7 @@ router.post('/importar/previa', upload.single('holerite'), async (req, res) => {
 
     res.json({
       mes_ciclo: mes,
+      tipo,
       itens,
       // Recibos do PDF sem colaborador correspondente no cadastro: provavelmente alguém que
       // ainda não foi cadastrado, ou cujo nome está grafado de forma muito diferente.
@@ -318,7 +334,9 @@ router.post('/importar/previa', upload.single('holerite'), async (req, res) => {
 // metade importado se algo falhar no meio).
 router.post('/importar/confirmar', express.json({ limit: '2mb' }), async (req, res) => {
   const { mes_ciclo: mes, itens } = req.body;
+  const tipo = tipoDoCorpo(req.body.tipo);
   if (!mes) return res.status(400).json({ erro: 'mes_ciclo (YYYY-MM) é obrigatório.' });
+  if (!tipo) return res.status(400).json({ erro: 'Tipo de holerite inválido (SALARIO, FERIAS ou DECIMO_TERCEIRO).' });
   if (!Array.isArray(itens) || itens.length === 0) {
     return res.status(400).json({ erro: 'Nenhum colaborador foi selecionado para importar.' });
   }
@@ -357,6 +375,20 @@ router.post('/importar/confirmar', express.json({ limit: '2mb' }), async (req, r
           valores[coluna] = arredondar(item.valores ? item.valores[coluna] : 0);
         }
 
+        if (tipo !== 'SALARIO') {
+          // Férias / 13º: gravados à parte, nunca sobrescrevem o holerite de salário.
+          await trx.run(
+            `INSERT INTO holerite_complementar (colaborador_id, mes_ciclo, tipo, vale, fgts, taxa, pagto, atualizado_por)
+             VALUES (?,?,?,?,?,?,?,?)
+             ON CONFLICT (colaborador_id, mes_ciclo, tipo) DO UPDATE SET
+               vale = EXCLUDED.vale, fgts = EXCLUDED.fgts, taxa = EXCLUDED.taxa, pagto = EXCLUDED.pagto,
+               atualizado_por = EXCLUDED.atualizado_por, atualizado_em = NOW()`,
+            id, mes, tipo, valores.vale, valores.fgts, valores.taxa, valores.pagto, req.usuario.id
+          );
+          aplicados.push({ colaborador_id: id, nome: pessoa.nome, valores });
+          continue;
+        }
+
         const existente = await trx.get(
           'SELECT * FROM pagamentos_antecipados WHERE colaborador_id = ? AND mes_ciclo = ?', id, mes
         );
@@ -387,14 +419,16 @@ router.post('/importar/confirmar', express.json({ limit: '2mb' }), async (req, r
   }
 
   // Auditoria com o detalhe do que foi gravado, para ser possível rastrear quem importou o quê.
-  await registrar(req.usuario.id, 'IMPORTAR_HOLERITE', 'pagamentos_antecipados', null, {
+  await registrar(req.usuario.id, 'IMPORTAR_HOLERITE', tipo === 'SALARIO' ? 'pagamentos_antecipados' : 'holerite_complementar', null, {
     mes_ciclo: mes,
+    tipo,
+    tipo_rotulo: ROTULO_TIPO[tipo],
     total_aplicados: aplicados.length,
     total_ignorados: ignorados.length,
     colaboradores: aplicados.map(a => ({ id: a.colaborador_id, nome: a.nome, ...a.valores }))
   });
 
-  res.json({ ok: true, total_aplicados: aplicados.length, aplicados, ignorados });
+  res.json({ ok: true, tipo, total_aplicados: aplicados.length, aplicados, ignorados });
 });
 
 module.exports = router;

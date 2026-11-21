@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.129**
+> **Versão do sistema: 2.130**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.129** (tag `v2.129`) |
+| **Versão atual** | **2.130** (tag `v2.130`) |
 
 ### Stack
 
@@ -271,9 +271,14 @@ if (feito.rows.length === 0) {
 
 ### 5.11 Custo de holerite: só o que excede a produção
 No módulo Financeiro → Gastos (`utils/gastosCustos.js`), o custo de holerite rateado por obra é
-`máx(H − P, 0)`, onde `P` = produção marcada + diárias e `H` = Vale + INSS + Taxa + Pagto. A produção
+`máx(H − P, 0)`, onde `P` = produção marcada + diárias e `H` = salário + férias + 13º (cada um = Vale +
+INSS + Taxa + Pagto; férias/13º ficam em `holerite_complementar`, somados em conjunto com o salário e
+nunca avaliados separadamente). A Medição (`routes/medicoes.js`) desconta o mesmo `H` inteiro. A produção
 já está nas obras pela marcação; somar o holerite inteiro contaria duas vezes. Vale Extra, Vale Ex
-RH e Adiantamento **não** fazem parte de `H`. **Não altere sem rever o Centro de Custo**, que
+RH e Adiantamento **não** fazem parte de `H`. Admissão (ASO 75 + Treinamento 150, constantes em
+`gastosCustos.js`) vai inteira para a obra do cadastro; DCTF/DAS são rateados em `ratearImpostos`.
+O percentual do ponto (`calcularDiasPorObra` em `parserPonto.js`) percorre todos os dias do mês e
+carrega a última obra nos dias sem batida. **Não altere sem rever o Centro de Custo**, que
 precisa usar a mesma regra — e usa: `routes/relatorios.js` chama `calcularCustosMes` de
 `utils/gastosCustos.js`, então Gastos e Centro de Custo nunca divergem.
 
@@ -493,7 +498,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.129).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.130).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -524,7 +529,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.129** |
+| Versão | **2.130** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |

@@ -177,7 +177,21 @@ async function extrairPonto(buffer) {
 // Dias por colaborador/obra. Cada dia vale 1: batendo em 1 obra = 1,0 naquela obra; em 2 obras
 // diferentes no mesmo dia = 0,5 em cada (1/N). Recebe eventos já com `chave` (colaborador) e
 // `obra_id`; eventos sem obra não entram (ficam pendentes do De-Para de ruas).
-function calcularDiasPorObra(eventos) {
+//
+// Com `mes` (YYYY-MM) passa a valer o "carregamento da última obra": percorre TODOS os dias do
+// mês, em ordem. Dia sem batida (falta ou lacuna) é atribuído à ÚLTIMA obra em que a pessoa
+// bateu ponto antes dele; se a falta vem antes da primeira batida do mês, vai para a primeira
+// obra batida. Assim o total de cada colaborador é sempre o número de dias do mês. Ex.: 2 dias
+// na obra A, 13 de falta, 5 na A e 10 na B → A = 2 + 13 + 5 = 20 (66,67%) e B = 10 (33,33%).
+// Quando o dia tem batidas em mais de uma obra, a "última" é a da batida mais tardia do dia.
+function diasNoMes(mes) {
+  const [ano, m] = mes.split('-').map(Number);
+  return new Date(Date.UTC(ano, m, 0)).getUTCDate();
+}
+
+function calcularDiasPorObra(eventos, mes) {
+  if (mes) return calcularDiasComLacunas(eventos, mes);
+
   const porDia = new Map(); // colab|data -> Set(obra_id)
   for (const e of eventos) {
     if (!e.chave || !e.obra_id) continue;
@@ -191,6 +205,46 @@ function calcularDiasPorObra(eventos) {
     if (!resultado.has(chave)) resultado.set(chave, new Map());
     const mapa = resultado.get(chave);
     for (const obraId of obras) mapa.set(obraId, (mapa.get(obraId) || 0) + 1 / obras.size);
+  }
+  return resultado;
+}
+
+function calcularDiasComLacunas(eventos, mes) {
+  const total = diasNoMes(mes);
+  const porColab = new Map(); // colab -> Map(dia -> [{ obra_id, hora }])
+  for (const e of eventos) {
+    if (!e.chave || !e.obra_id || !String(e.data).startsWith(mes)) continue;
+    const dia = Number(String(e.data).slice(8, 10));
+    if (!porColab.has(e.chave)) porColab.set(e.chave, new Map());
+    const dias = porColab.get(e.chave);
+    if (!dias.has(dia)) dias.set(dia, []);
+    dias.get(dia).push({ obra_id: e.obra_id, hora: e.hora || '' });
+  }
+
+  const resultado = new Map();
+  for (const [chave, dias] of porColab) {
+    const mapa = new Map();
+    const somar = (obraId, qtd) => mapa.set(obraId, (mapa.get(obraId) || 0) + qtd);
+    let ultima = null;
+    let primeira = null;
+    let lacunasIniciais = 0;
+
+    for (let dia = 1; dia <= total; dia++) {
+      const batidas = dias.get(dia);
+      if (batidas) {
+        batidas.sort((a, b) => a.hora.localeCompare(b.hora));
+        const obras = [...new Set(batidas.map(b => b.obra_id))];
+        for (const obraId of obras) somar(obraId, 1 / obras.length);
+        if (primeira === null) primeira = batidas[0].obra_id;
+        ultima = batidas[batidas.length - 1].obra_id;
+      } else if (ultima !== null) {
+        somar(ultima, 1);
+      } else {
+        lacunasIniciais += 1;
+      }
+    }
+    if (lacunasIniciais && primeira !== null) somar(primeira, lacunasIniciais);
+    resultado.set(chave, mapa);
   }
   return resultado;
 }
@@ -210,4 +264,4 @@ function percentuaisDeDias(mapaObraDias) {
   return itens;
 }
 
-module.exports = { extrairPonto, normalizarRua, calcularDiasPorObra, percentuaisDeDias };
+module.exports = { extrairPonto, normalizarRua, calcularDiasPorObra, percentuaisDeDias, diasNoMes };

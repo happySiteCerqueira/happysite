@@ -51,9 +51,10 @@ async function resolverEventos(eventos) {
   return { vinculados, pendentes, eventosRes, ruasPendentes, obraPorRua };
 }
 
-// Linhas de gastos_rateio_mensal (origem PONTO) a partir das batidas já resolvidas.
-function calcularRateio(eventosRes) {
-  const dias = calcularDiasPorObra(eventosRes);
+// Linhas de gastos_rateio_mensal (origem PONTO) a partir das batidas já resolvidas. Com `mes`,
+// aplica o carregamento da última obra nos dias sem batida (ver calcularDiasPorObra).
+function calcularRateio(eventosRes, mes) {
+  const dias = calcularDiasPorObra(eventosRes, mes);
   const linhas = [];
   for (const [chave, mapa] of dias) {
     for (const p of percentuaisDeDias(mapa)) linhas.push({ colaborador_id: Number(chave), ...p });
@@ -68,7 +69,7 @@ async function visaoPonto(payload, lote) {
   const foraDoMes = todos.length - eventos.length;
 
   const { vinculados, pendentes, eventosRes, ruasPendentes } = await resolverEventos(eventos);
-  const { dias, linhas } = calcularRateio(eventosRes);
+  const { dias, linhas } = calcularRateio(eventosRes, mes);
   const obras = new Map((await db.all('SELECT id, nome FROM obras')).map(o => [o.id, o.nome]));
 
   const eventosPorColab = new Map();
@@ -139,7 +140,8 @@ async function carregarEventosAtivos(mes) {
   const lote = await db.get("SELECT * FROM gastos_lotes WHERE tipo = 'PONTO' AND mes_referencia = ? AND status = 'ATIVO'", mes);
   if (!lote) return null;
   const linhas = await db.all(
-    `SELECT nome_origem AS nome, nome_normalizado, to_char(data_evento, 'YYYY-MM-DD') AS data, nsr,
+    `SELECT nome_origem AS nome, nome_normalizado, to_char(data_evento, 'YYYY-MM-DD') AS data,
+            to_char(evento_em, 'HH24:MI') AS hora, nsr,
             rua_original, rua_normalizada, cidade_normalizada
      FROM ponto_eventos WHERE lote_id = ?`, lote.id
   );
@@ -168,7 +170,7 @@ async function recalcularPonto(mes, usuarioId) {
   const resolvido = await resolverEventos(ativo.eventos);
   const { eventosRes, vinculados, obraPorRua } = resolvido;
   const idPorNome = new Map(vinculados.map(v => [v.item.nome_normalizado, v.colaborador_id]));
-  const { linhas: rateio } = calcularRateio(eventosRes);
+  const { linhas: rateio } = calcularRateio(eventosRes, mes);
 
   await db.transaction(async (trx) => {
     for (const [nome, id] of idPorNome) {

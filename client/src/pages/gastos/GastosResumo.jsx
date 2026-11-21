@@ -10,7 +10,10 @@ const CATEGORIAS = [
   { chave: 'cafe', rotulo: 'Café' },
   { chave: 'extras', rotulo: 'Extras' },
   { chave: 'epi', rotulo: 'EPI' },
-  { chave: 'holerite', rotulo: 'Holerite/Salário' }
+  { chave: 'admissao', rotulo: 'Admissão' },
+  { chave: 'holerite', rotulo: 'Holerite/Salário' },
+  { chave: 'dctf', rotulo: 'DCTF' },
+  { chave: 'das', rotulo: 'DAS' }
 ];
 
 export default function GastosResumo({ mes }) {
@@ -109,10 +112,30 @@ function Avisos({ avisos }) {
   const conflitos = avisos.conflitos_manuais || [];
   const semObra = avisos.colaboradores_sem_obra || [];
   const epiSemPreco = avisos.epi_sem_preco || 0;
-  if (conflitos.length === 0 && semObra.length === 0 && epiSemPreco === 0) return null;
+  const admissaoSemObra = avisos.admissao_sem_obra || 0;
+  if (conflitos.length === 0 && semObra.length === 0 && epiSemPreco === 0 && admissaoSemObra === 0
+    && !avisos.das_sem_receita && !avisos.dctf_sem_clt) return null;
 
   return (
     <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', fontSize: 13 }}>
+      {admissaoSemObra > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <strong>🩺 {admissaoSemObra} admissão(ões) do mês sem obra no cadastro</strong> — o custo de ASO + Treinamento
+          está em “Sem obra definida”. Defina a obra do colaborador em Cadastro.
+        </div>
+      )}
+      {avisos.das_sem_receita && (
+        <div style={{ marginBottom: 10 }}>
+          <strong>🧾 DAS sem receita com nota nos últimos 12 meses</strong> — não há base para ratear, então o valor
+          está em “Sem obra definida”.
+        </div>
+      )}
+      {avisos.dctf_sem_clt && (
+        <div style={{ marginBottom: 10 }}>
+          <strong>🧾 DCTF sem colaboradores CLT no mês</strong> — não há base para ratear, então o valor está em
+          “Sem obra definida”.
+        </div>
+      )}
       {epiSemPreco > 0 && (
         <div style={{ marginBottom: (conflitos.length || semObra.length) ? 10 : 0 }}>
           <strong>🦺 {epiSemPreco} item(ns) de EPI retirados neste mês estão sem valor</strong> e custam R$ 0,00 por enquanto.

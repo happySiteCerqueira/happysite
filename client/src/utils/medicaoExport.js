@@ -42,7 +42,9 @@ const ROTULOS_PAGAMENTO = {
   pagto: 'Pagto',
   vale_extra: 'Vale Extra',
   adiantamento: 'Adiantamento',
-  vale_ex_rh: 'Vale Ex RH'
+  vale_ex_rh: 'Vale Ex RH',
+  ferias: 'Férias',
+  decimo_terceiro: '13º Salário'
 };
 
 // Gera e baixa a planilha de Medição (dados já exibidos na tela) em formato Excel (.xlsx).
@@ -196,6 +198,8 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
     { header: 'Vale Extra', key: 'vale_extra', width: 12, destacarSeNegativo: true },
     { header: 'Vale Ex RH', key: 'vale_ex_rh', width: 12, destacarSeNegativo: true },
     { header: 'Adiantamento', key: 'adiantamento', width: 14 },
+    { header: 'Férias', key: 'ferias', width: 12 },
+    { header: '13º Salário', key: 'decimo_terceiro', width: 12 },
     { header: 'Total', key: 'total', width: 14 }
   ];
   const detalhePagamento = linhas
@@ -211,6 +215,8 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
         vale_extra: formatarMoeda(dp.vale_extra),
         vale_ex_rh: formatarMoeda(dp.vale_ex_rh),
         adiantamento: formatarMoeda(dp.adiantamento),
+        ferias: formatarMoeda(dp.ferias || 0),
+        decimo_terceiro: formatarMoeda(dp.decimo_terceiro || 0),
         total: formatarMoeda(item.valor_vale)
       };
       // Campos auxiliares (não exibidos como coluna) usados só para decidir o destaque em verde.
@@ -298,7 +304,7 @@ export function exportarMedicaoDetalhadoPdf(linhas, mes) {
     // receber aquele valor, em vez de ser descontado) — e precisa continuar aparecendo aqui,
     // apenas destacado em verde (ver didParseCell abaixo), em vez de ser filtrado/escondido.
     const componentes = dp
-      ? Object.keys(ROTULOS_PAGAMENTO).filter(chave => dp[chave] !== 0).map(chave => [ROTULOS_PAGAMENTO[chave], formatarMoeda(dp[chave]), dp[chave] < 0])
+      ? Object.keys(ROTULOS_PAGAMENTO).filter(chave => dp[chave] != null && dp[chave] !== 0).map(chave => [ROTULOS_PAGAMENTO[chave], formatarMoeda(dp[chave]), dp[chave] < 0])
       : [];
     if (componentes.length > 0) {
       if (y > 275) { doc.addPage(); y = 12; }

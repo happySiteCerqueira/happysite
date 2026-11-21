@@ -50,7 +50,7 @@ const COLUNAS_IMPORT = [
 // modoFixo="importar" é usado em Financeiro > Gastos > Dados: mostra só a importação do PDF,
 // sem o título. `mesExterno` permite à tela chamadora definir a competência da importação
 // (independente do mês de apuração do topo). Sem as props, a tela é a Conciliação (conferência).
-export default function Conciliacao({ modoFixo = null, onImportado = null, mesExterno = null }) {
+export default function Conciliacao({ modoFixo = null, onImportado = null, mesExterno = null, tipoHolerite = 'SALARIO' }) {
   // Usa a Data de Apuração global (seletor no topo), como as demais telas do ciclo mensal.
   const { mes: mesGlobal } = useApuracao();
   const mes = mesExterno || mesGlobal;
@@ -90,7 +90,7 @@ export default function Conciliacao({ modoFixo = null, onImportado = null, mesEx
     api.get('/conciliacao/previa', { params: { mes } })
       .then(res => setPrevia(res.data))
       .catch(() => setPrevia(null));
-  }, [mes]);
+  }, [mes, tipoHolerite]);
 
   // Passo 1 da importação: envia o PDF e recebe a proposta do que será gravado (nada é
   // persistido ainda). As linhas já vêm com a sugestão de marcação vinda do servidor.
@@ -106,6 +106,7 @@ export default function Conciliacao({ modoFixo = null, onImportado = null, mesEx
     const dados = new FormData();
     dados.append('holerite', arquivoImport);
     dados.append('mes_ciclo', mes);
+    dados.append('tipo', tipoHolerite);
 
     try {
       const res = await api.post('/conciliacao/importar/previa', dados, {
@@ -137,7 +138,7 @@ export default function Conciliacao({ modoFixo = null, onImportado = null, mesEx
     setImportando(true);
     setErro('');
     try {
-      const res = await api.post('/conciliacao/importar/confirmar', { mes_ciclo: mes, itens });
+      const res = await api.post('/conciliacao/importar/confirmar', { mes_ciclo: mes, tipo: tipoHolerite, itens });
       setResultadoImport(res.data);
       setPropostaImport(null);
       setSelecionados({});
@@ -288,6 +289,7 @@ export default function Conciliacao({ modoFixo = null, onImportado = null, mesEx
       {modo === 'importar' && (
         <PainelImportacao
           mes={mes}
+          tipo={tipoHolerite}
           inputRef={inputImport}
           onArquivo={setArquivoImport}
           proposta={propostaImport}
@@ -395,18 +397,23 @@ export default function Conciliacao({ modoFixo = null, onImportado = null, mesEx
 // Fluxo deliberado em DOIS PASSOS — nada é gravado sem o usuário conferir e confirmar:
 //   1. "Ler holerite"        → mostra a proposta, linha a linha, com o valor atual ao lado;
 //   2. "Importar marcados"   → grava só o que ficou marcado.
+const ROTULO_TIPO_HOLERITE = { SALARIO: 'Salário', FERIAS: 'Férias', DECIMO_TERCEIRO: '13º Salário' };
+
 function PainelImportacao({
-  mes, inputRef, onArquivo, proposta, selecionados, setSelecionados,
+  mes, tipo = 'SALARIO', inputRef, onArquivo, proposta, selecionados, setSelecionados,
   totalSelecionado, processando, erro, resultado, onGerar, onConfirmar, onAlternarTodos, onCancelar
 }) {
+  const rotuloTipo = ROTULO_TIPO_HOLERITE[tipo] || 'Salário';
   return (
     <>
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 10 }}>
-          Lê o PDF dos Holerites e preenche automaticamente <strong>Vale</strong>,{' '}
-          <strong>INSS</strong>, <strong>Taxa</strong> e <strong>Pagto</strong> do Holerite de{' '}
-          <strong>{rotuloMes(mes)}</strong>. Você confere tudo antes de gravar, e a edição manual
-          continua disponível na tabela do Holerite.
+          Lê o PDF dos Holerites de <strong>{rotuloTipo}</strong> e preenche automaticamente <strong>Vale</strong>,{' '}
+          <strong>INSS</strong>, <strong>Taxa</strong> e <strong>Pagto</strong> de{' '}
+          <strong>{rotuloMes(mes)}</strong>. Você confere tudo antes de gravar.
+          {tipo === 'SALARIO'
+            ? ' A edição manual continua disponível na tabela do Holerite.'
+            : ` O holerite de ${rotuloTipo} é gravado à parte e não altera o holerite de salário do mês.`}
         </div>
 
         {!proposta && (
@@ -431,7 +438,7 @@ function PainelImportacao({
         )}
       </div>
 
-      {resultado && <ResultadoImportacao resultado={resultado} mes={mes} />}
+      {resultado && <ResultadoImportacao resultado={resultado} mes={mes} tipo={tipo} />}
 
       {proposta && (
         <PropostaImportacao
@@ -610,15 +617,16 @@ function ListaSemCadastro({ itens }) {
 }
 
 // Confirmação pós-gravação: diz quantos entraram e lista o que foi ignorado (e por quê).
-function ResultadoImportacao({ resultado, mes }) {
+function ResultadoImportacao({ resultado, mes, tipo = 'SALARIO' }) {
   return (
     <div className="card" style={{ marginBottom: 12, borderLeft: '4px solid #16a34a' }}>
       <strong style={{ fontSize: 14, color: '#166534' }}>
-        ✅ {resultado.total_aplicados} lançamento(s) importado(s) em {rotuloMes(mes)}
+        ✅ {resultado.total_aplicados} lançamento(s) de {ROTULO_TIPO_HOLERITE[tipo]} importado(s) em {rotuloMes(mes)}
       </strong>
       <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-        Os valores já estão em <strong>Pagamentos Antecipados</strong> e podem ser ajustados
-        manualmente a qualquer momento.
+        {tipo === 'SALARIO'
+          ? <>Os valores já estão em <strong>Pagamentos Antecipados</strong> e podem ser ajustados manualmente a qualquer momento.</>
+          : <>Férias e 13º entram no total recebido do mês: descontam na <strong>Medição</strong> e são comparados com a produção no <strong>Centro de Custo</strong>.</>}
       </div>
 
       {resultado.ignorados && resultado.ignorados.length > 0 && (

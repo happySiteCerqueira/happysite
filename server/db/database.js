@@ -1173,6 +1173,46 @@ async function migrate() {
   await pool.query('CREATE INDEX IF NOT EXISTS idx_gastos_rateio_mes ON gastos_rateio_mensal (mes_referencia, colaborador_id)');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_gastos_extras_mes ON gastos_extras (mes_referencia) WHERE excluido = 0');
 
+  // ---------------------------------------------------------------------------------------
+  // v2.130 — Férias / 13º salário e impostos mensais (DCTF e DAS). Tudo aditivo.
+  //
+  // holerite_complementar: o holerite de FÉRIAS e o de 13º SALÁRIO, guardados à parte do holerite
+  //   de salário (pagamentos_antecipados) para nunca sobrescrevê-lo. Mesmos 4 componentes do
+  //   holerite (vale, fgts = INSS, taxa, pagto). O total recebido no mês é a SOMA dos três
+  //   (salário + férias + 13º): é ele que desconta a Medição e que é comparado com a produção.
+  // gastos_impostos: valor total mensal de DCTF e DAS, lançado à mão. O rateio por obra é
+  //   calculado (utils/gastosCustos.js), nunca gravado.
+  // ---------------------------------------------------------------------------------------
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS holerite_complementar (
+      id SERIAL PRIMARY KEY,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      mes_ciclo TEXT NOT NULL,
+      tipo TEXT NOT NULL CHECK(tipo IN ('FERIAS','DECIMO_TERCEIRO')),
+      vale DOUBLE PRECISION NOT NULL DEFAULT 0,
+      fgts DOUBLE PRECISION NOT NULL DEFAULT 0,
+      taxa DOUBLE PRECISION NOT NULL DEFAULT 0,
+      pagto DOUBLE PRECISION NOT NULL DEFAULT 0,
+      atualizado_por INTEGER REFERENCES usuarios(id),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      UNIQUE(colaborador_id, mes_ciclo, tipo)
+    );
+
+    CREATE TABLE IF NOT EXISTS gastos_impostos (
+      id SERIAL PRIMARY KEY,
+      mes_referencia TEXT NOT NULL,
+      tipo TEXT NOT NULL CHECK(tipo IN ('DCTF','DAS')),
+      valor DOUBLE PRECISION NOT NULL DEFAULT 0,
+      observacao TEXT,
+      criado_por INTEGER REFERENCES usuarios(id),
+      criado_em TIMESTAMP DEFAULT NOW(),
+      atualizado_em TIMESTAMP DEFAULT NOW(),
+      excluido INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_holerite_compl_mes ON holerite_complementar (mes_ciclo)');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS ux_gastos_impostos_ativo ON gastos_impostos (mes_referencia, tipo) WHERE excluido = 0');
+
   // Origem do lançamento em financeiro_gastos: 'MANUAL' (digitado) ou 'PDF_CAFE' (futuro parser
   // do Café). lote_id fica SEM chave estrangeira de propósito: o backup restaura tabelas em
   // ordem fixa e um lançamento nunca pode falhar na restauração por causa do lote.

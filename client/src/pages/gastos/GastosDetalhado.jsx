@@ -56,7 +56,8 @@ export default function GastosDetalhado({ mes }) {
         </div>
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
           O regime vem do cadastro (<em>participa de produção</em>). O custo de holerite é só o que
-          <strong> excede a produção</strong> do mês. O Café não entra aqui: é custo direto da obra.
+          <strong> excede a produção</strong> do mês, somando salário + férias + 13º. A admissão (ASO R$ 75 +
+          Treinamento R$ 150) vai inteira para a obra do cadastro. O Café não entra aqui: é custo direto da obra.
         </div>
       </div>
 
@@ -79,6 +80,7 @@ export default function GastosDetalhado({ mes }) {
                   <th style={{ textAlign: 'right' }}>VT</th>
                   <th style={{ textAlign: 'right' }}>Extras</th>
                   <th style={{ textAlign: 'right' }}>EPI</th>
+                  <th style={{ textAlign: 'right' }}>Admissão</th>
                   <th style={{ textAlign: 'right' }}>Custo Holerite</th>
                   <th style={{ textAlign: 'right' }}>Total</th>
                   {podeEditar && <th></th>}
@@ -107,10 +109,22 @@ export default function GastosDetalhado({ mes }) {
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{moeda(i.extras)}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{moeda(i.epi)}</td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {moeda(i.admissao)}
+                      {i.admissao > 0 && (
+                        <div style={{ fontSize: 10, color: '#6b7280' }}>obra: {i.admissao_obra}</div>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {moeda(i.holerite_custo)}
                       {i.holerite_recebido > 0 && (
                         <div style={{ fontSize: 10, color: '#6b7280' }}>
-                          recebeu {moeda(i.holerite_recebido)} · produziu {moeda(i.producao_diarias)}
+                          recebeu {moeda(i.holerite_recebido)}
+                          {(i.holerite_ferias > 0 || i.holerite_13 > 0) && (
+                            <> (salário {moeda(i.holerite_salario)}
+                              {i.holerite_ferias > 0 && <> + férias {moeda(i.holerite_ferias)}</>}
+                              {i.holerite_13 > 0 && <> + 13º {moeda(i.holerite_13)}</>})</>
+                          )}
+                          {' '}· produziu {moeda(i.producao_diarias)}
                         </div>
                       )}
                     </td>
@@ -131,6 +145,7 @@ export default function GastosDetalhado({ mes }) {
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.vt)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.extras)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.epi)}</td>
+                  <td style={{ textAlign: 'right' }}>{moeda(dados.totais.admissao)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.holerite_custo)}</td>
                   <td style={{ textAlign: 'right' }}>R$ {moeda(dados.totais.total)}</td>
                   {podeEditar && <td></td>}
