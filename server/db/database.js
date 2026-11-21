@@ -873,6 +873,27 @@ async function migrate() {
     await pool.query('ALTER TABLE usuarios ADD COLUMN token_versao INTEGER NOT NULL DEFAULT 0');
   }
 
+  // "ADM Master": só quem tem esta marca pode editar o campo "Mês anterior" dos Pagamentos
+  // Antecipados e dar/tirar a marca de outros usuários. Na primeira vez, o usuário "admin" é o
+  // master; e, se por qualquer motivo (ex.: backup antigo restaurado) ninguém tiver a marca, o
+  // primeiro ADM ativo assume — assim o sistema nunca fica sem um master.
+  if (!(await colunaExiste('usuarios', 'adm_master'))) {
+    await pool.query('ALTER TABLE usuarios ADD COLUMN adm_master BOOLEAN NOT NULL DEFAULT FALSE');
+    await pool.query("UPDATE usuarios SET adm_master = TRUE WHERE LOWER(login) = 'admin' AND perfil = 'ADM'");
+  }
+  await pool.query(
+    `UPDATE usuarios SET adm_master = TRUE
+     WHERE id = (SELECT MIN(id) FROM usuarios WHERE perfil = 'ADM' AND ativo = 1)
+       AND NOT EXISTS (SELECT 1 FROM usuarios WHERE adm_master = TRUE AND ativo = 1)`
+  );
+
+  // Saldo negativo da Medição do mês anterior, que vira desconto no mês seguinte. O valor é
+  // CALCULADO (utils/mesAnterior.js); esta coluna guarda só o ajuste manual do ADM Master
+  // (NULL = usa o valor automático).
+  if (!(await colunaExiste('pagamentos_antecipados', 'mes_anterior_manual'))) {
+    await pool.query('ALTER TABLE pagamentos_antecipados ADD COLUMN mes_anterior_manual DOUBLE PRECISION');
+  }
+
   // Cópia da assinatura de quem APLICOU a advertência, congelada no momento do lançamento.
   //
   // Por que copiar em vez de ler de usuarios.assinatura na hora de gerar o PDF: um documento

@@ -50,6 +50,19 @@ git checkout v2.111
 
 ## Versões
 
+### 2.132 — Coluna "Mês anterior" nos Pagamentos Antecipados (e ADM Master)
+
+- Nova coluna **Mês anterior** em **Pagtos. Antecipados** (PF e PJ): quando alguém fica com a **Medição
+  negativa** num mês, o valor vira **desconto no mês seguinte**, sozinho. Ex.: −2.711,53 em outubro →
+  2.711,53 em novembro. O desconto entra na **Medição** junto com os demais antecipados e, se o saldo
+  continuar negativo, segue para o mês seguinte. Vale a partir de **novembro/2026** (meses anteriores não mudam).
+- A coluna pode ser ajustada, mas **somente por um ADM Master** (↺ volta ao automático; 0 perdoa o saldo).
+  Os demais usuários veem o valor sem poder editar. Fica registrado na auditoria.
+- Nova marca **ADM Master** em **Usuários** (só um Master dá ou tira a marca; o sistema sempre mantém ao
+  menos um). Hoje o único Master é o usuário **admin**.
+- O Mês anterior **não entra** no custo do Centro de Custo (é recuperação de adiantamento, como o Vale Extra).
+- Colunas novas (adicionais): `usuarios.adm_master` e `pagamentos_antecipados.mes_anterior_manual`.
+
 ### 2.131 — Centro de Custo em 3 níveis, Ferramentas e admissão via ponto
 
 - **Centro de Custo redesenhado** (Financeiro → Centro de Custo), com alternância **🏢 Empresa

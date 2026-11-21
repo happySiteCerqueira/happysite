@@ -9,7 +9,8 @@ const ROTULOS = {
   pagto: 'Pagto',
   vale_extra: 'Vale Extra',
   adiantamento: 'Adiantamento',
-  vale_ex_rh: 'Vale Ex RH'
+  vale_ex_rh: 'Vale Ex RH',
+  mes_anterior: 'Mês anterior'
 };
 
 // Mesma planilha (pagamentos_antecipados) vista por duas abas, para os nomes ficarem certos:
@@ -25,7 +26,7 @@ const CABECALHO_FIXO = {
 };
 
 const COLUNAS_POR_MODO = {
-  extras: { PF: ['vale_extra', 'vale_ex_rh'], PJ: ['adiantamento'] },
+  extras: { PF: ['vale_extra', 'vale_ex_rh', 'mes_anterior'], PJ: ['adiantamento', 'mes_anterior'] },
   holerite: { PF: ['vale', 'fgts', 'taxa', 'pagto'], PJ: [] }
 };
 
@@ -34,7 +35,7 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
   const somaVisivel = (item, colunas) => colunas.reduce((s, c) => s + (Number(item[c]) || 0), 0);
   // Usa a Data de Apuração global (seletor no topo do sistema), em vez de um mês próprio da tela.
   const { mes, setMes } = useApuracao();
-  const [planilha, setPlanilha] = useState({ PJ: [], CPF: [], colunas: { PF: [], PJ: [] } });
+  const [planilha, setPlanilha] = useState({ PJ: [], CPF: [], colunas: { PF: [], PJ: [] }, pode_editar_mes_anterior: false });
   const [salvandoKey, setSalvandoKey] = useState(null);
   const [abaTipo, setAbaTipo] = useState('CPF'); // 'CPF' (PF) | 'PJ' — cada tipo tem a sua aba
   const [filtroFuncao, setFiltroFuncao] = useState('');
@@ -86,6 +87,60 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
       carregar();
     }
     setSalvandoKey(null);
+  }
+
+  // "Mês anterior": saldo negativo da Medição do mês passado, calculado sozinho. Só o ADM Master
+  // edita; quem não é Master vê o valor (com a marca "automático"/"ajustado") sem poder alterar.
+  function CelulaMesAnterior({ item }) {
+    const [valor, setValor] = useState(item.mes_anterior);
+    const key = `${item.colaborador_id}-mes_anterior`;
+    useEffect(() => setValor(item.mes_anterior), [item.mes_anterior]);
+    const podeEditar = planilha.pode_editar_mes_anterior && !item.bloqueado;
+
+    async function salvar(novoValor) {
+      setSalvandoKey(key);
+      try {
+        const { data } = await api.put('/pagamentos-antecipados/mes-anterior', {
+          colaborador_id: item.colaborador_id, mes_ciclo: mes, valor: novoValor
+        });
+        setPlanilha(prev => {
+          const atualizar = lista => lista.map(i => (i.colaborador_id === item.colaborador_id
+            ? { ...i, mes_anterior: data.mes_anterior, mes_anterior_auto: data.mes_anterior_auto, mes_anterior_manual: data.mes_anterior_manual }
+            : i));
+          return { ...prev, PJ: atualizar(prev.PJ), CPF: atualizar(prev.CPF) };
+        });
+      } catch (err) {
+        alert(err.response?.data?.erro || 'Erro ao salvar o Mês anterior');
+        carregar();
+      }
+      setSalvandoKey(null);
+    }
+
+    const marca = item.mes_anterior_manual
+      ? <span style={{ fontSize: 10, color: '#1d4ed8', fontWeight: 700 }} title={`Ajustado manualmente (automático: R$ ${Number(item.mes_anterior_auto).toFixed(2)})`}>✎ ajustado</span>
+      : (item.mes_anterior > 0 ? <span style={{ fontSize: 10, color: '#6b7280' }} title="Saldo negativo da Medição do mês anterior">automático</span> : null);
+
+    return (
+      <div>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={valor}
+            disabled={!podeEditar || salvandoKey === key}
+            title={podeEditar ? undefined : (item.bloqueado ? 'Medição deste mês já foi paga — valor bloqueado' : 'Somente o ADM Master pode editar')}
+            onChange={e => setValor(e.target.value)}
+            onBlur={() => { if (podeEditar && Number(valor) !== Number(item.mes_anterior)) salvar(valor === '' ? null : valor); }}
+            style={{ width: 90, ...(podeEditar ? {} : { background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' }) }}
+          />
+          {podeEditar && item.mes_anterior_manual && (
+            <button className="btn-secondary btn-sm" title="Voltar ao valor automático" onClick={() => salvar(null)}>↺</button>
+          )}
+        </div>
+        {marca}
+      </div>
+    );
   }
 
   function CelulaEditavel({ item, coluna }) {
@@ -145,7 +200,7 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
                 <td style={{ color: '#6b7280' }}>{item.funcao || '-'}</td>
                 <td style={{ color: '#6b7280' }}>{item.documento}</td>
                 {colunas.map(c => (
-                  <td key={c}><CelulaEditavel item={item} coluna={c} /></td>
+                  <td key={c}>{c === 'mes_anterior' ? <CelulaMesAnterior item={item} /> : <CelulaEditavel item={item} coluna={c} />}</td>
                 ))}
                 <td><strong>R$ {somaVisivel(item, colunas).toFixed(2)}</strong>
                   {item.bloqueado && <div style={{ fontSize: 10, color: '#dc2626' }}>🔒 Pago</div>}
@@ -211,9 +266,13 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
       <p style={{ color: '#6b7280', fontSize: 12 }}>
         {ehHolerite
           ? 'Vale, INSS, Taxa e Pagto vêm do PDF de holerites da contabilidade (importe acima) e também podem ser ajustados aqui. '
-          : 'Aqui ficam só os lançamentos internos: Vale Extra e Vale Ex RH (PF) e Adiantamento (PJ). Vale, INSS, Taxa e Pagto estão na aba Holerite. '}
+          : 'Aqui ficam só os lançamentos internos: Vale Extra e Vale Ex RH (PF), Adiantamento (PJ) e o Mês anterior. Vale, INSS, Taxa e Pagto estão na aba Holerite. '}
         Edite os valores diretamente na tabela (clique, digite e saia do campo para salvar). O <strong>Total</strong> é calculado
         automaticamente e não pode ser editado. Valores de pessoas cuja medição do mês já foi paga ficam bloqueados (🔒).
+        {!ehHolerite && (
+          <> O <strong>Mês anterior</strong> é o saldo negativo da Medição do mês passado (ex.: −2.711,53 em outubro vira 2.711,53 de
+          desconto em novembro) e é preenchido sozinho; só o <strong>ADM Master</strong> pode ajustá-lo (↺ volta ao automático).</>
+        )}
       </p>
     </div>
   );

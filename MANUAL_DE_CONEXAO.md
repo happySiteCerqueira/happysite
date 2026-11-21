@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.131**
+> **Versão do sistema: 2.132**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.131** (tag `v2.131`) |
+| **Versão atual** | **2.132** (tag `v2.132`) |
 
 ### Stack
 
@@ -325,6 +325,15 @@ A conferência (CPF e total do cabeçalho) é obrigatória na tela: o OCR pode e
   PDF/PNG/JPG/WEBP até 10 MB, conferindo o conteúdo do arquivo. A tela abre o arquivo via `api.get`
   (blob), nunca por link direto.
 
+### 5.17 Mês anterior (saldo negativo da Medição)
+O desconto "Mês anterior" **não é gravado**: `utils/mesAnterior.js` o calcula a partir da Medição do mês
+passado (mesma conta de `GET /medicoes/gerar`: produção + diárias − antecipados − férias/13º − o próprio
+Mês anterior daquele mês), em cadeia, só a partir de `MES_INICIO` (2026-11) para não mexer em meses já
+fechados. Só o ajuste do ADM Master fica em `pagamentos_antecipados.mes_anterior_manual`. Ele entra no
+desconto da Medição (`routes/medicoes.js`) e na tela de Pagamentos Antecipados, **mas não faz parte de
+`H` do Centro de Custo** (é recuperação de adiantamento, como Vale Extra). `autenticar` expõe
+`req.usuario.adm_master` (marca válida só para perfil ADM).
+
 ---
 
 ## 6. FLUXO DE TRABALHO — siga na ordem
@@ -499,7 +508,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.131).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.132).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -530,7 +539,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.131** |
+| Versão | **2.132** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |

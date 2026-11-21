@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.131** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.132** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -110,7 +110,7 @@ daquele mês (produção, diárias, antecipados).
 |---|---|
 | **📥 Receita** | O que a obra faturou. Campo **"com nota"** desconta 11% automaticamente. A **Data Pagamento** é o limite do cliente: vencida e não paga, a linha fica em vermelho com "ATRASADO · N dias" (some ao marcar Pago) |
 | **📄 Holerite** | Mostra e permite ajustar **Vale, INSS, Taxa e Pagto** por pessoa/mês. O PDF da contabilidade é importado em **Pagamentos → Cadastrar** |
-| **🧾 Pagtos. Antecipados** | Só lançamentos internos, em abas separadas: **PF** (Vale Extra e Vale Ex RH) e **PJ** (Adiantamento) |
+| **🧾 Pagtos. Antecipados** | Só lançamentos internos, em abas separadas: **PF** (Vale Extra, Vale Ex RH e **Mês anterior**) e **PJ** (Adiantamento e **Mês anterior**). O **Mês anterior** é o saldo negativo da Medição do mês passado (ex.: −2.711,53 em outubro → 2.711,53 de desconto em novembro), preenchido sozinho a partir de **novembro/2026**. Se continuar negativo, segue para o mês seguinte. **Só o ADM Master edita** (↺ volta ao automático; valor 0 perdoa o saldo) e desconta na Medição junto com os demais antecipados |
 | **💸 Pagamentos** (antes "Gastos"; permissão `financeiro.gastos`) | Custos por colaborador rateados por obra (VA, VT, Extras, EPI, Holerite) + Café direto da obra. Ver abaixo |
 | **🏗️ Centro de Custo** | O que entrou × o que saiu de cada obra: saldo e margem (antiga "Saúde financeira") |
 | **📈 Relatórios** | Mudou para a tela de **Medição** (aba Relatórios) |
@@ -326,7 +326,7 @@ PostgreSQL 16. Nomes de tabelas e colunas **em português**.
 
 | Tabela | Chave lógica | Guarda |
 |---|---|---|
-| `usuarios` | `login` | Quem acessa o sistema + perfil |
+| `usuarios` | `login` | Quem acessa o sistema + perfil. `adm_master` = marca **ADM Master** (só quem tem edita o *Mês anterior* e a marca de outros; sempre há ao menos um) |
 | `colaboradores` | — | Pessoas e PJ. `tipo` = `CPF`/`PJ`, `funcao`, `obra_id` (obra atual), `participa_producao` |
 | `obras` | — | Geometria do prédio (blocos, pavimentos, apartamentos) |
 | `obra_servicos` | `(obra_id, nome)` | Serviços da obra. `valor_unitario`, `modo_medicao`, `valor_manual` |
@@ -335,7 +335,7 @@ PostgreSQL 16. Nomes de tabelas e colunas **em português**.
 | `colaborador_precos` | `(colaborador_id, obra_servico_id)` | Preço diferenciado por pessoa |
 | `diarias` | `(colaborador_id, mes_ciclo)` | Quantidade e total |
 | `diaria_obras` | `(colaborador_id, mes_ciclo, obra_id)` | Rateio das diárias por obra |
-| `pagamentos_antecipados` | `(colaborador_id, mes_ciclo)` | Aba **Holerite**: vale, **fgts (=INSS)**, taxa, pagto. Aba **Pagtos. Antecipados**: vale_extra, vale_ex_rh, adiantamento |
+| `pagamentos_antecipados` | `(colaborador_id, mes_ciclo)` | Aba **Holerite**: vale, **fgts (=INSS)**, taxa, pagto. Aba **Pagtos. Antecipados**: vale_extra, vale_ex_rh, adiantamento e `mes_anterior_manual` (ajuste do ADM Master; NULL = automático, calculado em `utils/mesAnterior.js`) |
 | `medicoes` | `(colaborador_id, mes_ciclo, obra_id)` | Bruto, descontos, líquido, `status`, comprovante |
 | `financeiro_receitas` | — | Receita. `obra_nome` (texto), `valor_bruto`, `valor_liquido`, `com_nota` |
 | `financeiro_gastos` | — | Gastos diretos da obra (Café...). `mes_ciclo`, `obra_id` (opcional), `tipo`, `valor`, `origem`, `lote_id` |

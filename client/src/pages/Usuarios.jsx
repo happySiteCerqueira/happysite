@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import api from '../api/api';
+import { useAuth } from '../context/AuthContext';
 
 const PERFIS = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
 
 export default function Usuarios() {
+  const { usuario: eu } = useAuth();
+  const souMaster = !!eu?.adm_master;
   const [usuarios, setUsuarios] = useState([]);
   const [novo, setNovo] = useState({ nome: '', login: '', senha: '', perfil: 'RH' });
   const [erro, setErro] = useState('');
@@ -39,6 +42,19 @@ export default function Usuarios() {
     carregar();
   }
 
+
+  async function alternarMaster(u) {
+    const novo = !u.adm_master;
+    if (!window.confirm(novo
+      ? `Tornar "${u.nome}" ADM Master? Ele poderá editar o campo "Mês anterior" dos Pagamentos Antecipados e dar/tirar esta marca de outros.`
+      : `Tirar a marca de ADM Master de "${u.nome}"?`)) return;
+    try {
+      await api.put(`/usuarios/${u.id}`, { adm_master: novo });
+      carregar();
+    } catch (err) {
+      alert(err.response?.data?.erro || 'Não foi possível alterar a marca de ADM Master.');
+    }
+  }
 
   async function resetarSenha(u) {
     const res = await api.post(`/usuarios/${u.id}/resetar-senha`, {});
@@ -82,7 +98,7 @@ export default function Usuarios() {
         <h3>Usuários cadastrados</h3>
         <table>
           <thead>
-            <tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Status</th><th>1º acesso?</th><th>Ações</th></tr>
+            <tr><th>Nome</th><th>Login</th><th>Perfil</th><th>ADM Master</th><th>Status</th><th>1º acesso?</th><th>Ações</th></tr>
           </thead>
           <tbody>
             {usuarios.map(u => (
@@ -93,6 +109,14 @@ export default function Usuarios() {
                   <select value={u.perfil} onChange={e => alterarPerfil(u, e.target.value)} style={{ fontSize: 13 }}>
                     {PERFIS.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
+                </td>
+                <td>
+                  {u.perfil === 'ADM' ? (
+                    <label title={souMaster ? 'Marcar/desmarcar ADM Master' : 'Somente um ADM Master altera esta marca'} style={{ cursor: souMaster ? 'pointer' : 'not-allowed' }}>
+                      <input type="checkbox" checked={!!u.adm_master} disabled={!souMaster} onChange={() => alternarMaster(u)} />
+                      {u.adm_master ? ' ⭐ Master' : ''}
+                    </label>
+                  ) : <span style={{ color: '#9ca3af' }}>—</span>}
                 </td>
 
                 <td>{u.ativo ? 'Ativo' : 'Inativo'}</td>

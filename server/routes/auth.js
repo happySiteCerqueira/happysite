@@ -40,6 +40,7 @@ router.post('/login', async (req, res) => {
       nome: usuario.nome,
       login: usuario.login,
       perfil: usuario.perfil,
+      adm_master: !!usuario.adm_master && usuario.perfil === 'ADM',
       precisa_trocar_senha: !!usuario.precisa_trocar_senha
     }
   });
@@ -81,10 +82,11 @@ router.post('/trocar-senha', autenticar, async (req, res) => {
 
 router.get('/me', autenticar, async (req, res) => {
   const usuario = await db.get(
-    'SELECT id, nome, login, perfil, precisa_trocar_senha FROM usuarios WHERE id = ?',
+    'SELECT id, nome, login, perfil, precisa_trocar_senha, adm_master FROM usuarios WHERE id = ?',
     req.usuario.id
   );
   if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado' });
+  usuario.adm_master = !!usuario.adm_master && usuario.perfil === 'ADM';
 
   // A imagem da assinatura NÃO vai aqui de propósito: é um PNG base64 que pode passar de
   // 100 KB, e este endpoint é chamado a cada carregamento do app. Enviamos só o indicador

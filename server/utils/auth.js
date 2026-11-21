@@ -43,7 +43,7 @@ async function carregarUsuario(id) {
   const emCache = cacheUsuarios.get(id);
   if (emCache && emCache.ate > agora) return emCache.dados;
   const dados = await db.get(
-    'SELECT id, login, nome, perfil, ativo, token_versao FROM usuarios WHERE id = ?', id
+    'SELECT id, login, nome, perfil, ativo, token_versao, adm_master FROM usuarios WHERE id = ?', id
   );
   cacheUsuarios.set(id, { dados: dados || null, ate: agora + CACHE_MS });
   return dados || null;
@@ -66,7 +66,11 @@ async function autenticar(req, res, next) {
     if (!usuario || !usuario.ativo || (payload.tv || 0) !== (usuario.token_versao || 0)) {
       return res.status(401).json({ erro: 'Sessão encerrada. Entre novamente.' });
     }
-    req.usuario = { id: usuario.id, login: usuario.login, nome: usuario.nome, perfil: usuario.perfil };
+    req.usuario = {
+      id: usuario.id, login: usuario.login, nome: usuario.nome, perfil: usuario.perfil,
+      // ADM Master: marca do cadastro, válida só para quem continua com perfil ADM.
+      adm_master: !!usuario.adm_master && usuario.perfil === 'ADM'
+    };
     next();
   } catch (e) {
     console.error('[auth] falha ao validar sessão:', e.message);

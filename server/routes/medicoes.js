@@ -8,6 +8,7 @@ const { autenticar } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar } = require('../utils/auditoria');
 const { rotuloCelula } = require('../utils/celulasLabel');
+const { carregarMesAnterior } = require('../utils/mesAnterior');
 
 // Extrai o número do andar a partir do rótulo já formatado (ex: "3º Andar - Apto 302" -> 3).
 // Itens sem andar (Térreo, Fundação, Diárias, etc.) recebem um número bem alto para ficarem
@@ -157,6 +158,21 @@ router.get('/gerar', async (req, res) => {
     colaboradoresExtras = [...diariasMes, ...antecipadosMes, ...complementaresMes];
   }
 
+  // "Mês anterior": saldo negativo da Medição do mês passado, que desconta neste mês (ver
+  // utils/mesAnterior.js). Quem só tem esse desconto também precisa aparecer na lista.
+  const mesAnteriorMapa = await carregarMesAnterior(mes);
+  if (!obras) {
+    const idsComSaldo = [...mesAnteriorMapa].filter(([, v]) => v.efetivo > 0).map(([id]) => id);
+    if (idsComSaldo.length) {
+      const ph = idsComSaldo.map(() => '?').join(',');
+      const doSaldo = await db.all(
+        `SELECT c.id as colaborador_id, c.nome, c.tipo, c.documento, c.pix, c.banco, c.agencia, c.conta, c.funcao, c.contato_responsavel
+         FROM colaboradores c WHERE c.id IN (${ph})`, ...idsComSaldo
+      );
+      colaboradoresExtras = [...colaboradoresExtras, ...doSaldo];
+    }
+  }
+
 
   // Cache de obras + rótulos customizados de apartamento, pré-carregados (sem await dentro de map)
   const obraIdsUnicos = [...new Set(linhas.map(l => l.obra_id))];
@@ -236,8 +252,9 @@ router.get('/gerar', async (req, res) => {
       .reduce((s, c) => s + (c.vale || 0) + (c.fgts || 0) + (c.taxa || 0) + (c.pagto || 0), 0);
     const totalFerias = somaCompl('FERIAS');
     const totalDecimo = somaCompl('DECIMO_TERCEIRO');
+    const mesAnterior = (mesAnteriorMapa.get(p.colaborador_id) || {}).efetivo || 0;
     const totalAntecipado = (l ? (l.vale + l.fgts + l.taxa + l.pagto + l.vale_extra + l.adiantamento + (l.vale_ex_rh || 0)) : 0)
-      + totalFerias + totalDecimo;
+      + totalFerias + totalDecimo + mesAnterior;
     const diaria = await db.get('SELECT * FROM diarias WHERE colaborador_id = ? AND mes_ciclo = ?', p.colaborador_id, mes);
     const totalDiarias = diaria ? diaria.total : 0;
 
@@ -278,7 +295,7 @@ router.get('/gerar', async (req, res) => {
     // Detalhamento do pagamento antecipado (usado na exportação "com detalhe"), abrindo cada
     // componente individual do desconto (Vale, FGTS, Taxa, Pagto, Vale Extra, Adiantamento),
     // em vez de mostrar apenas o total já somado.
-    const detalhePagamento = (l || totalFerias || totalDecimo) ? {
+    const detalhePagamento = (l || totalFerias || totalDecimo || mesAnterior) ? {
       vale: l ? l.vale || 0 : 0,
       fgts: l ? l.fgts || 0 : 0,
       taxa: l ? l.taxa || 0 : 0,
@@ -287,7 +304,8 @@ router.get('/gerar', async (req, res) => {
       adiantamento: l ? l.adiantamento || 0 : 0,
       vale_ex_rh: l ? l.vale_ex_rh || 0 : 0,
       ferias: totalFerias,
-      decimo_terceiro: totalDecimo
+      decimo_terceiro: totalDecimo,
+      mes_anterior: mesAnterior
     } : null;
 
     return {

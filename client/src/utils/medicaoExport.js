@@ -44,7 +44,8 @@ const ROTULOS_PAGAMENTO = {
   adiantamento: 'Adiantamento',
   vale_ex_rh: 'Vale Ex RH',
   ferias: 'Férias',
-  decimo_terceiro: '13º Salário'
+  decimo_terceiro: '13º Salário',
+  mes_anterior: 'Mês anterior'
 };
 
 // Gera e baixa a planilha de Medição (dados já exibidos na tela) em formato Excel (.xlsx).
@@ -200,6 +201,7 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
     { header: 'Adiantamento', key: 'adiantamento', width: 14 },
     { header: 'Férias', key: 'ferias', width: 12 },
     { header: '13º Salário', key: 'decimo_terceiro', width: 12 },
+    { header: 'Mês anterior', key: 'mes_anterior', width: 14 },
     { header: 'Total', key: 'total', width: 14 }
   ];
   const detalhePagamento = linhas
@@ -217,6 +219,7 @@ export async function exportarMedicaoDetalhadoExcel(linhas, mes) {
         adiantamento: formatarMoeda(dp.adiantamento),
         ferias: formatarMoeda(dp.ferias || 0),
         decimo_terceiro: formatarMoeda(dp.decimo_terceiro || 0),
+        mes_anterior: formatarMoeda(dp.mes_anterior || 0),
         total: formatarMoeda(item.valor_vale)
       };
       // Campos auxiliares (não exibidos como coluna) usados só para decidir o destaque em verde.
