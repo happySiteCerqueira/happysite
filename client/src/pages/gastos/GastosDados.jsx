@@ -5,7 +5,6 @@ import { interpretarTextoCaju, lerImagensCaju } from '../../utils/cajuOcr';
 import PainelPrevia, { BlocoPendencias } from './PainelPrevia';
 import EditorCaju from './EditorCaju';
 import Conciliacao from '../Conciliacao';
-import ImpostosCard from './ImpostosCard';
 import CustosAdmissaoCard from './CustosAdmissaoCard';
 import { useAuth } from '../../context/AuthContext';
 
@@ -100,7 +99,6 @@ export default function GastosDados({ mesGlobal, renderLancamentos }) {
             </div>
           </div>
         )}
-        <ImpostosCard mesGlobal={mesGlobal} />
         <CustosAdmissaoCard />
       </div>
 
@@ -136,7 +134,7 @@ export default function GastosDados({ mesGlobal, renderLancamentos }) {
       {renderLancamentos && (
         <details open style={{ marginTop: 16 }}>
           <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
-            ☕ Lançamentos diretos por obra (Café e outros)
+            💸 Lançar gastos (DCTF, DAS, Seguro, contabilidade, Café e outros)
           </summary>
           {renderLancamentos(mesGlobal)}
         </details>

@@ -484,7 +484,7 @@ function montarResposta(mapa, periodo, diariasSemObra) {
 }
 
 // Meses do período em que DCTF e/ou DAS ainda não foram lançados (Financeiro → Pagamentos →
-// Cadastrar → Impostos do mês). Sem esses valores a margem do período é parcial, e a tela avisa.
+// Cadastrar → Lançar gastos). Sem esses valores a margem do período é parcial, e a tela avisa.
 // Só olha períodos com mês definido (o "Todo o histórico" não cobra meses antigos), a partir de
 // MES_INICIO_ALERTA_IMPOSTOS (antes disso os impostos nunca foram lançados no sistema) e até o
 // mês corrente (mês futuro não tem o que cobrar).

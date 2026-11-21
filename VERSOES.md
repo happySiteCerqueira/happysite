@@ -50,6 +50,16 @@ git checkout v2.111
 
 ## Versões
 
+### 2.136 — "Lançar gastos" passa a ter DCTF, DAS, Seguro, contabilidade, iFractal e Resolve
+
+- O card **Impostos e seguro do mês** foi removido. Em **Pagamentos → Cadastrar → 💸 Lançar gastos**, o campo **Tipo**
+  agora começa com **DCTF, DAS, Seguro, CONTAB. CERQUEIRA, CONTAB. DO CARMO, IFRACTAL e RESOLVE**, seguidos de Café,
+  Ferramentas, VA, Vale Transporte e **Outros** (texto livre), como já era.
+- **DCTF, DAS e Seguro** não pedem obra: continuam sendo rateados automaticamente (um valor por mês e tipo; lançar de
+  novo substitui). Aparecem na lista do mês como "Rateado entre as obras" e entram nos totais, podendo ser editados/excluídos.
+- Os demais tipos são gastos diretos da obra escolhida (ou "Sem obra definida"), como o Café.
+- O servidor passou a recusar DCTF/DAS/Seguro como gasto direto, para não contar o valor duas vezes.
+
 ### 2.135 — Seguro mensal rateado por quantidade de colaboradores CLT
 
 - Novo campo **Seguro (R$)** no card de impostos em **Pagamentos → Cadastrar** (junto de DCTF e DAS), por competência.

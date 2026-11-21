@@ -427,7 +427,13 @@ router.get('/resumo/configuravel', permitir('ADM'), async (req, res) => {
 // Os tipos abaixo são apenas as SUGESTÕES da tela. O campo é texto livre de propósito: amanhã
 // pode surgir "Cesta básica", "EPI" ou "Alojamento" sem precisar de alteração no código nem
 // migração no banco.
-const TIPOS_GASTO_SUGERIDOS = ['Café', 'Ferramentas', 'VA', 'Vale Transporte'];
+const TIPOS_GASTO_SUGERIDOS = ['CONTAB. CERQUEIRA', 'CONTAB. DO CARMO', 'IFRACTAL', 'RESOLVE', 'Café', 'Ferramentas', 'VA', 'Vale Transporte'];
+
+// DCTF, DAS e Seguro NÃO são gastos diretos: são lançados em /gastos-custos/impostos e rateados
+// pelo servidor. Aceitá-los aqui contaria o valor duas vezes.
+const TIPOS_RATEADOS = ['dctf', 'das', 'seguro'];
+const tipoRateado = tipo => TIPOS_RATEADOS.includes((tipo || '').toString().trim().toLowerCase());
+const ERRO_TIPO_RATEADO = 'DCTF, DAS e Seguro são rateados automaticamente entre as obras; lance-os pelo valor mensal da empresa.';
 
 function parseGasto(g) {
   if (!g) return g;
@@ -472,6 +478,7 @@ router.post('/gastos', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
   const { mes_ciclo, obra_id, tipo, descricao, valor } = req.body;
   if (!mes_ciclo) return res.status(400).json({ erro: 'Informe o mês do gasto.' });
   if (!tipo || !tipo.toString().trim()) return res.status(400).json({ erro: 'Informe o tipo do gasto (ex.: Café, VA, Vale Transporte).' });
+  if (tipoRateado(tipo)) return res.status(400).json({ erro: ERRO_TIPO_RATEADO });
 
   const valorNum = Number(valor) || 0;
   if (valorNum <= 0) return res.status(400).json({ erro: 'Informe um valor maior que zero.' });
@@ -492,6 +499,7 @@ router.put('/gastos/:id', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
   if (!atual) return res.status(404).json({ erro: 'Gasto não encontrado' });
 
   const { mes_ciclo, obra_id, tipo, descricao, valor } = req.body;
+  if (tipo !== undefined && tipoRateado(tipo)) return res.status(400).json({ erro: ERRO_TIPO_RATEADO });
   const valorFinal = valor !== undefined ? Number(valor) || 0 : atual.valor;
   if (valorFinal <= 0) return res.status(400).json({ erro: 'Informe um valor maior que zero.' });
 
