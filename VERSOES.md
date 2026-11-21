@@ -50,6 +50,16 @@ git checkout v2.111
 
 ## Versões
 
+### 2.137 — Tabela fixa no topo de "Lançar gastos"
+
+- **Pagamentos → Cadastrar → Lançar gastos** abre com a tabela **📌 Lançamentos fixos do mês**: DCTF, DAS, SEGURO,
+  CONTAB. DO CARMO, CONTAB. CERQUEIRA, IFRACTAL e RESOLVE, um valor por item e por mês, com um único botão **Salvar**.
+  Só as linhas alteradas são enviadas; valor vazio/zero remove o lançamento.
+- DCTF, DAS e SEGURO continuam rateados automaticamente (sem obra). Os outros quatro têm seletor de **Obra**
+  (padrão "Sem obra definida") e são gastos diretos dessa obra.
+- O formulário **Lançar gasto** abaixo segue como antes (Café, Ferramentas, VA, Vale Transporte e Outros), sem repetir
+  os itens da tabela fixa.
+
 ### 2.136 — "Lançar gastos" passa a ter DCTF, DAS, Seguro, contabilidade, iFractal e Resolve
 
 - O card **Impostos e seguro do mês** foi removido. Em **Pagamentos → Cadastrar → 💸 Lançar gastos**, o campo **Tipo**

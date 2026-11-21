@@ -185,17 +185,22 @@ export default function Financeiro() {
 // valor continuar visível em vez de desaparecer.
 const GASTO_VAZIO = { mes_ciclo: '', obra_id: '', tipo: '', descricao: '', valor: '' };
 
-// DCTF, DAS e Seguro são valores mensais da EMPRESA: não pedem obra, porque o servidor os rateia
-// sozinho (utils/gastosCustos.js). São gravados em /gastos-custos/impostos (1 por mês e tipo),
-// não em financeiro_gastos. `chave` é o tipo aceito pelo servidor.
-const IMPOSTOS_GASTO = {
-  DCTF: { chave: 'DCTF', regra: 'Rateado automaticamente pelos dias dos colaboradores CLT em cada obra.' },
-  DAS: { chave: 'DAS', regra: 'Rateado automaticamente pela receita com nota dos últimos 12 meses de cada obra.' },
-  Seguro: { chave: 'SEGURO', regra: 'Rateado automaticamente pela quantidade de colaboradores CLT em cada obra.' }
-};
-const ehImposto = tipo => Object.prototype.hasOwnProperty.call(IMPOSTOS_GASTO, tipo);
+// Lançamentos FIXOS do mês, na tabela do topo de "Lançar gastos". DCTF, DAS e Seguro são valores da
+// EMPRESA: não têm obra, porque o servidor os rateia sozinho (utils/gastosCustos.js) e eles são
+// gravados em /gastos-custos/impostos (1 por mês e tipo). Os demais são gastos diretos em
+// financeiro_gastos (1 por mês e tipo, com obra opcional); o `tipo` gravado é o próprio rótulo.
+const LANCAMENTOS_FIXOS = [
+  { rotulo: 'DCTF', imposto: 'DCTF', regra: 'Rateio automático: dias dos colaboradores CLT em cada obra' },
+  { rotulo: 'DAS', imposto: 'DAS', regra: 'Rateio automático: receita com nota dos últimos 12 meses' },
+  { rotulo: 'SEGURO', imposto: 'SEGURO', regra: 'Rateio automático: qtd. de colaboradores CLT em cada obra' },
+  { rotulo: 'CONTAB. DO CARMO' },
+  { rotulo: 'CONTAB. CERQUEIRA' },
+  { rotulo: 'IFRACTAL' },
+  { rotulo: 'RESOLVE' }
+];
+const chaveTipo = t => (t || '').toString().trim().toLowerCase();
+const ehTipoFixo = t => LANCAMENTOS_FIXOS.some(f => chaveTipo(f.rotulo) === chaveTipo(t));
 const ROTULO_RATEADO = 'Rateado entre as obras';
-const ROTULO_IMPOSTO = { DCTF: 'DCTF', DAS: 'DAS', SEGURO: 'Seguro' };
 
 // Lançamentos diretos por obra (Café e outros). Usado dentro de Pagamentos > Cadastrar: recebe o mês
 // do seletor global (mesExterno). O Resumo recarrega sozinho ao ser aberto (a aba é remontada).
@@ -207,14 +212,19 @@ function Gastos({ mesExterno, onAlterado }) {
   const [mesInterno, setMes] = useState(mesAtual());
   const mes = mesExterno || mesInterno;
   const [dadosGastos, setDadosGastos] = useState(null);
-  const [impostos, setImpostos] = useState([]);
+  const [impostos, setImpostos] = useState({});
   const [obras, setObras] = useState([]);
   const [tipos, setTipos] = useState([]);
   const [form, setForm] = useState({ ...GASTO_VAZIO, mes_ciclo: mesAtual() });
-  // Gasto comum: id numérico. Imposto/seguro: o próprio item ({ imposto: true, mes_ciclo, tipo }).
-  const [editando, setEditando] = useState(null);
+  const [editandoId, setEditandoId] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  // Tabela fixa: valor e obra digitados por rótulo, e o que já está gravado (para só enviar o que mudou).
+  const [fixos, setFixos] = useState({});
+  const [fixosGravados, setFixosGravados] = useState({});
+  const [salvandoFixos, setSalvandoFixos] = useState(false);
+  const [erroFixos, setErroFixos] = useState('');
+  const [avisoFixos, setAvisoFixos] = useState('');
 
   useEffect(() => {
     api.get('/obras', COM_MATRIZ).then(res => setObras(res.data)).catch(() => setObras([]));
@@ -222,53 +232,81 @@ function Gastos({ mesExterno, onAlterado }) {
   }, []);
 
   function carregar() {
-    api.get('/financeiro/gastos', { params: { mes } })
-      .then(res => setDadosGastos(res.data))
-      .catch(() => setDadosGastos(null));
-    api.get('/gastos-custos/impostos', { params: { mes } })
-      .then(res => setImpostos(['dctf', 'das', 'seguro']
-        .filter(k => res.data[k]?.valor > 0)
-        .map(k => {
-          const tipo = ROTULO_IMPOSTO[k.toUpperCase()];
-          return { id: `imposto-${k}`, imposto: true, mes_ciclo: mes, tipo, obra_id: null, obra_nome: ROTULO_RATEADO,
-            descricao: res.data[k].observacao || '', valor: res.data[k].valor };
-        })))
-      .catch(() => setImpostos([]));
+    Promise.all([
+      api.get('/financeiro/gastos', { params: { mes } }).then(res => res.data).catch(() => null),
+      api.get('/gastos-custos/impostos', { params: { mes } }).then(res => res.data).catch(() => ({}))
+    ]).then(([gastos, imp]) => {
+      setDadosGastos(gastos);
+      const impostosMes = {};
+      const gravados = {};
+      for (const f of LANCAMENTOS_FIXOS) {
+        if (f.imposto) {
+          const atual = imp[f.imposto.toLowerCase()];
+          const valor = atual?.valor > 0 ? atual.valor : 0;
+          if (valor > 0) impostosMes[f.rotulo] = { valor, descricao: atual.observacao || '' };
+          gravados[f.rotulo] = { id: null, valor: valor ? String(valor) : '', obra_id: '', descricao: atual?.observacao || '' };
+        } else {
+          const item = (gastos?.itens || []).find(i => chaveTipo(i.tipo) === chaveTipo(f.rotulo));
+          gravados[f.rotulo] = {
+            id: item ? item.id : null, valor: item ? String(item.valor) : '',
+            obra_id: item?.obra_id ? String(item.obra_id) : '', descricao: item?.descricao || ''
+          };
+        }
+      }
+      setImpostos(impostosMes);
+      setFixosGravados(gravados);
+      setFixos(gravados);
+    });
     if (onAlterado) onAlterado();
   }
-  useEffect(carregar, [mes]);
+  useEffect(() => { setAvisoFixos(''); setErroFixos(''); carregar(); }, [mes]);
 
   // Ao trocar o mês do filtro, o formulário acompanha: evita lançar sem querer num mês
   // diferente do que está sendo visualizado na tela.
   useEffect(() => { setForm(f => ({ ...f, mes_ciclo: mes })); }, [mes]);
 
-  // DCTF/DAS/Seguro e gastos comuns ficam em tabelas diferentes: ao salvar, o registro antigo
-  // (se a edição mudou o tipo, o mês ou a natureza do lançamento) é removido do lugar de origem.
-  const apagarImposto = item => api.put('/gastos-custos/impostos', { mes_referencia: item.mes_ciclo, tipo: IMPOSTOS_GASTO[item.tipo].chave, valor: 0 });
+  // Salva só as linhas fixas que mudaram. Valor vazio/zero remove o lançamento.
+  async function salvarFixos() {
+    setSalvandoFixos(true); setErroFixos(''); setAvisoFixos('');
+    let atual = null;
+    try {
+      for (const f of LANCAMENTOS_FIXOS) {
+        atual = f.rotulo;
+        const novo = fixos[f.rotulo] || {};
+        const antigo = fixosGravados[f.rotulo] || {};
+        const valor = Number(novo.valor) || 0;
+        if (valor < 0) throw new Error('Informe valores iguais ou maiores que zero.');
+        const mudou = valor !== (Number(antigo.valor) || 0) || (!f.imposto && valor > 0 && (novo.obra_id || '') !== (antigo.obra_id || ''));
+        if (!mudou) continue;
+
+        if (f.imposto) {
+          await api.put('/gastos-custos/impostos', { mes_referencia: mes, tipo: f.imposto, valor: valor || '', observacao: antigo.descricao });
+        } else if (valor === 0) {
+          if (antigo.id) await api.delete(`/financeiro/gastos/${antigo.id}`);
+        } else if (antigo.id) {
+          await api.put(`/financeiro/gastos/${antigo.id}`, { mes_ciclo: mes, obra_id: novo.obra_id || '', tipo: f.rotulo, descricao: antigo.descricao, valor });
+        } else {
+          await api.post('/financeiro/gastos', { mes_ciclo: mes, obra_id: novo.obra_id || '', tipo: f.rotulo, descricao: '', valor });
+        }
+      }
+      setAvisoFixos(`✔ Lançamentos de ${rotuloMes(mes)} salvos.`);
+      carregar();
+    } catch (e) {
+      setErroFixos(`${atual ? `${atual}: ` : ''}${e.response?.data?.erro || e.message || 'Não foi possível salvar.'}`);
+    } finally {
+      setSalvandoFixos(false);
+    }
+  }
 
   async function salvar() {
     if (!form.tipo.trim()) { setErro('Informe o tipo do gasto.'); return; }
     if (!(Number(form.valor) > 0)) { setErro('Informe um valor maior que zero.'); return; }
     setSalvando(true); setErro('');
     try {
-      const novoImposto = ehImposto(form.tipo);
-      const antigoImposto = editando && editando.imposto ? editando : null;
-      const antigoGasto = editando && !editando.imposto ? editando : null;
-
-      if (novoImposto) {
-        const mesmoRegistro = antigoImposto && antigoImposto.tipo === form.tipo && antigoImposto.mes_ciclo === form.mes_ciclo;
-        if (antigoImposto && !mesmoRegistro) await apagarImposto(antigoImposto);
-        await api.put('/gastos-custos/impostos', {
-          mes_referencia: form.mes_ciclo, tipo: IMPOSTOS_GASTO[form.tipo].chave, valor: form.valor, observacao: form.descricao
-        });
-        if (antigoGasto) await api.delete(`/financeiro/gastos/${antigoGasto.id}`);
-      } else {
-        if (antigoGasto) await api.put(`/financeiro/gastos/${antigoGasto.id}`, form);
-        else await api.post('/financeiro/gastos', form);
-        if (antigoImposto) await apagarImposto(antigoImposto);
-      }
+      if (editandoId) await api.put(`/financeiro/gastos/${editandoId}`, form);
+      else await api.post('/financeiro/gastos', form);
       setForm({ ...GASTO_VAZIO, mes_ciclo: mes });
-      setEditando(null);
+      setEditandoId(null);
       carregar();
     } catch (e) {
       setErro(e.response?.data?.erro || 'Não foi possível salvar o gasto.');
@@ -278,7 +316,7 @@ function Gastos({ mesExterno, onAlterado }) {
   }
 
   function editar(item) {
-    setEditando(item);
+    setEditandoId(item.id);
     setErro('');
     setForm({
       mes_ciclo: item.mes_ciclo,
@@ -293,23 +331,25 @@ function Gastos({ mesExterno, onAlterado }) {
   async function excluir(item) {
     if (!window.confirm(`Excluir o gasto "${item.tipo}" de R$ ${formatarValorBR(item.valor)}?`)) return;
     try {
-      if (item.imposto) await apagarImposto(item);
-      else await api.delete(`/financeiro/gastos/${item.id}`);
+      await api.delete(`/financeiro/gastos/${item.id}`);
       carregar();
     } catch (e) {
       setErro(e.response?.data?.erro || 'Não foi possível excluir.');
     }
   }
 
-  // Junta os impostos/seguro (rateados) aos gastos diretos para os totais e a tabela do mês.
+  // Totais do mês: gastos diretos + DCTF/DAS/Seguro (rateados). A lista de baixo mostra só os gastos
+  // que NÃO estão na tabela fixa (um por tipo fixo); duplicados antigos continuam aparecendo ali.
   const dados = dadosGastos && (() => {
-    const somaImpostos = impostos.reduce((s, i) => s + i.valor, 0);
+    const somaImpostos = Object.values(impostos).reduce((s, i) => s + i.valor, 0);
     const porTipo = { ...dadosGastos.por_tipo };
-    for (const i of impostos) porTipo[i.tipo] = Math.round(((porTipo[i.tipo] || 0) + i.valor) * 100) / 100;
+    for (const [rotulo, i] of Object.entries(impostos)) porTipo[rotulo] = Math.round(((porTipo[rotulo] || 0) + i.valor) * 100) / 100;
     const porObra = { ...dadosGastos.por_obra };
     if (somaImpostos > 0) porObra[ROTULO_RATEADO] = Math.round(somaImpostos * 100) / 100;
+    const idsNaTabela = new Set(Object.values(fixosGravados).map(g => g.id).filter(Boolean));
     return {
-      itens: [...impostos, ...dadosGastos.itens], total: Math.round((dadosGastos.total + somaImpostos) * 100) / 100,
+      itens: dadosGastos.itens.filter(i => !idsNaTabela.has(i.id)),
+      total: Math.round((dadosGastos.total + somaImpostos) * 100) / 100,
       por_tipo: porTipo, por_obra: porObra
     };
   })();
@@ -333,22 +373,81 @@ function Gastos({ mesExterno, onAlterado }) {
         </div>
 
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
-          Lance aqui DCTF, DAS, Seguro, contabilidade, iFractal, Resolve, Café e outros gastos. DCTF, DAS e Seguro são
-          rateados sozinhos entre as obras; os demais vão para a obra informada (ou "Sem obra definida"). Tudo entra no{' '}
-          <strong>Centro de Custo</strong>. VA, VT e holerite dos colaboradores vêm das abas Cadastrar e Detalhado.
+          Preencha a tabela fixa abaixo com os valores do mês e use o formulário para os demais gastos (Café e outros).
+          DCTF, DAS e SEGURO são rateados sozinhos entre as obras; os demais vão para a obra informada (ou "Sem obra
+          definida"). Tudo entra no <strong>Centro de Custo</strong>. VA, VT e holerite dos colaboradores vêm das abas
+          Cadastrar e Detalhado.
         </div>
       </div>
+
+      <TabelaFixos
+        fixos={fixos} setFixos={setFixos} obras={obras} podeLancar={podeLancar} salvando={salvandoFixos}
+        erro={erroFixos} aviso={avisoFixos} onSalvar={salvarFixos} mes={mes}
+      />
 
       {podeLancar && (
         <FormularioGasto
           form={form} setForm={setForm} obras={obras} tipos={tipos}
-          editandoId={editando ? (editando.id || true) : null} salvando={salvando} erro={erro} onSalvar={salvar}
-          onCancelar={() => { setEditando(null); setForm({ ...GASTO_VAZIO, mes_ciclo: mes }); setErro(''); }}
+          editandoId={editandoId} salvando={salvando} erro={erro} onSalvar={salvar}
+          onCancelar={() => { setEditandoId(null); setForm({ ...GASTO_VAZIO, mes_ciclo: mes }); setErro(''); }}
         />
       )}
 
       {dados && <ResumoGastos dados={dados} />}
       {dados && <TabelaGastos itens={dados.itens} podeLancar={podeLancar} onEditar={editar} onExcluir={excluir} />}
+    </div>
+  );
+}
+
+// Tabela fixa do topo de "Lançar gastos": uma linha por item mensal recorrente.
+function TabelaFixos({ fixos, setFixos, obras, podeLancar, salvando, erro, aviso, onSalvar, mes }) {
+  const atualizar = (rotulo, campo, valor) => setFixos(f => ({ ...f, [rotulo]: { ...f[rotulo], [campo]: valor } }));
+  const total = LANCAMENTOS_FIXOS.reduce((s, f) => s + (Number(fixos[f.rotulo]?.valor) || 0), 0);
+
+  return (
+    <div className="card" style={{ marginBottom: 16, overflowX: 'auto' }}>
+      <h4 style={{ marginTop: 0 }}>📌 Lançamentos fixos de {rotuloMes(mes)}</h4>
+      <table>
+        <thead>
+          <tr><th>Item</th><th style={{ width: 170 }}>Valor (R$)</th><th>Obra</th></tr>
+        </thead>
+        <tbody>
+          {LANCAMENTOS_FIXOS.map(f => (
+            <tr key={f.rotulo}>
+              <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{f.rotulo}</td>
+              <td>
+                <input type="number" min="0" step="0.01" placeholder="0,00" disabled={!podeLancar}
+                  value={fixos[f.rotulo]?.valor ?? ''} onChange={e => atualizar(f.rotulo, 'valor', e.target.value)} />
+              </td>
+              <td>
+                {f.imposto ? (
+                  <span style={{ fontSize: 12, color: '#6b7280' }}>{f.regra}</span>
+                ) : (
+                  <select disabled={!podeLancar} value={fixos[f.rotulo]?.obra_id ?? ''}
+                    onChange={e => atualizar(f.rotulo, 'obra_id', e.target.value)}>
+                    <option value="">— Sem obra definida —</option>
+                    {obras.map(o => <option key={o.id} value={o.id}>{rotuloObra(o)}</option>)}
+                  </select>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex gap-2" style={{ marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        {podeLancar && (
+          <button className="btn-primary" onClick={onSalvar} disabled={salvando}>
+            {salvando ? 'Salvando...' : '💾 Salvar lançamentos fixos'}
+          </button>
+        )}
+        {total > 0 && <span style={{ fontSize: 13 }}>Total da tabela: <strong>R$ {formatarValorBR(total)}</strong></span>}
+        {!podeLancar && <span style={{ fontSize: 12, color: '#6b7280' }}>Somente ADM e Financeiro lançam.</span>}
+      </div>
+      <div style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>
+        Um valor por item em cada mês. Deixe vazio (ou zero) para remover o lançamento.
+      </div>
+      {aviso && <div style={{ marginTop: 8, color: '#166534', fontSize: 13, fontWeight: 600 }}>{aviso}</div>}
+      {erro && <div style={{ marginTop: 8, color: '#b91c1c', fontSize: 13, fontWeight: 600 }}>{erro}</div>}
     </div>
   );
 }
@@ -360,9 +459,8 @@ const OPCAO_OUTROS = '__outros__';
 
 // Formulário de lançamento/edição de um gasto.
 function FormularioGasto({ form, setForm, obras, tipos, editandoId, salvando, erro, onSalvar, onCancelar }) {
-  // DCTF, DAS e Seguro vêm primeiro, depois os tipos do servidor (contabilidade, Café...).
-  const tiposFixos = [...Object.keys(IMPOSTOS_GASTO), ...(tipos.length ? tipos : TIPOS_PADRAO_GASTO)];
-  const imposto = ehImposto(form.tipo) ? IMPOSTOS_GASTO[form.tipo] : null;
+  // Os itens da tabela fixa não repetem aqui na lista de tipos.
+  const tiposFixos = (tipos.length ? tipos : TIPOS_PADRAO_GASTO).filter(t => !ehTipoFixo(t));
   const [outroAberto, setOutroAberto] = useState(false);
   // Um tipo que não está na lista (lançamento antigo em texto livre) é tratado como "Outros".
   const tipoSelecionado = tiposFixos.includes(form.tipo)
@@ -394,15 +492,13 @@ function FormularioGasto({ form, setForm, obras, tipos, editandoId, salvando, er
               onChange={e => setForm({ ...form, tipo: e.target.value })} />
           )}
         </div>
-        {!imposto && (
-          <div className="flex-col gap-2">
-            <label style={{ fontSize: 12 }}>Obra</label>
-            <select value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>
-              <option value="">— Sem obra definida —</option>
-              {obras.map(o => <option key={o.id} value={o.id}>{rotuloObra(o)}</option>)}
-            </select>
-          </div>
-        )}
+        <div className="flex-col gap-2">
+          <label style={{ fontSize: 12 }}>Obra</label>
+          <select value={form.obra_id} onChange={e => setForm({ ...form, obra_id: e.target.value })}>
+            <option value="">— Sem obra definida —</option>
+            {obras.map(o => <option key={o.id} value={o.id}>{rotuloObra(o)}</option>)}
+          </select>
+        </div>
         <div className="flex-col gap-2">
           <label style={{ fontSize: 12 }}>Valor (R$)</label>
           <input type="number" step="0.01" value={form.valor}
@@ -414,12 +510,6 @@ function FormularioGasto({ form, setForm, obras, tipos, editandoId, salvando, er
             onChange={e => setForm({ ...form, descricao: e.target.value })} />
         </div>
       </div>
-
-      {imposto && (
-        <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
-          {imposto.regra} Só há um lançamento por mês: lançar de novo substitui o valor.
-        </div>
-      )}
 
       <div className="flex gap-2" style={{ marginTop: 12 }}>
         <button className="btn-primary" onClick={onSalvar} disabled={salvando}>
@@ -467,7 +557,7 @@ function TabelaGastos({ itens, podeLancar, onEditar, onExcluir }) {
   if (itens.length === 0) {
     return (
       <div className="card" style={{ fontSize: 13, color: '#6b7280' }}>
-        Nenhum gasto lançado neste mês.
+        Nenhum outro gasto lançado neste mês.
       </div>
     );
   }

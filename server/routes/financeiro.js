@@ -427,7 +427,7 @@ router.get('/resumo/configuravel', permitir('ADM'), async (req, res) => {
 // Os tipos abaixo são apenas as SUGESTÕES da tela. O campo é texto livre de propósito: amanhã
 // pode surgir "Cesta básica", "EPI" ou "Alojamento" sem precisar de alteração no código nem
 // migração no banco.
-const TIPOS_GASTO_SUGERIDOS = ['CONTAB. CERQUEIRA', 'CONTAB. DO CARMO', 'IFRACTAL', 'RESOLVE', 'Café', 'Ferramentas', 'VA', 'Vale Transporte'];
+const TIPOS_GASTO_SUGERIDOS = ['Café', 'Ferramentas', 'VA', 'Vale Transporte'];
 
 // DCTF, DAS e Seguro NÃO são gastos diretos: são lançados em /gastos-custos/impostos e rateados
 // pelo servidor. Aceitá-los aqui contaria o valor duas vezes.
