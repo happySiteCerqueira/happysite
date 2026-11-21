@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.124** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.125** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -109,7 +109,7 @@ daquele mês (produção, diárias, antecipados).
 | Sub-aba | Função |
 |---|---|
 | **📥 Receita** | O que a obra faturou. Campo **"com nota"** desconta 11% automaticamente. A **Data Pagamento** é o limite do cliente: vencida e não paga, a linha fica em vermelho com "ATRASADO · N dias" (some ao marcar Pago) |
-| **📄 Holerite** | Importa o PDF de holerites da contabilidade e mostra **Vale, INSS, Taxa e Pagto** por pessoa/mês (editável) |
+| **📄 Holerite** | Mostra e permite ajustar **Vale, INSS, Taxa e Pagto** por pessoa/mês. O PDF da contabilidade é importado em **Gastos → Dados** |
 | **🧾 Pagtos. Antecipados** | Só lançamentos internos, em abas separadas: **PF** (Vale Extra e Vale Ex RH) e **PJ** (Adiantamento) |
 | **💸 Gastos** | Custos por colaborador rateados por obra (VA, VT, Extras, EPI, Holerite) + Café direto da obra. Ver abaixo |
 | **🏗️ Centro de Custo** | O que entrou × o que saiu de cada obra: saldo e margem (antiga "Saúde financeira") |
@@ -127,7 +127,7 @@ Três sub-abas, sempre sobre o mês de apuração do topo:
   Holerite/Salário). Os lançamentos manuais de Café e outros ficam abaixo, como sempre foram.
 - **Detalhado** — uma linha por colaborador: regime, obras e % de rateio, VA, VT, Extras, EPI, custo de
   holerite e total. Ações: **+ Extra** e **% Rateio** (ajuste manual, que vale só naquele mês).
-- **Dados** — cards de importação (Caju, VT, Ponto, Café), cada um com a sua competência e a
+- **Dados** — cards de importação (Caju, VT, Ponto, Café e **Holerite**), cada um com a sua competência e a
   confirmação dela. Fluxo: **prévia** → **De-Para** dos vínculos pendentes → **confirmar**.
   Reimportar o mesmo tipo/mês **substitui** o lote anterior (com confirmação; o antigo fica como
   histórico). Detalhes por tipo:
@@ -200,8 +200,9 @@ Confere o PDF de holerites da contabilidade (layout *SCI*) contra o sistema, com
 | Taxa | código `441` |
 | Pagto | `SALÁRIO LÍQUIDO` |
 
-Tem duas abas: **Conferir** (compara) e **Importar** (preenche o Holerite a partir do PDF, com
-revisão antes de gravar — a mesma importação está em **Financeiro → Holerite**).
+A tela só **confere** (compara o PDF com o que está lançado). A **importação** do PDF, que
+preenche o Holerite com revisão antes de gravar, fica em **Financeiro → Gastos → Dados** (card
+*Holerite*, com a sua própria competência).
 
 O cruzamento é pelo **nome normalizado** (sem acento, maiúsculas), com CPF como desempate e,
 por último, semelhança ≥ 92%.

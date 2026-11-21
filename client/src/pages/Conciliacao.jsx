@@ -47,11 +47,13 @@ const COLUNAS_IMPORT = [
   { coluna: 'pagto', rotulo: 'Pagto (Líquido)' }
 ];
 
-// modoFixo="importar" é usado pela aba Financeiro > Holerite: mostra só a importação do PDF,
-// sem o título e o seletor de modo. Sem a prop, a tela é a Conciliação completa de sempre.
-export default function Conciliacao({ modoFixo = null, onImportado = null }) {
+// modoFixo="importar" é usado em Financeiro > Gastos > Dados: mostra só a importação do PDF,
+// sem o título. `mesExterno` permite à tela chamadora definir a competência da importação
+// (independente do mês de apuração do topo). Sem as props, a tela é a Conciliação (conferência).
+export default function Conciliacao({ modoFixo = null, onImportado = null, mesExterno = null }) {
   // Usa a Data de Apuração global (seletor no topo), como as demais telas do ciclo mensal.
-  const { mes } = useApuracao();
+  const { mes: mesGlobal } = useApuracao();
+  const mes = mesExterno || mesGlobal;
   const [previa, setPrevia] = useState(null);
   const [arquivoHolerite, setArquivoHolerite] = useState(null);
   const [arquivoMedicao, setArquivoMedicao] = useState(null);
@@ -65,9 +67,9 @@ export default function Conciliacao({ modoFixo = null, onImportado = null }) {
   const inputMedicao = useRef(null);
 
   // --- Modo de trabalho da tela -----------------------------------------------------------
-  // 'conferir' = compara o PDF com o que já está lançado (comportamento original);
-  // 'importar' = lê o PDF e preenche os Pagamentos Antecipados automaticamente.
-  const [modo, setModo] = useState(modoFixo || 'conferir');
+  // 'conferir' = compara o PDF com o que já está lançado (tela Conciliação);
+  // 'importar' = lê o PDF e preenche o Holerite (Gastos → Dados, via modoFixo).
+  const [modo] = useState(modoFixo || 'conferir');
   const [arquivoImport, setArquivoImport] = useState(null);
   const [propostaImport, setPropostaImport] = useState(null);
   const [selecionados, setSelecionados] = useState({});
@@ -212,27 +214,11 @@ export default function Conciliacao({ modoFixo = null, onImportado = null }) {
       <h2>🧮 Conciliação de Folha</h2>
       <p style={{ fontSize: 13, color: '#6b7280', marginTop: -6 }}>
         Confronta o PDF dos <strong>Holerites</strong> da contabilidade com os lançamentos de
-        Pagamento Antecipado do sistema em <strong>{rotuloMes(mes)}</strong>. Conferidos:
+        Holerite do sistema em <strong>{rotuloMes(mes)}</strong>. Conferidos:
         Vale (953), INSS (91005), Taxa (441) e Pagto (Salário Líquido).
+        Para <strong>importar</strong> o PDF e preencher o Holerite, use{' '}
+        <strong>Financeiro → Gastos → Dados</strong>.
       </p>
-
-      {/* Dois modos de uso do MESMO PDF: conferir o que já está lançado (comportamento
-          original da tela) ou importar os valores para poupar a digitação manual. O
-          lançamento manual em Pagamentos Antecipados continua disponível como sempre. */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        {[
-          { chave: 'conferir', rotulo: '🔍 Conferir lançamentos' },
-          { chave: 'importar', rotulo: '📥 Importar do holerite' }
-        ].map(item => (
-          <button
-            key={item.chave}
-            className={modo === item.chave ? 'btn-primary' : 'btn-secondary'}
-            onClick={() => { setModo(item.chave); setErro(''); }}
-          >
-            {item.rotulo}
-          </button>
-        ))}
-      </div>
         </>
       )}
       {modo === 'conferir' && (

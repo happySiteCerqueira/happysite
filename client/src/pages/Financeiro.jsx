@@ -6,7 +6,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
 import PagamentosAntecipados from './PagamentosAntecipados';
-import Conciliacao from './Conciliacao';
 import GastosCustos from './gastos/GastosCustos';
 import CentroCusto from './CentroCusto';
 
@@ -92,9 +91,8 @@ export default function Financeiro() {
   const mostrarReceita = temAcessoSubaba('financeiro.receita');
   const mostrarPagamentos = temAcessoSubaba('financeiro.pagamentos');
   // O Holerite usa a mesma permissão de Pagamentos Antecipados: são a mesma planilha, vista por
-  // colunas diferentes. Importar o PDF continua exigindo o módulo Conciliação.
+  // colunas diferentes. A importação do PDF fica em Gastos → Dados (exige o módulo Conciliação).
   const mostrarHolerite = mostrarPagamentos;
-  const podeImportarHolerite = temAcessoSubaba('conciliacao');
   const mostrarGastos = temAcessoSubaba('financeiro.gastos');
   const mostrarRelatorios = temAcessoSubaba('financeiro.relatorios');
   // A permissão "financeiro.relatorios" agora governa o Centro de Custo (aqui) e o relatório
@@ -109,8 +107,6 @@ export default function Financeiro() {
     : mostrarCentroCusto ? 'centrocusto'
     : mostrarResumo ? 'resumo' : null;
   const [subAba, setSubAba] = useState(primeiraDisponivel);
-  // Incrementado após importar o PDF do holerite para a tabela da aba recarregar os valores.
-  const [versaoHolerite, setVersaoHolerite] = useState(0);
 
 
 
@@ -154,8 +150,11 @@ export default function Financeiro() {
       {subAba === 'receita' && mostrarReceita && <Receita />}
       {subAba === 'holerite' && mostrarHolerite && (
         <>
-          {podeImportarHolerite && <Conciliacao modoFixo="importar" onImportado={() => setVersaoHolerite(v => v + 1)} />}
-          <PagamentosAntecipados key={versaoHolerite} modo="holerite" />
+          <div className="card" style={{ marginBottom: 12, fontSize: 13, color: '#6b7280' }}>
+            📥 Para <strong>importar o PDF de holerites</strong> da contabilidade, use{' '}
+            <strong>Gastos → Dados</strong>. Aqui você confere e ajusta os valores de cada pessoa.
+          </div>
+          <PagamentosAntecipados modo="holerite" />
         </>
       )}
       {subAba === 'pagamentos' && mostrarPagamentos && <PagamentosAntecipados />}

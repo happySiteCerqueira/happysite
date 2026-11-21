@@ -50,6 +50,15 @@ git checkout v2.111
 
 ## Versões
 
+### 2.125 — Importação do holerite passa para Gastos → Dados
+
+- A **importação do PDF de holerites** saiu de **Conciliação** e da aba **Holerite** e agora é um
+  card em **Financeiro → Gastos → Dados**, com **mês/ano de referência próprio** (como os demais
+  cards) e a mesma prévia com conferência antes de gravar. Quem não tem o módulo Conciliação não
+  vê o card (a rota do servidor é a mesma e continua protegida).
+- **Conciliação** ficou só com a conferência. A aba **Financeiro → Holerite** mostra a tabela de
+  valores e indica onde importar.
+
 ### 2.124 — Desligados continuam consultáveis nos meses em que trabalharam
 
 - Quem foi **desligado/arquivado** não some mais do histórico. Nas listas do mês de apuração

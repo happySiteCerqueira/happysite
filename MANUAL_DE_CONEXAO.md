@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.124**
+> **Versão do sistema: 2.125**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.124** (tag `v2.124`) |
+| **Versão atual** | **2.125** (tag `v2.125`) |
 
 ### Stack
 
@@ -178,7 +178,7 @@ HappySite/
 | EPI | `Epi.jsx` | `epi.js` |
 | Financeiro | `Financeiro.jsx` (Receita, Holerite, Resumo) | `financeiro.js` |
 | ↳ Gastos (custo por colaborador/obra) | `gastos/` (`GastosCustos`, `GastosResumo`, `GastosDetalhado`, `GastosDados`, `PainelPrevia`, `EditorCaju`) + `utils/cajuOcr.js` + lançamentos manuais em `Financeiro.jsx` | `gastosCustos.js` (telas), `gastosImportacao.js` (lotes/De-Para) · `utils/gastosCustos.js` (motor), `parserVt.js`, `parserPonto.js`, `pontoRateio.js`, `pdfLinhas.js` |
-| ↳ Holerite | `Conciliacao.jsx` (`modoFixo="importar"`) + `PagamentosAntecipados.jsx` (`modo="holerite"`) | `conciliacao.js`, `pagamentos-antecipados.js` |
+| ↳ Holerite | `PagamentosAntecipados.jsx` (`modo="holerite"`); importação do PDF no card Holerite de `gastos/GastosDados.jsx`, que reusa `Conciliacao.jsx` (`modoFixo="importar"`, `mesExterno`) | `conciliacao.js`, `pagamentos-antecipados.js` |
 | ↳ Pagtos. Antecipados | `PagamentosAntecipados.jsx` | `pagamentos-antecipados.js` |
 | ↳ Centro de Custo (antiga Saúde financeira) | `CentroCusto.jsx` | `relatorios.js` (`GET /relatorios/saude-obras`) |
 | Conciliação | `Conciliacao.jsx` | `conciliacao.js` |
@@ -470,7 +470,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.124).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.125).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -501,7 +501,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.124** |
+| Versão | **2.125** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |
