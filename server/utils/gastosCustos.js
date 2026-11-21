@@ -4,14 +4,13 @@
 // a MESMA conta, e é essa conta que alimenta tanto as telas quanto a saúde financeira.
 const db = require('../db/database');
 const { condicaoVisivelNoMes } = require('./colaboradoresMes');
+const { obterConfigAdmissao } = require('./asoCusto');
 
 const SEM_OBRA = 'Sem obra definida';
 
-// Custo de admissão: lançado automaticamente no mês da data de admissão do cadastro e atribuído
-// INTEIRO à obra do cadastro do colaborador (não é dividido pelo ponto).
-const CUSTO_ASO = 75;
-const CUSTO_TREINAMENTO = 150;
-const CUSTO_ADMISSAO = CUSTO_ASO + CUSTO_TREINAMENTO;
+// Custo de admissão (ASO + Treinamento): valores e data de corte vêm de config_custos_admissao
+// (utils/asoCusto.js; padrão R$ 75 + R$ 150, a partir de 01/10/2026). Cai INTEIRO em uma só obra:
+// a do cadastro ou, se o ponto/rateio manual do mês mostrar outra obra principal, ela.
 
 const arredondar = v => Math.round((Number(v) || 0) * 100) / 100;
 
@@ -216,7 +215,8 @@ const somaPor = (linhas, chave = 'valor') => {
 // O valor é o copiado na retirada; retiradas feitas antes de existir valor (NULL) usam o valor
 // ATUAL do item. Retirada sem nenhum valor custa 0 e é contada em `epi_sem_preco` para a tela avisar.
 async function calcularCustosMes(mes, opcoes = {}) {
-  const [itens, extras, holerites, complementares, admitidos, impostos, producao, diarias, colabs, epis] = await Promise.all([
+  const configAdmissao = await obterConfigAdmissao();
+  const [itens, extras, holerites, complementares, admitidos, asoPeriodicos, impostos, producao, diarias, colabs, epis] = await Promise.all([
     db.all(
       `SELECT i.colaborador_id, i.categoria, SUM(i.valor) AS valor
        FROM gastos_colaborador_itens i JOIN gastos_lotes l ON l.id = i.lote_id
@@ -235,7 +235,12 @@ async function calcularCustosMes(mes, opcoes = {}) {
     db.all(
       `SELECT id AS colaborador_id FROM colaboradores
        WHERE data_admissao >= (?::text || '-01')::date
-         AND data_admissao < ((?::text || '-01')::date + INTERVAL '1 month')`, mes, mes),
+         AND data_admissao < ((?::text || '-01')::date + INTERVAL '1 month')
+         AND data_admissao >= ?::date`, mes, mes, configAdmissao.data_inicio_vigencia),
+    db.all(
+      `SELECT colaborador_id, SUM(valor) AS valor FROM custos_aso_periodico
+       WHERE mes_ciclo = ? AND excluido = 0 AND data_realizacao >= ?::date GROUP BY colaborador_id`,
+      mes, configAdmissao.data_inicio_vigencia),
     db.all('SELECT tipo, valor FROM gastos_impostos WHERE mes_referencia = ? AND excluido = 0', mes),
     db.all(
       `SELECT cel.colaborador_id, SUM(cel.valor) AS valor
@@ -266,6 +271,8 @@ async function calcularCustosMes(mes, opcoes = {}) {
   const ferias = somaPor(complementares.filter(c => c.tipo === 'FERIAS'));
   const decimo = somaPor(complementares.filter(c => c.tipo === 'DECIMO_TERCEIRO'));
   const admitidosIds = new Set(admitidos.map(a => a.colaborador_id));
+  const aso = somaPor(asoPeriodicos);
+  const custoAdmissao = (Number(configAdmissao.valor_aso) || 0) + (Number(configAdmissao.valor_treinamento) || 0);
   const prod = somaPor(producao);
   const diar = somaPor(diarias);
   const epi = somaPor(epis);
@@ -273,6 +280,7 @@ async function calcularCustosMes(mes, opcoes = {}) {
 
   const ids = new Set([
     ...va.keys(), ...vt.keys(), ...ext.keys(), ...hol.keys(), ...ferias.keys(), ...decimo.keys(), ...admitidosIds,
+    ...[...aso].filter(([, v]) => v > 0).map(([k]) => k),
     ...[...epi].filter(([, v]) => v > 0).map(([k]) => k)
   ]);
   const pessoas = colabs.filter(c => ids.has(c.id));
@@ -282,7 +290,7 @@ async function calcularCustosMes(mes, opcoes = {}) {
   const acumular = (obraId, obraNome, campo, valor) => {
     const chave = obraId || 0;
     if (!porObra.has(chave)) {
-      porObra.set(chave, { obra_id: obraId || null, obra: obraNome || SEM_OBRA, va: 0, vt: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, dctf: 0, das: 0 });
+      porObra.set(chave, { obra_id: obraId || null, obra: obraNome || SEM_OBRA, va: 0, vt: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0 });
     }
     porObra.get(chave)[campo] += valor;
   };
@@ -299,7 +307,8 @@ async function calcularCustosMes(mes, opcoes = {}) {
     const recebido = Math.max(arredondar(salario + valorFerias + valorDecimo), 0);
     const produzido = arredondar((prod.get(c.id) || 0) + (diar.get(c.id) || 0));
     const excedente = arredondar(Math.max(recebido - produzido, 0));
-    const valorAdmissao = admitidosIds.has(c.id) ? CUSTO_ADMISSAO : 0;
+    const valorAdmissao = admitidosIds.has(c.id) ? custoAdmissao : 0;
+    const valorAso = arredondar(aso.get(c.id));
 
     const rateio = rateios.get(c.id);
     const pesos = rateio.itens.map(i => i.percentual);
@@ -317,6 +326,8 @@ async function calcularCustosMes(mes, opcoes = {}) {
     // outra obra principal no mês, para ela).
     const destino = destinoAdmissao(c, rateio);
     if (valorAdmissao > 0) acumular(destino.obra_id, destino.obra_nome, 'admissao', valorAdmissao);
+    // ASO periódico (renovação): inteiro na obra atual da pessoa no mês do exame (mesma regra).
+    if (valorAso > 0) acumular(destino.obra_id, destino.obra_nome, 'aso_periodico', valorAso);
 
     return {
       colaborador_id: c.id,
@@ -340,6 +351,10 @@ async function calcularCustosMes(mes, opcoes = {}) {
       admissao_obra_id: valorAdmissao > 0 ? destino.obra_id : null,
       // CADASTRO = ficou na obra do cadastro; PONTO/MANUAL = transferida para a obra principal do mês.
       admissao_via: valorAdmissao > 0 ? destino.via : null,
+      aso_periodico: valorAso,
+      aso_periodico_obra: valorAso > 0 ? destino.obra_nome : null,
+      aso_periodico_obra_id: valorAso > 0 ? destino.obra_id : null,
+      aso_periodico_via: valorAso > 0 ? destino.via : null,
       qtd_extras: qtdExtras.get(c.id) || 0,
       holerite_salario: salario,
       holerite_ferias: valorFerias,
@@ -347,7 +362,7 @@ async function calcularCustosMes(mes, opcoes = {}) {
       holerite_recebido: recebido,
       producao_diarias: produzido,
       holerite_custo: excedente,
-      total: arredondar(valorVa + valorVt + valorExtras + valorEpi + excedente + valorAdmissao)
+      total: arredondar(valorVa + valorVt + valorExtras + valorEpi + excedente + valorAdmissao + valorAso)
     };
   }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
@@ -365,9 +380,10 @@ async function calcularCustosMes(mes, opcoes = {}) {
     epiSemPreco: retiradasSemPreco,
     impostos: { dctf: valorImposto('DCTF'), das: valorImposto('DAS'), avisos: avisosImpostos },
     impostosPartes: partesImpostos,
+    configAdmissao,
     // Só calculado quando a CERQUEIRA é rateada pelo critério "Qtd. CLT" (utils/cerqueira.js).
     pesosClt: opcoes.comPesosClt ? await pesosCltDoMes(mes, colabs) : null,
-    admissaoSemObra: resultado.filter(c => c.admissao > 0 && !c.admissao_obra_id).length
+    admissaoSemObra: resultado.filter(c => (c.admissao > 0 && !c.admissao_obra_id) || (c.aso_periodico > 0 && !c.aso_periodico_obra_id)).length
   };
 }
 
@@ -393,13 +409,13 @@ async function montarResumo(mes) {
   const obras = new Map();
   const linhaObra = (id, nome) => {
     const chave = id || 0;
-    if (!obras.has(chave)) obras.set(chave, { obra_id: id || null, obra: nome || SEM_OBRA, va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, dctf: 0, das: 0, outros: 0 });
+    if (!obras.has(chave)) obras.set(chave, { obra_id: id || null, obra: nome || SEM_OBRA, va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0, outros: 0 });
     return obras.get(chave);
   };
   for (const o of porObra.values()) {
     const l = linhaObra(o.obra_id, o.obra);
     l.va += o.va; l.vt += o.vt; l.extras += o.extras; l.holerite += o.holerite; l.epi += o.epi;
-    l.admissao += o.admissao; l.dctf += o.dctf; l.das += o.das;
+    l.admissao += o.admissao; l.aso_periodico += o.aso_periodico; l.dctf += o.dctf; l.das += o.das;
   }
 
   const conflitos = [];
@@ -420,9 +436,9 @@ async function montarResumo(mes) {
       ...l,
       va: arredondar(l.va), vt: arredondar(l.vt), cafe: arredondar(l.cafe), ferramentas: arredondar(l.ferramentas),
       extras: arredondar(l.extras), holerite: arredondar(l.holerite), epi: arredondar(l.epi), outros: arredondar(l.outros),
-      admissao: arredondar(l.admissao), dctf: arredondar(l.dctf), das: arredondar(l.das)
+      admissao: arredondar(l.admissao), aso_periodico: arredondar(l.aso_periodico), dctf: arredondar(l.dctf), das: arredondar(l.das)
     };
-    linha.total = arredondar(linha.va + linha.vt + linha.cafe + linha.ferramentas + linha.extras + linha.holerite + linha.epi + linha.outros + linha.admissao + linha.dctf + linha.das);
+    linha.total = arredondar(linha.va + linha.vt + linha.cafe + linha.ferramentas + linha.extras + linha.holerite + linha.epi + linha.outros + linha.admissao + linha.aso_periodico + linha.dctf + linha.das);
     return linha;
   }).sort((a, b) => {
     if (!a.obra_id !== !b.obra_id) return a.obra_id ? -1 : 1; // "Sem obra definida" sempre por último
@@ -430,9 +446,9 @@ async function montarResumo(mes) {
   });
 
   const totais = lista.reduce((acc, l) => {
-    for (const k of ['va', 'vt', 'cafe', 'ferramentas', 'extras', 'holerite', 'epi', 'admissao', 'dctf', 'das', 'outros', 'total']) acc[k] = arredondar(acc[k] + l[k]);
+    for (const k of ['va', 'vt', 'cafe', 'ferramentas', 'extras', 'holerite', 'epi', 'admissao', 'aso_periodico', 'dctf', 'das', 'outros', 'total']) acc[k] = arredondar(acc[k] + l[k]);
     return acc;
-  }, { va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, dctf: 0, das: 0, outros: 0, total: 0 });
+  }, { va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0, outros: 0, total: 0 });
 
   const semObra = colaboradores.filter(c => c.rateio_origem === 'SEM_OBRA');
   return {
@@ -453,4 +469,4 @@ async function montarResumo(mes) {
   };
 }
 
-module.exports = { calcularCustosMes, montarResumo, ratearCentavos, classificarTipoGasto, chaveTexto, arredondar, SEM_OBRA, CUSTO_ASO, CUSTO_TREINAMENTO, CUSTO_ADMISSAO };
+module.exports = { calcularCustosMes, montarResumo, ratearCentavos, classificarTipoGasto, chaveTexto, arredondar, SEM_OBRA };

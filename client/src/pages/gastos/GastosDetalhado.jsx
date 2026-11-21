@@ -57,8 +57,8 @@ export default function GastosDetalhado({ mes }) {
         </div>
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
           O regime vem do cadastro (<em>participa de produção</em>). O custo de holerite é só o que
-          <strong> excede a produção</strong> do mês, somando salário + férias + 13º. A admissão (ASO R$ 75 +
-                    Treinamento R$ 150) nasce na obra do cadastro e passa inteira para a obra principal do ponto, se for outra. O Café não entra aqui: é custo direto da obra.
+          <strong> excede a produção</strong> do mês, somando salário + férias + 13º.           A admissão (ASO +
+                    Treinamento, valores em Cadastrar) nasce na obra do cadastro e passa inteira para a obra principal do ponto, se for outra; o ASO periódico (renovação) cai na obra atual da pessoa no mês do exame. O Café não entra aqui: é custo direto da obra.
         </div>
       </div>
 
@@ -82,6 +82,7 @@ export default function GastosDetalhado({ mes }) {
                   <th style={{ textAlign: 'right' }}>Extras</th>
                   <th style={{ textAlign: 'right' }}>EPI</th>
                   <th style={{ textAlign: 'right' }}>Admissão</th>
+                  <th style={{ textAlign: 'right' }}>ASO Periód.</th>
                   <th style={{ textAlign: 'right' }}>Custo Holerite</th>
                   <th style={{ textAlign: 'right' }}>Total</th>
                   {podeEditar && <th></th>}
@@ -118,6 +119,12 @@ export default function GastosDetalhado({ mes }) {
                       )}
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {moeda(i.aso_periodico)}
+                      {i.aso_periodico > 0 && (
+                        <div style={{ fontSize: 10, color: '#6b7280' }}>obra atual: {i.aso_periodico_obra}</div>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                       {moeda(i.holerite_custo)}
                       {i.holerite_recebido > 0 && (
                         <div style={{ fontSize: 10, color: '#6b7280' }}>
@@ -149,6 +156,7 @@ export default function GastosDetalhado({ mes }) {
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.extras)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.epi)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.admissao)}</td>
+                  <td style={{ textAlign: 'right' }}>{moeda(dados.totais.aso_periodico)}</td>
                   <td style={{ textAlign: 'right' }}>{moeda(dados.totais.holerite_custo)}</td>
                   <td style={{ textAlign: 'right' }}>R$ {moeda(dados.totais.total)}</td>
                   {podeEditar && <td></td>}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
+import { useApuracao } from '../context/ApuracaoContext';
 import Modal from '../components/Modal';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
@@ -108,6 +109,14 @@ export default function Financeiro() {
     : mostrarCentroCusto ? 'centrocusto'
     : mostrarResumo ? 'resumo' : null;
   const [subAba, setSubAba] = useState(primeiraDisponivel);
+  // Atalho do alerta de DCTF/DAS do Centro de Custo: abre Pagamentos já em "Cadastrar", no mês pendente.
+  const { setMes: setMesApuracao } = useApuracao();
+  const [abaGastosInicial, setAbaGastosInicial] = useState('resumo');
+  function irParaCadastrar(mes) {
+    if (mes) setMesApuracao(mes);
+    setAbaGastosInicial('dados');
+    setSubAba('gastos');
+  }
 
 
 
@@ -132,7 +141,7 @@ export default function Financeiro() {
           </button>
         )}
         {mostrarGastos && (
-          <button className={subAba === 'gastos' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setSubAba('gastos')}>
+          <button className={subAba === 'gastos' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => { setAbaGastosInicial('resumo'); setSubAba('gastos'); }}>
             💸 Pagamentos
           </button>
         )}
@@ -160,9 +169,9 @@ export default function Financeiro() {
       )}
       {subAba === 'pagamentos' && mostrarPagamentos && <PagamentosAntecipados />}
       {subAba === 'gastos' && mostrarGastos && (
-        <GastosCustos renderLancamentos={(mesLancamentos) => <Gastos mesExterno={mesLancamentos} />} />
+        <GastosCustos abaInicial={abaGastosInicial} renderLancamentos={(mesLancamentos) => <Gastos mesExterno={mesLancamentos} />} />
       )}
-      {subAba === 'centrocusto' && mostrarCentroCusto && <CentroCusto />}
+      {subAba === 'centrocusto' && mostrarCentroCusto && <CentroCusto onIrParaCadastrar={mostrarGastos ? irParaCadastrar : null} />}
       {subAba === 'resumo' && mostrarResumo && <Resumo />}
     </div>
   );

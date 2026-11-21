@@ -5,6 +5,7 @@ const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar, registrarSnapshot } = require('../utils/auditoria');
 const { condicaoVisivelNoMes } = require('../utils/colaboradoresMes');
 const { calcularCustosMes, montarResumo, arredondar } = require('../utils/gastosCustos');
+const { obterConfigAdmissao, gerarCustosAsoPendentes, sincronizarObrasAsoPeriodico } = require('../utils/asoCusto');
 
 const router = express.Router();
 
@@ -37,9 +38,9 @@ router.get('/detalhado', async (req, res) => {
   const { colaboradores } = await calcularCustosMes(mes);
 
   const totais = colaboradores.reduce((acc, c) => {
-    for (const k of ['va', 'vt', 'extras', 'epi', 'admissao', 'holerite_custo', 'total']) acc[k] = arredondar(acc[k] + c[k]);
+    for (const k of ['va', 'vt', 'extras', 'epi', 'admissao', 'aso_periodico', 'holerite_custo', 'total']) acc[k] = arredondar(acc[k] + c[k]);
     return acc;
-  }, { va: 0, vt: 0, extras: 0, epi: 0, admissao: 0, holerite_custo: 0, total: 0 });
+  }, { va: 0, vt: 0, extras: 0, epi: 0, admissao: 0, aso_periodico: 0, holerite_custo: 0, total: 0 });
 
   res.json({ mes, itens: colaboradores, totais });
 });
@@ -222,7 +223,38 @@ router.put('/rateio', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
   await registrar(req.usuario.id, 'AJUSTAR_RATEIO', 'gastos_rateio_mensal', pessoa.id, {
     mes_referencia, antes: anteriores, depois: limpos
   });
+  await sincronizarObrasAsoPeriodico(db, mes_referencia);
   res.json({ ok: true });
+});
+
+// ---- Custos de admissão: valores e data de corte --------------------------------------------
+//
+// Uma linha única (config_custos_admissao). Só admissões e exames a partir de `data_inicio_vigencia`
+// geram custo automático. Alterar os valores muda o cálculo de admissão de todos os meses (o
+// valor do ASO periódico, esse, fica gravado no momento em que a renovação é registrada).
+router.get('/config-admissao', async (req, res) => {
+  res.json(await obterConfigAdmissao());
+});
+
+router.put('/config-admissao', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
+  const atual = await obterConfigAdmissao();
+  const valorAso = req.body.valor_aso === undefined ? atual.valor_aso : Number(req.body.valor_aso);
+  const valorTreinamento = req.body.valor_treinamento === undefined ? atual.valor_treinamento : Number(req.body.valor_treinamento);
+  const vigencia = req.body.data_inicio_vigencia === undefined ? atual.data_inicio_vigencia : String(req.body.data_inicio_vigencia);
+  if (!Number.isFinite(valorAso) || valorAso < 0 || !Number.isFinite(valorTreinamento) || valorTreinamento < 0) {
+    return res.status(400).json({ erro: 'Informe valores iguais ou maiores que zero.' });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(vigencia) || Number.isNaN(Date.parse(vigencia))) {
+    return res.status(400).json({ erro: 'Informe uma data de vigência válida.' });
+  }
+  await db.run(
+    'UPDATE config_custos_admissao SET valor_aso = ?, valor_treinamento = ?, data_inicio_vigencia = ?, atualizado_por = ?, atualizado_em = NOW() WHERE id = 1',
+    arredondar(valorAso), arredondar(valorTreinamento), vigencia, req.usuario.id
+  );
+  // Data de corte mais antiga: renovações de ASO já registradas desde ela passam a ter custo.
+  const asoGerados = await gerarCustosAsoPendentes();
+  await registrar(req.usuario.id, 'EDITAR', 'config_custos_admissao', 1, { antes: atual, depois: { valor_aso: valorAso, valor_treinamento: valorTreinamento, data_inicio_vigencia: vigencia } });
+  res.json({ ok: true, aso_gerados: asoGerados });
 });
 
 // ---- Importações (lotes) -------------------------------------------------------------------

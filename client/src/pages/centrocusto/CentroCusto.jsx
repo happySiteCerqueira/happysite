@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../../api/api';
 import { useApuracao } from '../../context/ApuracaoContext';
 import AvisosCentroCusto from './AvisosCentroCusto';
+import PendenciaImpostos from './PendenciaImpostos';
 import NivelResumo from './NivelResumo';
 import NivelTopicos from './NivelTopicos';
 import NivelDetalhado from './NivelDetalhado';
@@ -36,7 +37,7 @@ function lerPreferencia(chave, padrao) {
   try { return localStorage.getItem(chave) ?? padrao; } catch { return padrao; }
 }
 
-export default function CentroCusto() {
+export default function CentroCusto({ onIrParaCadastrar = null }) {
   const { mes: mesApuracao } = useApuracao();
   // Por padrão mostra o MÊS DE APURAÇÃO (seletor global do topo). 'tudo' = todo o histórico;
   // 'intervalo' = outro mês ou período.
@@ -239,6 +240,7 @@ export default function CentroCusto() {
 
       {!carregando && dados && (
         <>
+          <PendenciaImpostos pendencias={dados.impostos_pendentes || []} onIrParaCadastrar={onIrParaCadastrar} />
           <AvisosCentroCusto avisos={dados.avisos} />
           {escopo === 'obra' && !obraAtual ? (
             <div className="card" style={{ fontSize: 13, color: '#6b7280' }}>Escolha uma obra acima.</div>

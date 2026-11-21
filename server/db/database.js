@@ -517,6 +517,57 @@ async function migrate() {
     );
   `);
 
+  // ---------------------------------------------------------------------------------------
+  // v2.134 — Custos de admissão configuráveis e ASO periódico (renovação). Tudo aditivo.
+  //
+  // config_custos_admissao: UMA linha (id = 1) com o valor do ASO, o do treinamento e a data de
+  //   corte (data_inicio_vigencia): só admissões a partir dela geram custo automático — as
+  //   anteriores à implantação da regra ficam de fora, em qualquer tela.
+  // custos_aso_periodico: um custo por renovação de ASO registrada no módulo ASO (aso_historico).
+  //   Competência = mês do exame; obra = obra principal do colaborador naquele mês (ponto) ou a do
+  //   cadastro. aso_registro_id NÃO tem FK de propósito: ao estornar a renovação o custo é marcado
+  //   excluido = 1 (nunca apagado) e o índice único parcial libera o registro.
+  // ---------------------------------------------------------------------------------------
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS config_custos_admissao (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      valor_aso DOUBLE PRECISION NOT NULL DEFAULT 75,
+      valor_treinamento DOUBLE PRECISION NOT NULL DEFAULT 150,
+      data_inicio_vigencia DATE NOT NULL DEFAULT '2026-10-01',
+      atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+      atualizado_em TIMESTAMP DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS custos_aso_periodico (
+      id SERIAL PRIMARY KEY,
+      colaborador_id INTEGER NOT NULL REFERENCES colaboradores(id) ON DELETE CASCADE,
+      aso_registro_id INTEGER NOT NULL,
+      mes_ciclo TEXT NOT NULL,
+      data_realizacao DATE NOT NULL,
+      obra_id INTEGER REFERENCES obras(id) ON DELETE SET NULL,
+      valor DOUBLE PRECISION NOT NULL DEFAULT 0,
+      excluido INTEGER NOT NULL DEFAULT 0,
+      criado_em TIMESTAMP DEFAULT NOW()
+    );
+  `);
+  if (!(await colunaExiste('config_custos_admissao', 'data_inicio_vigencia'))) {
+    await pool.query("ALTER TABLE config_custos_admissao ADD COLUMN data_inicio_vigencia DATE NOT NULL DEFAULT '2026-10-01'");
+  }
+  await pool.query('INSERT INTO config_custos_admissao (id) VALUES (1) ON CONFLICT (id) DO NOTHING');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS ux_custos_aso_registro_ativo ON custos_aso_periodico (aso_registro_id) WHERE excluido = 0');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_custos_aso_mes ON custos_aso_periodico (mes_ciclo) WHERE excluido = 0');
+  // Renovações já registradas desde a data de corte e ainda sem custo (obra inicial = a do
+  // cadastro; o motor a resolve pelo ponto do mês e utils/asoCusto.js a mantém sincronizada).
+  await pool.query(`
+    INSERT INTO custos_aso_periodico (colaborador_id, aso_registro_id, mes_ciclo, data_realizacao, obra_id, valor)
+    SELECT h.colaborador_id, h.id, to_char(h.data_aso, 'YYYY-MM'), h.data_aso, c.obra_id, cfg.valor_aso
+    FROM aso_historico h
+    JOIN colaboradores c ON c.id = h.colaborador_id AND c.tipo = 'CPF'
+    CROSS JOIN config_custos_admissao cfg
+    WHERE cfg.id = 1 AND h.data_aso >= cfg.data_inicio_vigencia
+      AND NOT EXISTS (SELECT 1 FROM custos_aso_periodico x WHERE x.aso_registro_id = h.id)
+  `);
+
   // Nova tabela: Agenda (compromissos/eventos do módulo Agenda). Cada linha é um compromisso com
   // data obrigatória, hora opcional (evento de "dia inteiro" quando nula), descrição livre e
   // vínculo opcional com uma obra (ON DELETE SET NULL: apagar a obra não apaga o compromisso,

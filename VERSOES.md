@@ -50,6 +50,22 @@ git checkout v2.111
 
 ## Versões
 
+### 2.134 — Vigência da admissão, ASO periódico, descontos discriminados e alerta de DCTF/DAS
+
+- **Data de corte da admissão**: novo card **🩺 Custos de Admissão** em **Pagamentos → Cadastrar** com **"Válido para
+  admissões a partir de:"** (padrão 01/10/2026), o valor do ASO e o do treinamento. Só admissões a partir dessa data
+  geram custo — no Centro de Custo (mês e "Todo o histórico") e em Resumo/Detalhado. Admissões antigas saem dos números.
+- **ASO periódico (renovação)**: cada renovação registrada no módulo **ASO** (CLT) gera o custo do ASO vigente, na
+  **competência do mês do exame**, **inteiro na obra atual** da pessoa (obra principal do ponto do mês; sem ponto, a do
+  cadastro). Se o ponto for importado/recalculado depois, a obra acompanha. Entra no bloco **Admissão & ASO** do Centro de
+  Custo (níveis 1–3: *"ASO Periódico — Renovação (Obra atual: …)"*) e em Pagamentos (coluna *ASO Periód.*). Novo botão **↩
+  Estornar** no histórico do ASO, que remove a renovação e marca o custo como excluído.
+- **Medição**: a coluna **Pagto. Antecipado** passa a mostrar a composição do desconto — *Holerite mensal, Férias, 13º
+  Salário, Vales/antecipados e Mês anterior* — sem mudar o líquido.
+- **Centro de Custo**: faixa de alerta quando **DCTF e/ou DAS** do período ainda não foram lançados (*"a margem exibida
+  é parcial"*), com atalho para **Pagamentos → Cadastrar** no mês pendente.
+- Tabelas novas: `config_custos_admissao` e `custos_aso_periodico` (registradas no backup).
+
 ### 2.133 — Centro administrativo CERQUEIRA e rateio no Centro de Custo
 
 - Nova **🏢 CERQUEIRA (Matriz / Adm)**: centro de custo da empresa (sócios, equipe administrativa e

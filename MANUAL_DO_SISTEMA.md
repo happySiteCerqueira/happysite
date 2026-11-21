@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.133** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.134** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -87,9 +87,14 @@ Consolida **tudo o que cada pessoa tem a receber no mês**:
 
 ```
 valor_bruto   = produção marcada nas obras + diárias
-valor_vale    = total dos pagamentos antecipados (vale, INSS, taxa, pagto, extras)
+valor_vale    = holerite mensal + férias + 13º salário + vales/antecipados + mês anterior
 valor_liquido = valor_bruto − valor_vale
 ```
+
+Na coluna **Pagto. Antecipado** o total descontado vem **discriminado em sub-linhas** (e no tooltip ao passar o
+mouse): **Holerite mensal** (Vale + INSS + Taxa + Pagto), **Férias**, **13º Salário**, **Vales / antecipados**
+(Vale Extra + Vale Ex RH + Adiantamento) e **Mês anterior** (saldo negativo do mês passado). Só aparecem as
+parcelas diferentes de zero; a soma delas é exatamente o valor descontado no líquido.
 
 > O líquido **pode ficar negativo** — significa que a pessoa adiantou mais do que produziu.
 
@@ -165,12 +170,23 @@ Custo de holerite rateado = máx(H − P, 0)       (os três somados, nunca aval
 - Produziu 8 mil e recebeu 2,7 mil (salário) + 2,3 mil (férias) + 0,5 mil (13º) → H = 5,5 mil; a
   **Medição desconta 5,5 mil** (sobram 2,5 mil a pagar) e o Centro de Custo **não lança excedente**.
 - Vale Extra, Vale Ex RH e Adiantamento **não** entram no H: são descontos da Medição.
-- **Admissão (ASO R$ 75 + Treinamento R$ 150 = R$ 225)**: automática, no mês da **data de admissão** do
-  cadastro. **Nasce na obra do cadastro** e, quando o **ponto** (ou o rateio manual) do mês mostra que
-  a pessoa trabalhou principalmente em **outra obra**, os R$ 225 são **transferidos inteiros** para a obra
-  principal do mês (a de maior %; em empate, a do cadastro) — nunca são divididos. Sem ponto, fica na obra do
+- **Admissão (ASO + Treinamento)**: automática, no mês da **data de admissão** do cadastro, **só para
+  admissões a partir da data de vigência** (padrão **01/10/2026**; as anteriores à implantação da regra ficam de
+  fora em todas as telas). Valores (padrão ASO R$ 75 + Treinamento R$ 150 = R$ 225) e a data de vigência
+  são editados no card **🩺 Custos de Admissão** em **Pagamentos → Cadastrar** ("Válido para admissões a
+  partir de:"; ADM/Financeiro). **Nasce na obra do cadastro** e, quando o **ponto** (ou o rateio manual) do mês
+  mostra que a pessoa trabalhou principalmente em **outra obra**, o custo é **transferido inteiro** para a obra
+  principal do mês (a de maior %; em empate, a do cadastro) — nunca é dividido. Sem ponto, fica na obra do
   cadastro; sem obra, cai em "Sem obra definida" com aviso. A regra aplicada aparece no Centro de Custo
   ("Direto na obra do cadastro" ou "Transferido via Ponto").
+- **ASO Periódico (Renovação)**: cada **renovação** registrada em **ASO** (CLT) gera o custo do ASO vigente
+  (valor gravado no momento do registro), na **competência do mês do exame**, **inteiro na obra atual** da pessoa
+  naquele mês (obra principal do ponto/rateio manual; sem ponto, a do cadastro; sem obra, "Sem obra definida").
+  Se o ponto do mês for importado ou recalculado depois, a obra acompanha. Aparece junto da admissão, no bloco
+  **Admissão & ASO** (Resumo e Detalhado de Pagamentos: coluna *ASO Periód.*; Centro de Custo níveis 1 a 3, como
+  *"ASO Periódico — Renovação (Obra atual: …)"*). O **1º ASO** (admissional) não gera esse custo (já está no custo de
+  admissão), nem renovações anteriores à data de vigência. **Estornar** uma renovação (ASO → Histórico → ↩ Estornar;
+  ADM/RH) a remove do histórico e marca o custo como excluído.
 - **Gastos diretos por obra** (formulário ➕ Lançar gasto): tipos **Café**, **Ferramentas**, **VA**,
   **Vale Transporte** e **Outros** (texto livre). Vão 100% para a obra escolhida. Ferramentas tem coluna
   própria no Resumo e bloco próprio no Centro de Custo.
@@ -243,6 +259,11 @@ navegador):
 
 **Critério de rateio** (seletor ao lado do quadro; padrão **Híbrido 50/50**):
 
+**⚠️ Alerta de pendência de impostos:** quando, num mês do período (a partir de out/2026, até o mês corrente),
+o **DCTF** e/ou o **DAS** ainda não foram lançados (Pagamentos → Cadastrar → Impostos do mês), aparece no topo do
+Centro de Custo a faixa *"Pendência no mês: DCTF e/ou DAS ainda não foram lançados — a margem exibida é parcial"*,
+com o botão **Lançar em Pagamentos → Cadastrar** (abre a aba já no mês pendente). O "Todo o histórico" não gera alerta.
+
 | Critério | Como divide |
 |---|---|
 | **Híbrido 50/50 (Custo + Receita)** | 50% pelo **Custo Direto Operacional** da obra no mês + 50% pela **Receita Líquida** da obra no mês |
@@ -281,7 +302,7 @@ por último, semelhança ≥ 92%.
 |---|---|
 | **📇 Prestadores** | Lista de colaboradores e PJ, com histórico e edição do cadastro |
 | **🦺 EPI** | Estoque e entrega de equipamentos, com termo assinado. Cada item tem **valor unitário**; cada retirada vira custo do colaborador (competência = mês da data da retirada), rateado entre as obras como VA/VT. A retirada guarda o valor da época; retiradas antigas sem valor usam o valor atual do item |
-| **🩺 ASO** | Controle de exames ocupacionais e vencimentos |
+| **🩺 ASO** | Controle de exames ocupacionais e vencimentos. Cada **renovação** gera o custo de **ASO Periódico** (ver Pagamentos); **↩ Estornar** no histórico remove a renovação e o custo |
 | **🗓️ Agenda** | Compromissos com lembretes por notificação push |
 | **⚠️ Advertência** | Emissão de termos com assinatura digital |
 | **🔍 Auditoria** | Trilha de tudo que foi alterado (só ADM) |
@@ -380,6 +401,8 @@ PostgreSQL 16. Nomes de tabelas e colunas **em português**.
 | `gastos_extras` | — | Extras manuais por colaborador/mês (exclusão lógica) |
 | `holerite_complementar` | `(colaborador_id, mes_ciclo, tipo)` | Holerite de `FERIAS` e `DECIMO_TERCEIRO` (vale, fgts = INSS, taxa, pagto); à parte do salário |
 | `gastos_impostos` | `(mes_referencia, tipo)` quando não excluído | DCTF/DAS do mês (valor total; o rateio é calculado) |
+| `config_custos_admissao` | linha única (`id = 1`) | Valor do ASO, valor do treinamento e `data_inicio_vigencia` (corte das admissões que geram custo; padrão 2026-10-01) |
+| `custos_aso_periodico` | `aso_registro_id` único quando `excluido = 0` | Custo de cada renovação de ASO (valor, competência = mês do exame, `obra_id` da obra atual). Sem FK para `aso_historico`: o estorno marca `excluido = 1` |
 | `colaborador_aliases` / `obra_enderecos_alias` | — | De-Para persistente de nomes e de ruas |
 | `perfil_permissoes` | `(perfil, modulo)` | O que cada perfil acessa |
 | `auditoria` | — | Trilha de alterações (`entidade`, `entidade_id`, `acao`, `detalhes`) |

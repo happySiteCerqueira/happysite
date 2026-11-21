@@ -12,6 +12,7 @@ const CATEGORIAS = [
   { chave: 'extras', rotulo: 'Extras' },
   { chave: 'epi', rotulo: 'EPI' },
   { chave: 'admissao', rotulo: 'Admissão' },
+  { chave: 'aso_periodico', rotulo: 'ASO Periódico' },
   { chave: 'holerite', rotulo: 'Holerite/Salário' },
   { chave: 'dctf', rotulo: 'DCTF' },
   { chave: 'das', rotulo: 'DAS' }

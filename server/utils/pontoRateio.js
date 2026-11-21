@@ -2,6 +2,7 @@
 const db = require('../db/database');
 const { resolverColaboradores, resolverRuas } = require('./gastosImportacao');
 const { calcularDiasPorObra, percentuaisDeDias } = require('./parserPonto');
+const { sincronizarObrasAsoPeriodico } = require('./asoCusto');
 
 const arredondar2 = v => Math.round((Number(v) || 0) * 100) / 100;
 
@@ -121,6 +122,8 @@ async function gravarRateio(trx, mes, linhas, usuarioId) {
   await inserirEmLotes(trx, 'gastos_rateio_mensal',
     ['colaborador_id', 'mes_referencia', 'obra_id', 'dias', 'percentual', 'origem', 'atualizado_por'],
     linhas.map(l => [l.colaborador_id, mes, l.obra_id, l.dias, l.percentual, 'PONTO', usuarioId]));
+  // A obra principal de quem fez ASO no mês pode ter mudado com o novo ponto.
+  await sincronizarObrasAsoPeriodico(trx, mes);
 }
 
 async function gravarPonto(trx, lote, visao, usuarioId) {

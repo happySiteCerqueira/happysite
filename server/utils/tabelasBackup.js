@@ -21,6 +21,8 @@ const TABELAS_BACKUP = [
   'holerite_complementar', 'gastos_impostos',
   'epi_itens', 'epi_retiradas', 'epi_retirada_itens', 'epi_movimentos',
   'aso_historico',
+  // Custo de admissão configurável (corte de vigência) e custos de ASO periódico (renovação).
+  'config_custos_admissao', 'custos_aso_periodico',
   'advertencia_modelos', 'advertencias',
   'agenda_eventos', 'agenda_evento_usuarios', 'agenda_evento_perfis', 'agenda_lembretes',
   'perfil_permissoes', 'auditoria'

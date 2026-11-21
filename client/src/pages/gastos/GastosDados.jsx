@@ -6,6 +6,7 @@ import PainelPrevia, { BlocoPendencias } from './PainelPrevia';
 import EditorCaju from './EditorCaju';
 import Conciliacao from '../Conciliacao';
 import ImpostosCard from './ImpostosCard';
+import CustosAdmissaoCard from './CustosAdmissaoCard';
 import { useAuth } from '../../context/AuthContext';
 
 // Aba Dados: porta de entrada dos PDFs. Cada card tem a PRÓPRIA competência de referência,
@@ -100,6 +101,7 @@ export default function GastosDados({ mesGlobal, renderLancamentos }) {
           </div>
         )}
         <ImpostosCard mesGlobal={mesGlobal} />
+        <CustosAdmissaoCard />
       </div>
 
       {holeriteAberto && podeImportarHolerite && (

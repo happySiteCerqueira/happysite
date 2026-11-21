@@ -131,7 +131,7 @@ const CATEGORIAS_SAIDA = [
   { chave: 'VT', rotulo: 'VT (Vale Transporte)' },
   { chave: 'EXTRAS', rotulo: 'Extras' },
   { chave: 'EPI', rotulo: 'EPI' },
-  { chave: 'ADMISSAO', rotulo: 'Admissão (ASO + Treinamento)' },
+  { chave: 'ADMISSAO', rotulo: 'Admissão & ASO' },
   { chave: 'DCTF', rotulo: 'DCTF' },
   { chave: 'DAS', rotulo: 'DAS' },
   { chave: 'FERRAMENTAS', rotulo: 'Ferramentas' },
@@ -283,8 +283,10 @@ async function mesesDoPeriodo(mesInicio, mesFim) {
     `SELECT DISTINCT m FROM (
        SELECT mes_ciclo AS m FROM pagamentos_antecipados WHERE (vale + fgts + taxa + pagto) <> 0
        UNION SELECT mes_ciclo FROM holerite_complementar
+       UNION SELECT mes_ciclo FROM custos_aso_periodico WHERE excluido = 0
        UNION SELECT mes_referencia FROM gastos_impostos WHERE excluido = 0
-       UNION SELECT to_char(data_admissao, 'YYYY-MM') FROM colaboradores WHERE data_admissao IS NOT NULL
+       UNION SELECT to_char(data_admissao, 'YYYY-MM') FROM colaboradores
+         WHERE data_admissao >= (SELECT data_inicio_vigencia FROM config_custos_admissao WHERE id = 1)
        UNION SELECT mes_referencia FROM gastos_colaborador_itens
        UNION SELECT mes_referencia FROM gastos_extras WHERE excluido = 0
      ) t WHERE 1 = 1${filtro} ORDER BY m`, ...params
@@ -302,7 +304,7 @@ async function buscarCustosColaboradores(mesInicio, mesFim) {
     // Custos que pertencem à obra e não à pessoa: admissão (ASO + Treinamento, na obra do
     // cadastro), DCTF e DAS (rateados). Entram junto dos benefícios, por obra e tipo.
     for (const o of porObra.values()) {
-      for (const [campo, rotulo, categoria] of [['admissao', 'Admissão (ASO + Treinamento)', 'ADMISSAO'], ['dctf', 'DCTF', 'DCTF'], ['das', 'DAS', 'DAS']]) {
+      for (const [campo, rotulo, categoria] of [['admissao', 'Admissão (ASO + Treinamento)', 'ADMISSAO'], ['aso_periodico', 'ASO Periódico (Renovação)', 'ADMISSAO'], ['dctf', 'DCTF', 'DCTF'], ['das', 'DAS', 'DAS']]) {
         if (!o[campo]) continue;
         const chave = `${o.obra_id || 0}|${rotulo}`;
         if (!beneficios.has(chave)) {
@@ -478,6 +480,29 @@ function montarResposta(mapa, periodo, diariasSemObra) {
       })()
     }
   };
+}
+
+// Meses do período em que DCTF e/ou DAS ainda não foram lançados (Financeiro → Pagamentos →
+// Cadastrar → Impostos do mês). Sem esses valores a margem do período é parcial, e a tela avisa.
+// Só olha períodos com mês definido (o "Todo o histórico" não cobra meses antigos), a partir de
+// MES_INICIO_ALERTA_IMPOSTOS (antes disso os impostos nunca foram lançados no sistema) e até o
+// mês corrente (mês futuro não tem o que cobrar).
+const MES_INICIO_ALERTA_IMPOSTOS = '2026-10';
+
+async function buscarPendenciasImpostos(mesInicio, mesFim) {
+  if (!mesInicio || !mesFim) return [];
+  const hoje = new Date();
+  const atual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  const meses = (await mesesDoPeriodo(mesInicio, mesFim)).filter(m => m >= MES_INICIO_ALERTA_IMPOSTOS && m <= atual);
+  if (meses.length === 0) return [];
+  const lancados = await db.all(
+    `SELECT mes_referencia, tipo FROM gastos_impostos
+     WHERE excluido = 0 AND valor > 0 AND mes_referencia >= ? AND mes_referencia <= ?`, meses[0], meses[meses.length - 1]
+  );
+  const ok = new Set(lancados.map(l => `${l.mes_referencia}|${l.tipo}`));
+  return meses
+    .map(mes => ({ mes, falta: ['DCTF', 'DAS'].filter(t => !ok.has(`${mes}|${t}`)) }))
+    .filter(p => p.falta.length > 0);
 }
 
 // Relatório de saúde financeira por obra: cruza as entradas (Receita) com o custo de mão de
@@ -680,6 +705,7 @@ router.get('/saude-obras', async (req, res) => {
   }
 
   const resposta = montarResposta(mapa, { data_inicio, data_fim }, diariasSemObra);
+  resposta.impostos_pendentes = await buscarPendenciasImpostos(mes_inicio, mes_fim);
   resposta.categorias = categoriasSaida(incluirCerqueira);
   resposta.cerqueira = {
     disponivel: !!cerq.matriz,
@@ -822,7 +848,7 @@ async function buscarLinhasDetalhadas(params) {
   // ---- Custos por colaborador, admissão e impostos: vêm da engine, mês a mês ----
   const rotuloImposto = { dctf: 'DCTF', das: 'DAS' };
   for (const mes of await mesesDoPeriodo(mes_inicio, mes_fim)) {
-    const { colaboradores, impostosPartes } = await calcularCustosMes(mes);
+    const { colaboradores, impostosPartes, configAdmissao } = await calcularCustosMes(mes);
 
     for (const c of colaboradores) {
       for (const d of c.distribuicao) {
@@ -852,9 +878,20 @@ async function buscarLinhasDetalhadas(params) {
           tipo: 'SAIDA', categoria: 'ADMISSAO', categoria_rotulo: rotuloCategoria.ADMISSAO,
           obra_chave: chaveDaObra(c.admissao_obra, c.admissao_obra_id), obra: c.admissao_obra_id ? c.admissao_obra : 'Sem obra definida',
           competencia: mes, data: null, colaborador: c.nome, item: 'Admissão',
-          descricao: 'ASO R$ 75,00 + Treinamento R$ 150,00',
+          descricao: `ASO ${fmtMoeda(configAdmissao.valor_aso)} + Treinamento ${fmtMoeda(configAdmissao.valor_treinamento)}`,
           regra: c.admissao_via === 'CADASTRO' ? 'Direto na obra do cadastro' : (c.admissao_via === 'MANUAL' ? 'Transferido via rateio manual' : 'Transferido via Ponto'),
           valor: c.admissao
+        });
+      }
+      if (c.aso_periodico > 0) {
+        const obraAso = c.aso_periodico_obra_id ? c.aso_periodico_obra : 'Sem obra definida';
+        add({
+          tipo: 'SAIDA', categoria: 'ADMISSAO', categoria_rotulo: rotuloCategoria.ADMISSAO,
+          obra_chave: chaveDaObra(c.aso_periodico_obra, c.aso_periodico_obra_id), obra: obraAso,
+          competencia: mes, data: null, colaborador: c.nome, item: 'ASO Periódico (Renovação)',
+          descricao: `ASO Periódico — Renovação (Obra atual: ${obraAso})`,
+          regra: c.aso_periodico_via === 'CADASTRO' ? 'Direto na obra atual do cadastro' : 'Obra principal do mês via Ponto',
+          valor: c.aso_periodico
         });
       }
     }

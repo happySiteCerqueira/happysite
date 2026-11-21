@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../api/api';
 
 // Formata uma data (Date, string ISO ou 'YYYY-MM-DD') como dd/mm/aaaa, ignorando timezone
@@ -184,6 +184,12 @@ function ModalRenovarAso({ colaborador, onFechar, onRenovado }) {
             um novo exame agora conta como <strong>ASO antecipado</strong> e passa a ser a nova referência de vencimento.
           </p>
         )}
+        {!colaborador.sem_aso && (
+          <p style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', padding: 8, borderRadius: 6, marginTop: 0, marginBottom: 12 }}>
+            🩺 A renovação gera o <strong>custo de ASO periódico</strong> (valor do ASO configurado em Financeiro → Pagamentos →
+            Cadastrar), na competência do mês do exame e na obra atual do colaborador.
+          </p>
+        )}
         {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
         <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
@@ -219,7 +225,7 @@ function AbaHistorico() {
     api.get('/aso/vencimentos').then(res => setColaboradores(res.data));
   }, []);
 
-  useEffect(() => {
+  const carregarHistorico = useCallback(() => {
     if (!colaboradorId) { setDados(null); return; }
     setCarregando(true);
     setErro('');
@@ -228,6 +234,20 @@ function AbaHistorico() {
       .catch(() => setErro('Erro ao carregar histórico'))
       .finally(() => setCarregando(false));
   }, [colaboradorId]);
+
+  useEffect(() => { carregarHistorico(); }, [carregarHistorico]);
+
+  // Estorno de uma renovação lançada por engano: o vencimento volta a contar do exame anterior e o
+  // custo de ASO periódico gerado por ela é excluído do Centro de Custo.
+  async function estornar(h) {
+    if (!window.confirm(`Estornar a renovação de ${formatarData(h.data_aso)}? O custo de ASO periódico dela também será removido.`)) return;
+    try {
+      await api.delete(`/aso/renovacoes/${h.id}`);
+      carregarHistorico();
+    } catch (err) {
+      alert(err.response?.data?.erro || 'Não foi possível estornar a renovação.');
+    }
+  }
 
   return (
     <div className="card">
@@ -263,6 +283,7 @@ function AbaHistorico() {
                     <th>Vencimento</th>
                     <th>Status</th>
                     <th>Registrado por</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -296,6 +317,12 @@ function AbaHistorico() {
                           )}
                         </td>
                         <td style={{ color: '#6b7280' }}>{h.criado_por_nome || '-'}</td>
+                        <td>
+                          {h.tipo === 'RENOVACAO' && h.id && (
+                            <button className="btn-secondary btn-sm" title="Estornar esta renovação (também remove o custo de ASO periódico dela)"
+                              onClick={() => estornar(h)}>↩ Estornar</button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

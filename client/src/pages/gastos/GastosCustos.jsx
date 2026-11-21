@@ -18,9 +18,9 @@ const SUBABAS = [
   { chave: 'detalhado', rotulo: '👷 Detalhado' }
 ];
 
-export default function GastosCustos({ renderLancamentos }) {
+export default function GastosCustos({ renderLancamentos, abaInicial = 'resumo' }) {
   const { mes, setMes } = useApuracao();
-  const [aba, setAba] = useState('resumo');
+  const [aba, setAba] = useState(abaInicial);
 
   return (
     <div>

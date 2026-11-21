@@ -11,6 +11,38 @@ function formatarValorBR(valor) {
   return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Composição do desconto ("Pagto. Antecipado") de uma pessoa, para a conferência com ela ficar
+// transparente. O total descontado é a soma de tudo isto: Holerite mensal + Férias + 13º salário
+// + Vales/antecipados + saldo negativo do mês anterior. Só entram as parcelas diferentes de zero.
+function composicaoDescontos(dp) {
+  if (!dp) return [];
+  const n = v => Number(v) || 0;
+  const linhas = [
+    { rotulo: 'Holerite mensal (Vale + INSS + Taxa + Pagto)', curto: 'Holerite mensal', valor: n(dp.vale) + n(dp.fgts) + n(dp.taxa) + n(dp.pagto) },
+    { rotulo: 'Férias', curto: 'Férias', valor: n(dp.ferias) },
+    { rotulo: '13º Salário', curto: '13º Salário', valor: n(dp.decimo_terceiro) },
+    { rotulo: 'Vales / antecipados (Vale Extra + Vale Ex RH + Adiantamento)', curto: 'Vales / antecipados', valor: n(dp.vale_extra) + n(dp.vale_ex_rh) + n(dp.adiantamento) },
+    { rotulo: 'Mês anterior (saldo negativo da Medição passada)', curto: 'Mês anterior', valor: n(dp.mes_anterior) }
+  ];
+  return linhas.filter(l => Math.abs(l.valor) > 0.004);
+}
+
+function ComposicaoDescontos({ detalhe }) {
+  const linhas = composicaoDescontos(detalhe);
+  // Mostra cada parcela do desconto (mesmo quando há só uma, para o tipo de desconto ficar claro).
+  if (linhas.length === 0) return null;
+  return (
+    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4, lineHeight: 1.5 }}>
+      {linhas.map(l => (
+        <div key={l.curto} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, whiteSpace: 'nowrap' }}>
+          <span>{l.curto}</span>
+          <span style={{ color: l.valor < 0 ? '#16a34a' : '#374151' }}>R$ {formatarValorBR(l.valor)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Medicao() {
   const { usuario, temAcessoSubaba } = useAuth();
   // O relatório Produção x Pagamentos veio de Financeiro. Continua com a mesma permissão
@@ -197,7 +229,11 @@ function MedicaoMensal() {
                   </td>
                   <td>{item.tipo}</td>
                   <td>R$ {formatarValorBR(item.valor_bruto)}</td>
-                  <td>R$ {formatarValorBR(item.valor_vale)}</td>
+                  <td title={composicaoDescontos(item.detalhe_pagamento).map(l => `${l.rotulo}: R$ ${formatarValorBR(l.valor)}`).join('\n')}>
+                    R$ {formatarValorBR(item.valor_vale)}
+                    {/* Composição do desconto: quanto é holerite mensal, férias, 13º, vales e saldo do mês anterior. */}
+                    <ComposicaoDescontos detalhe={item.detalhe_pagamento} />
+                  </td>
                   <td><strong>R$ {formatarValorBR(item.valor_liquido)}</strong></td>
                   <td><span className={`badge badge-${item.status.toLowerCase()}`}>{item.status}</span></td>
                   <td>

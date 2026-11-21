@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.133**
+> **Versão do sistema: 2.134**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.133** (tag `v2.133`) |
+| **Versão atual** | **2.134** (tag `v2.134`) |
 
 ### Stack
 
@@ -345,6 +345,18 @@ fonte única do `/relatorios/saude-obras` e do `/relatorios/centro-custo/linhas`
 dos mesmos itens, para os totais baterem. O critério não é gravado no banco (vem na requisição e fica no
 `localStorage` do navegador).
 
+### 5.19 Custo de admissão configurável e ASO periódico
+`utils/asoCusto.js` concentra a regra: `obterConfigAdmissao()` (tabela de linha única
+`config_custos_admissao`: valores + `data_inicio_vigencia`), `gerarCustoAsoPeriodico()` (chamado por
+`POST /aso/:id/renovar`, dentro da mesma transação da renovação), `estornarCustoAso()` (`DELETE
+/aso/renovacoes/:id`, marca `excluido = 1`) e `sincronizarObrasAsoPeriodico()` (chamado ao gravar o rateio do
+ponto e ao ajustar o rateio manual). O motor (`utils/gastosCustos.js`) filtra admissões **e** exames por
+`data >= data_inicio_vigencia` e resolve a obra do ASO na hora do cálculo (mesma regra `destinoAdmissao`);
+`custos_aso_periodico.obra_id` é só registro. Mudar os valores recalcula a admissão de todos os meses (o ASO periódico
+guarda o valor da época). A migração de `database.js` cria os custos das renovações já registradas desde a
+vigência. O alerta de DCTF/DAS é `buscarPendenciasImpostos` em `routes/relatorios.js` (campo
+`impostos_pendentes` de `/saude-obras`; consulta `gastos_impostos`).
+
 ---
 
 ## 6. FLUXO DE TRABALHO — siga na ordem
@@ -519,7 +531,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.133).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.134).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -550,7 +562,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.133** |
+| Versão | **2.134** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |

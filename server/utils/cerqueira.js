@@ -83,8 +83,10 @@ async function mesesDaMatriz(mesInicio, mesFim) {
     `SELECT DISTINCT m FROM (
        SELECT mes_ciclo AS m FROM pagamentos_antecipados WHERE (vale + fgts + taxa + pagto) <> 0
        UNION SELECT mes_ciclo FROM holerite_complementar
+       UNION SELECT mes_ciclo FROM custos_aso_periodico WHERE excluido = 0
        UNION SELECT mes_referencia FROM gastos_impostos WHERE excluido = 0
-       UNION SELECT to_char(data_admissao, 'YYYY-MM') FROM colaboradores WHERE data_admissao IS NOT NULL
+       UNION SELECT to_char(data_admissao, 'YYYY-MM') FROM colaboradores
+         WHERE data_admissao >= (SELECT data_inicio_vigencia FROM config_custos_admissao WHERE id = 1)
        UNION SELECT mes_referencia FROM gastos_colaborador_itens
        UNION SELECT mes_referencia FROM gastos_extras WHERE excluido = 0
        UNION SELECT mes_ciclo FROM financeiro_gastos WHERE excluido = 0
@@ -142,9 +144,18 @@ function itensDaMatriz(mes, matriz, engine, gastos) {
       }
     }
     if (c.admissao > 0 && c.admissao_obra_id === matriz.id) {
+      const cfg = engine.configAdmissao;
       add({
-        origem: 'ADMISSAO', colaborador: c.nome, item: 'Admissão', descricao: 'ASO R$ 75,00 + Treinamento R$ 150,00',
+        origem: 'ADMISSAO', colaborador: c.nome, item: 'Admissão',
+        descricao: `ASO R$ ${fmtMoeda(cfg.valor_aso)} + Treinamento R$ ${fmtMoeda(cfg.valor_treinamento)}`,
         regra: c.admissao_via === 'CADASTRO' ? 'Direto na obra do cadastro' : 'Transferido via Ponto', valor: c.admissao
+      });
+    }
+    if (c.aso_periodico > 0 && c.aso_periodico_obra_id === matriz.id) {
+      add({
+        origem: 'ASO', colaborador: c.nome, item: 'ASO Periódico (Renovação)',
+        descricao: `ASO Periódico — Renovação (Obra atual: ${matriz.nome})`,
+        regra: c.aso_periodico_via === 'CADASTRO' ? 'Direto na obra atual do cadastro' : 'Obra principal do mês via Ponto', valor: c.aso_periodico
       });
     }
   }
@@ -186,7 +197,7 @@ async function basesDoMes(mes, obrasProducao, engine, gastos) {
   for (const p of producao) soma(p.obra_id, p.valor);
   for (const d of diarias) soma(d.obra_id, d.valor);
   for (const o of engine.porObra.values()) {
-    soma(o.obra_id, o.va + o.vt + o.extras + o.holerite + o.epi + o.admissao);
+    soma(o.obra_id, o.va + o.vt + o.extras + o.holerite + o.epi + o.admissao + o.aso_periodico);
   }
   for (const g of gastos) soma(g.obra_id, g.valor);
 
