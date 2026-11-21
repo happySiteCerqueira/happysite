@@ -65,7 +65,7 @@ export default function Usuarios() {
             <input value={novo.login} onChange={e => setNovo({ ...novo, login: e.target.value })} required />
           </div>
           <div className="flex-col gap-2">
-            <label>Senha provisória</label>
+            <label>Senha provisória (mín. 10, letras e números)</label>
             <input value={novo.senha} onChange={e => setNovo({ ...novo, senha: e.target.value })} required />
           </div>
           <div className="flex-col gap-2">

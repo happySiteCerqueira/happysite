@@ -27,6 +27,12 @@ services:
       DATABASE_URL: postgresql://happysite:${DB_PASSWORD}@db:5432/happysite
       DB_SSL: "false"
       PORT: 3001
+      # Obrigatório: segredo que assina os tokens de login (mínimo 32 caracteres). Gere com
+      # `openssl rand -base64 48` e guarde só no .env do servidor — NUNCA no repositório.
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env do servidor}
+      # Opcional: senha do usuario "admin" criado quando o banco esta vazio (senao e gerada
+      # uma senha aleatoria, exibida uma unica vez no log).
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
       # Opcional: credenciais da conta de serviço do Google (ver .env.example e DEPLOY_VPS.md)
       # para o backup automático diário também ser enviado à pasta "SISTEMA CERQUEIRA" no Drive.
       GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}

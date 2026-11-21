@@ -25,6 +25,10 @@ if (rotasFaltando.length > 0) {
   process.exit(1);
 }
 
+// O servidor roda atrás do Caddy (um único proxy): com isso req.ip é o IP real do cliente, usado
+// no bloqueio de tentativas de login e na auditoria.
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
@@ -36,10 +40,8 @@ app.get('/ping', (req, res) => {
 });
 
 
-// Arquivos de comprovantes (uploads)
-const comprovantesDir = path.join(__dirname, '..', 'data', 'comprovantes');
-if (!fs.existsSync(comprovantesDir)) fs.mkdirSync(comprovantesDir, { recursive: true });
-app.use('/comprovantes', express.static(comprovantesDir));
+// Os comprovantes de pagamento NÃO são servidos como arquivos públicos: são entregues apenas por
+// GET /api/medicoes/:id/comprovante (exige login + permissão de Medição).
 
 // Rotas da API
 app.use('/api/auth', require('./routes/auth'));

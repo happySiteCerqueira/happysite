@@ -1,22 +1,34 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db/database');
-const { gerarToken, autenticar } = require('../utils/auth');
+const { gerarToken, autenticar, invalidarCacheUsuario } = require('../utils/auth');
 const { registrar } = require('../utils/auditoria');
+const { validarSenha } = require('../utils/senha');
+const { barrarSeBloqueado, registrarFalha, registrarSucesso } = require('../utils/limiteTentativas');
 
 const router = express.Router();
 
+// Usado quando o login não existe, para o tempo de resposta ser parecido com o de uma senha
+// errada (não revela se o usuário existe).
+const HASH_FALSO = bcrypt.hashSync('senha-inexistente-' + Date.now(), 10);
+
 router.post('/login', async (req, res) => {
-  const { login, senha } = req.body;
-  if (!login || !senha) return res.status(400).json({ erro: 'Login e senha são obrigatórios' });
+  const { login, senha } = req.body || {};
+  if (!login || !senha || typeof login !== 'string' || typeof senha !== 'string') {
+    return res.status(400).json({ erro: 'Login e senha são obrigatórios' });
+  }
+  if (barrarSeBloqueado(req, res, login)) return;
 
-  // Login reconhecido sem diferenciar maiúsculas/minúsculas (ILIKE), mas a senha continua
-  // exigindo correspondência exata (comparada via bcrypt logo abaixo).
-  const usuario = await db.get('SELECT * FROM usuarios WHERE login ILIKE ? AND ativo = 1', login);
-  if (!usuario) return res.status(401).json({ erro: 'Usuário ou senha inválidos' });
-
-  const ok = bcrypt.compareSync(senha, usuario.senha_hash);
-  if (!ok) return res.status(401).json({ erro: 'Usuário ou senha inválidos' });
+  // Login reconhecido sem diferenciar maiúsculas/minúsculas (comparação exata em minúsculas, sem
+  // curingas), mas a senha continua exigindo correspondência exata (bcrypt logo abaixo).
+  const usuario = await db.get('SELECT * FROM usuarios WHERE LOWER(login) = LOWER(?) AND ativo = 1 ORDER BY id LIMIT 1', login);
+  const ok = bcrypt.compareSync(senha, usuario ? usuario.senha_hash : HASH_FALSO);
+  if (!usuario || !ok) {
+    registrarFalha(req.ip, login);
+    console.warn(`[auth] login recusado: "${login.slice(0, 40)}" ip=${req.ip}`);
+    return res.status(401).json({ erro: 'Usuário ou senha inválidos' });
+  }
+  registrarSucesso(req.ip, login);
 
   const token = gerarToken(usuario);
   await registrar(usuario.id, 'LOGIN', 'usuarios', usuario.id, {});
@@ -34,23 +46,37 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/trocar-senha', autenticar, async (req, res) => {
-  const { senha_atual, nova_senha } = req.body;
-  if (!nova_senha || nova_senha.length < 4) {
-    return res.status(400).json({ erro: 'Nova senha deve ter pelo menos 4 caracteres' });
-  }
+  const { senha_atual, nova_senha } = req.body || {};
   const usuario = await db.get('SELECT * FROM usuarios WHERE id = ?', req.usuario.id);
   if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado' });
 
+  const erroSenha = validarSenha(nova_senha, usuario.login);
+  if (erroSenha) return res.status(400).json({ erro: erroSenha });
+
+  const chaveTentativa = `troca:${usuario.id}`;
+  if (barrarSeBloqueado(req, res, chaveTentativa)) return;
+
   if (!usuario.precisa_trocar_senha) {
     if (!senha_atual || !bcrypt.compareSync(senha_atual, usuario.senha_hash)) {
+      registrarFalha(req.ip, chaveTentativa);
       return res.status(400).json({ erro: 'Senha atual incorreta' });
     }
   }
+  if (bcrypt.compareSync(nova_senha, usuario.senha_hash)) {
+    return res.status(400).json({ erro: 'A nova senha deve ser diferente da atual.' });
+  }
+  registrarSucesso(req.ip, chaveTentativa);
 
+  // Incrementar token_versao derruba as outras sessões abertas com a senha antiga; a sessão
+  // atual recebe um token novo para continuar logada.
   const hash = bcrypt.hashSync(nova_senha, 10);
-  await db.run('UPDATE usuarios SET senha_hash = ?, precisa_trocar_senha = 0 WHERE id = ?', hash, usuario.id);
+  await db.run(
+    'UPDATE usuarios SET senha_hash = ?, precisa_trocar_senha = 0, token_versao = token_versao + 1 WHERE id = ?',
+    hash, usuario.id
+  );
+  invalidarCacheUsuario(usuario.id);
   await registrar(usuario.id, 'TROCA_SENHA', 'usuarios', usuario.id, {});
-  res.json({ ok: true });
+  res.json({ ok: true, token: gerarToken({ ...usuario, token_versao: (usuario.token_versao || 0) + 1 }) });
 });
 
 router.get('/me', autenticar, async (req, res) => {

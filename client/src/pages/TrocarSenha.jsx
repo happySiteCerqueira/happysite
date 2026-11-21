@@ -20,10 +20,13 @@ export default function TrocarSenha() {
   async function handleSubmit(e) {
     e.preventDefault();
     setErro('');
-    if (novaSenha.length < 4) return setErro('A nova senha deve ter pelo menos 4 caracteres');
+    if (novaSenha.length < 10) return setErro('A nova senha deve ter pelo menos 10 caracteres');
+    if (!/[A-Za-z]/.test(novaSenha) || !/\d/.test(novaSenha)) return setErro('A nova senha deve ter letras e números');
     if (novaSenha !== confirmar) return setErro('As senhas não coincidem');
     try {
-      await api.post('/auth/trocar-senha', { senha_atual: senhaAtual, nova_senha: novaSenha });
+      const res = await api.post('/auth/trocar-senha', { senha_atual: senhaAtual, nova_senha: novaSenha });
+      // A troca encerra as outras sessões; o servidor devolve um token novo para esta continuar.
+      if (res.data.token) localStorage.setItem('hs_token', res.data.token);
       atualizarUsuario({ precisa_trocar_senha: false });
       setOk(true);
       setTimeout(() => navigate('/'), 1000);
@@ -53,6 +56,7 @@ export default function TrocarSenha() {
         <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
           <label style={{ fontSize: 13, fontWeight: 600 }}>Nova senha</label>
           <input type="password" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} />
+          <span style={{ fontSize: 12, color: '#6b7280' }}>Mínimo de 10 caracteres, com letras e números.</span>
         </div>
         <div className="flex-col gap-2" style={{ marginBottom: 20 }}>
           <label style={{ fontSize: 13, fontWeight: 600 }}>Confirmar nova senha</label>

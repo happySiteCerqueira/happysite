@@ -88,7 +88,7 @@ async function registrarSnapshot(req, acao, entidade, entidadeId, antes, depois,
       ...(payload.contexto || {}),
       usuario_nome: req.usuario?.nome,
       perfil: req.usuario?.perfil,
-      ip: req.headers?.['x-forwarded-for'] || req.ip || null,
+      ip: req.ip || null,
       metodo: req.method,
       rota: req.originalUrl
     };

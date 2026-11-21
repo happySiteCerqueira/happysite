@@ -87,8 +87,28 @@ function MedicaoMensal() {
     if (!item.medicao_id || !file) return;
     const formData = new FormData();
     formData.append('comprovante', file);
-    await api.post(`/medicoes/${item.medicao_id}/comprovante`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    try {
+      await api.post(`/medicoes/${item.medicao_id}/comprovante`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    } catch (err) {
+      alert(err.response?.data?.erro || 'Não foi possível anexar o comprovante.');
+      return;
+    }
     gerar();
+  }
+
+  // O comprovante não é mais um link público: é baixado com o login (token) e aberto como arquivo
+  // local do navegador. A aba é aberta antes da requisição para o navegador não bloquear o pop-up.
+  async function verComprovante(item) {
+    const aba = window.open('', '_blank');
+    try {
+      const res = await api.get(`/medicoes/${item.medicao_id}/comprovante`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      if (aba) aba.location.href = url; else window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
+    } catch {
+      if (aba) aba.close();
+      alert('Não foi possível abrir o comprovante.');
+    }
   }
 
   // OBS: o botão "Atualizar tudo" foi removido. O recálculo agora é AUTOMÁTICO: sempre que
@@ -182,13 +202,13 @@ function MedicaoMensal() {
                   <td><span className={`badge badge-${item.status.toLowerCase()}`}>{item.status}</span></td>
                   <td>
                     <div className="flex-col gap-2">
-                      {item.comprovante_path && (
-                        <a href={item.comprovante_path} target="_blank" rel="noreferrer">📄 Ver comprovante</a>
+                      {item.comprovante_path && item.medicao_id && (
+                        <a href="#" onClick={e => { e.preventDefault(); verComprovante(item); }}>📄 Ver comprovante</a>
                       )}
                       {item.medicao_id && (
                         <label className="btn-secondary btn-sm" style={{ cursor: 'pointer', textAlign: 'center' }}>
                           📎 {item.comprovante_path ? 'Substituir' : 'Anexar'}
-                          <input type="file" style={{ display: 'none' }}
+                          <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" style={{ display: 'none' }}
                             onChange={e => anexarComprovante(item, e.target.files?.[0])} />
                         </label>
                       )}

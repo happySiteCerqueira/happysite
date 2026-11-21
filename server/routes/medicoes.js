@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db/database');
@@ -27,11 +28,63 @@ const router = express.Router();
 const uploadDir = path.join(__dirname, '..', '..', 'data', 'comprovantes');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+// Comprovantes: só PDF e imagens comuns, até 10 MB. O nome gravado em disco é aleatório (não
+// adivinhável) e a extensão vem de uma lista fixa; o conteúdo é conferido pelos primeiros bytes
+// do arquivo (um .html renomeado para .pdf é recusado). Os arquivos NÃO são públicos: só são
+// entregues por GET /api/medicoes/:id/comprovante, que exige login e permissão de Medição.
+const TIPOS_COMPROVANTE = {
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp'
+};
+const TAMANHO_MAX_COMPROVANTE = 10 * 1024 * 1024;
+
+function assinaturaConfere(arquivo, ext) {
+  const buf = Buffer.alloc(12);
+  const fd = fs.openSync(arquivo, 'r');
+  try { fs.readSync(fd, buf, 0, 12, 0); } finally { fs.closeSync(fd); }
+  if (ext === '.pdf') return buf.slice(0, 4).toString('latin1') === '%PDF';
+  if (ext === '.png') return buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (ext === '.jpg' || ext === '.jpeg') return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  if (ext === '.webp') return buf.slice(0, 4).toString('latin1') === 'RIFF' && buf.slice(8, 12).toString('latin1') === 'WEBP';
+  return false;
+}
+
+const uploadBruto = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => cb(null, `${crypto.randomUUID()}${path.extname(file.originalname).toLowerCase()}`)
+  }),
+  limits: { fileSize: TAMANHO_MAX_COMPROVANTE, files: 1 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (TIPOS_COMPROVANTE[ext]) return cb(null, true);
+    cb(new Error('TIPO_INVALIDO'));
+  }
 });
-const upload = multer({ storage });
+
+const upload = {
+  single: (campo) => (req, res, next) => {
+    uploadBruto.single(campo)(req, res, (err) => {
+      if (err) {
+        let erro = 'Falha no envio do arquivo.';
+        if (err.message === 'TIPO_INVALIDO') erro = 'Envie o comprovante em PDF, PNG, JPG ou WEBP.';
+        else if (err.code === 'LIMIT_FILE_SIZE') erro = 'O arquivo é maior que 10 MB.';
+        return res.status(400).json({ erro });
+      }
+      if (req.file) {
+        const ext = path.extname(req.file.filename).toLowerCase();
+        if (!assinaturaConfere(req.file.path, ext)) {
+          fs.unlink(req.file.path, () => {});
+          return res.status(400).json({ erro: 'O conteúdo do arquivo não corresponde ao tipo informado.' });
+        }
+      }
+      next();
+    });
+  }
+};
 
 router.use(autenticar, permissaoModulo('medicao'));
 
@@ -306,6 +359,29 @@ router.post('/:id/pagar', upload.single('comprovante'), async (req, res) => {
   await registrar(req.usuario.id, 'PAGAR_MEDICAO', 'medicoes', id, { comprovantePath });
 
   res.json({ ok: true, comprovante_path: comprovantePath });
+});
+
+// Entrega o comprovante (somente com login e permissão de Medição; nunca por URL pública).
+router.get('/:id/comprovante', async (req, res) => {
+  const medicao = await db.get('SELECT comprovante_path FROM medicoes WHERE id = ?', req.params.id);
+  if (!medicao || !medicao.comprovante_path) return res.status(404).json({ erro: 'Comprovante não encontrado' });
+
+  const nome = path.basename(medicao.comprovante_path);
+  const arquivo = path.join(uploadDir, nome);
+  if (!arquivo.startsWith(uploadDir + path.sep) || !fs.existsSync(arquivo)) {
+    return res.status(404).json({ erro: 'Arquivo do comprovante não encontrado' });
+  }
+
+  // Só tipos seguros são exibidos no navegador; qualquer outro (arquivos antigos) vira download.
+  const tipo = TIPOS_COMPROVANTE[path.extname(nome).toLowerCase()];
+  res.set({
+    'Content-Type': tipo || 'application/octet-stream',
+    'Content-Disposition': `${tipo ? 'inline' : 'attachment'}; filename="comprovante${path.extname(nome).toLowerCase().replace(/[^.a-z0-9]/g, '')}"`,
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+    'Cache-Control': 'private, no-store'
+  });
+  res.sendFile(arquivo);
 });
 
 // Anexar ou substituir o comprovante de uma medição em qualquer momento (antes ou depois de pago)

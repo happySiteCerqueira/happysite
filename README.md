@@ -53,7 +53,7 @@ VS Code (`code .`) e usar o `iniciar-dev.bat` normalmente.
 2. Dê duplo-clique em **`iniciar-dev.bat`**
 3. Ele vai instalar as dependências (na primeira vez) e abrir 2 janelas: backend (porta 3001) e frontend (porta 5173)
 4. O navegador abre automaticamente em `http://localhost:5173`
-5. Login padrão: **admin / admin** (perfil ADM — troque a senha no primeiro acesso)
+5. Login inicial: usuário **admin** (perfil ADM). A senha é a de `ADMIN_INITIAL_PASSWORD` ou uma aleatória exibida uma única vez no terminal; a troca é exigida no primeiro acesso
 
 ## Como testar localmente (modo "produção local", um único processo)
 

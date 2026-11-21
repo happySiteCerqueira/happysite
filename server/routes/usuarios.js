@@ -1,8 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db/database');
-const { autenticar, permitir } = require('../utils/auth');
+const { autenticar, permitir, invalidarCacheUsuario } = require('../utils/auth');
 const { registrar } = require('../utils/auditoria');
+const { validarSenha, gerarSenhaProvisoria } = require('../utils/senha');
 
 const router = express.Router();
 
@@ -19,10 +20,12 @@ router.post('/', async (req, res) => {
   if (!nome || !login || !senha || !perfil) return res.status(400).json({ erro: 'Preencha todos os campos' });
   const perfisValidos = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
   if (!perfisValidos.includes(perfil)) return res.status(400).json({ erro: 'Perfil inválido' });
+  const erroSenha = validarSenha(senha, login);
+  if (erroSenha) return res.status(400).json({ erro: erroSenha });
 
   // Verifica duplicidade ignorando maiúsculas/minúsculas (ILIKE), já que o login passou a ser
   // reconhecido no momento do login sem diferenciar caixa (ver server/routes/auth.js).
-  const existe = await db.get('SELECT id FROM usuarios WHERE login ILIKE ?', login);
+  const existe = await db.get('SELECT id FROM usuarios WHERE LOWER(login) = LOWER(?)', login);
   if (existe) return res.status(400).json({ erro: 'Login já existe' });
 
   const hash = bcrypt.hashSync(senha, 10);
@@ -41,10 +44,18 @@ router.put('/:id', async (req, res) => {
   const usuario = await db.get('SELECT * FROM usuarios WHERE id = ?', id);
   if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado' });
 
+  const novoAtivo = ativo === undefined ? usuario.ativo : (ativo ? 1 : 0);
+  const novoPerfil = perfil ?? usuario.perfil;
+  const perfisValidos = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
+  if (!perfisValidos.includes(novoPerfil)) return res.status(400).json({ erro: 'Perfil inválido' });
+
+  // Desativar derruba as sessões abertas; reativar não "ressuscita" tokens antigos.
+  const derrubarSessoes = novoAtivo !== usuario.ativo;
   await db.run(
-    'UPDATE usuarios SET nome = ?, perfil = ?, ativo = ? WHERE id = ?',
-    nome ?? usuario.nome, perfil ?? usuario.perfil, ativo === undefined ? usuario.ativo : (ativo ? 1 : 0), id
+    `UPDATE usuarios SET nome = ?, perfil = ?, ativo = ?${derrubarSessoes ? ', token_versao = token_versao + 1' : ''} WHERE id = ?`,
+    nome ?? usuario.nome, novoPerfil, novoAtivo, id
   );
+  invalidarCacheUsuario(id);
 
   await registrar(req.usuario.id, 'EDITAR', 'usuarios', id, req.body);
   res.json({ ok: true });
@@ -56,9 +67,18 @@ router.post('/:id/resetar-senha', async (req, res) => {
   const usuario = await db.get('SELECT * FROM usuarios WHERE id = ?', id);
   if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado' });
 
-  const senha = nova_senha || '1234';
+  // Sem senha informada, gera uma provisória aleatória (nunca uma senha fixa).
+  const senha = nova_senha || gerarSenhaProvisoria();
+  if (nova_senha) {
+    const erroSenha = validarSenha(nova_senha, usuario.login);
+    if (erroSenha) return res.status(400).json({ erro: erroSenha });
+  }
   const hash = bcrypt.hashSync(senha, 10);
-  await db.run('UPDATE usuarios SET senha_hash = ?, precisa_trocar_senha = 1 WHERE id = ?', hash, id);
+  await db.run(
+    'UPDATE usuarios SET senha_hash = ?, precisa_trocar_senha = 1, token_versao = token_versao + 1 WHERE id = ?',
+    hash, id
+  );
+  invalidarCacheUsuario(id);
 
   await registrar(req.usuario.id, 'RESETAR_SENHA', 'usuarios', id, {});
   res.json({ ok: true, senha_provisoria: senha });
@@ -66,7 +86,8 @@ router.post('/:id/resetar-senha', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   const id = req.params.id;
-  await db.run('UPDATE usuarios SET ativo = 0 WHERE id = ?', id);
+  await db.run('UPDATE usuarios SET ativo = 0, token_versao = token_versao + 1 WHERE id = ?', id);
+  invalidarCacheUsuario(id);
   await registrar(req.usuario.id, 'DESATIVAR', 'usuarios', id, {});
   res.json({ ok: true });
 });

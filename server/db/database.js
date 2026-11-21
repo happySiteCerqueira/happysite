@@ -417,14 +417,20 @@ async function migrate() {
     }
   }
 
-  // Seed: usuário admin padrão
+  // Seed: usuário admin inicial (só quando a tabela está vazia). NUNCA usa senha fixa: usa
+  // ADMIN_INITIAL_PASSWORD, se definida, ou gera uma senha aleatória exibida UMA vez no log.
+  // Em ambos os casos o sistema exige a troca da senha no primeiro acesso.
   const ucountRes = await pool.query('SELECT COUNT(*)::int c FROM usuarios');
   if (ucountRes.rows[0].c === 0) {
-    const hash = bcrypt.hashSync('admin', 10);
+    const senhaInicial = process.env.ADMIN_INITIAL_PASSWORD || require('crypto').randomBytes(12).toString('base64url');
+    const hash = bcrypt.hashSync(senhaInicial, 10);
     await pool.query(
       'INSERT INTO usuarios (nome, login, senha_hash, perfil, precisa_trocar_senha) VALUES ($1,$2,$3,$4,1)',
       ['Administrador', 'admin', hash, 'ADM']
     );
+    if (!process.env.ADMIN_INITIAL_PASSWORD) {
+      console.log(`[seed] Usuário "admin" criado. Senha inicial (exibida só agora): ${senhaInicial}`);
+    }
   }
 
   // Migração idempotente: coluna "ordem" em obra_servicos
@@ -859,6 +865,12 @@ async function migrate() {
   }
   if (!(await colunaExiste('usuarios', 'assinatura_atualizada_em'))) {
     await pool.query('ALTER TABLE usuarios ADD COLUMN assinatura_atualizada_em TIMESTAMP');
+  }
+
+  // Revogação de sessões: trocar/resetar a senha ou desativar o usuário incrementa este contador,
+  // e todo token emitido antes disso deixa de valer (ver server/utils/auth.js).
+  if (!(await colunaExiste('usuarios', 'token_versao'))) {
+    await pool.query('ALTER TABLE usuarios ADD COLUMN token_versao INTEGER NOT NULL DEFAULT 0');
   }
 
   // Cópia da assinatura de quem APLICOU a advertência, congelada no momento do lançamento.

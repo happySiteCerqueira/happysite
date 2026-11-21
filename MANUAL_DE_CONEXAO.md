@@ -1,6 +1,6 @@
 # MANUAL DE CONEXÃO — HappySite
 
-> **Versão do sistema: 2.126**
+> **Versão do sistema: 2.127**
 > Leia este arquivo INTEIRO antes de alterar qualquer coisa.
 >
 > 💡 **Este manual está dentro do próprio sistema:** Configurações → 📘 Manuais (só ADM).
@@ -44,7 +44,7 @@ produção por colaborador, pagamentos, folha e centro de custo de cada obra.
 | **Site em produção** | https://app.cerqueiraengenharia.com.br |
 | **Repositório** | https://github.com/happySiteCerqueira/happysite |
 | **Branch de produção** | `main` (todo push dispara deploy automático) |
-| **Versão atual** | **2.126** (tag `v2.126`) |
+| **Versão atual** | **2.127** (tag `v2.127`) |
 
 ### Stack
 
@@ -84,7 +84,11 @@ Crie **`server/.env`** (ele está no `.gitignore`, por isso nunca vem no clone):
 ```
 DATABASE_URL=postgresql://usuario:senha@host/database?sslmode=require
 PORT=3001
+# opcional em desenvolvimento (sem ela, usa um segredo aleatório temporário):
+# JWT_SECRET=um-texto-aleatorio-com-pelo-menos-32-caracteres
 ```
+
+> ⚠️ Em **produção** o `JWT_SECRET` é obrigatório (veja 5.16) e já está no `.env` do servidor.
 
 > 🔑 **Onde achar a senha real:** as credenciais estão em
 > `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` (fora do repositório).
@@ -296,6 +300,25 @@ a chave **como veio do parser**; nunca a normalize de novo.
 precisa de internet. O servidor só extrai a imagem das páginas (`/gastos-importacao/CAJU/imagens`).
 A conferência (CPF e total do cabeçalho) é obrigatória na tela: o OCR pode errar um dígito.
 
+### 5.16 Segurança de acesso (v2.127)
+- **`JWT_SECRET` é obrigatório** (≥ 32 caracteres) no `.env` do servidor (`/opt/happysite/.env`), repassado
+  pelo `docker-compose.yml`. Sem ele o container **não sobe**. Nunca escreva o segredo no código (o
+  repositório é público). Trocar o valor derruba todas as sessões. Em desenvolvimento, sem a variável,
+  é usado um segredo aleatório temporário.
+- `autenticar` (`server/utils/auth.js`) consulta o banco (cache de 10 s): usuário inativo ou com
+  `usuarios.token_versao` diferente do token perde a sessão na hora, e o **perfil vale o do cadastro**.
+  Trocar/resetar senha e desativar usuário incrementam `token_versao`. Se um dia mexer direto no banco
+  (`UPDATE usuarios ...`), a mudança leva até 10 s para valer.
+- Login: bloqueio de 15 min após 5 erros (login+IP), 30 (login) ou 40 (IP) — `utils/limiteTentativas.js`.
+  O servidor usa `trust proxy = 1` (Caddy), então `req.ip` é o IP real.
+- Senhas: mínimo 10 caracteres com letras e números, sem senhas comuns (`utils/senha.js`). Reset de
+  senha gera senha aleatória. Não existe mais `admin/admin`: banco vazio cria o admin com
+  `ADMIN_INITIAL_PASSWORD` ou senha aleatória exibida uma vez no log.
+- **Comprovantes de medição não são públicos**: ficam em `data/comprovantes/` com nome aleatório e só
+  saem por `GET /api/medicoes/:id/comprovante` (login + permissão de Medição). Upload aceita só
+  PDF/PNG/JPG/WEBP até 10 MB, conferindo o conteúdo do arquivo. A tela abre o arquivo via `api.get`
+  (blob), nunca por link direto.
+
 ---
 
 ## 6. FLUXO DE TRABALHO — siga na ordem
@@ -470,7 +493,7 @@ manual existe):
 
 ```
 Você vai dar manutenção no HappySite, sistema de gestão da Cerqueira Engenharia que está
-EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.126).
+EM PRODUÇÃO em https://app.cerqueiraengenharia.com.br (versão 2.127).
 
 ANTES DE QUALQUER COISA, leia estes arquivos inteiros, na ordem:
 1. MANUAL_DE_CONEXAO.md   <- regras, armadilhas e fluxo de trabalho
@@ -501,7 +524,7 @@ Meu pedido é: [DESCREVA AQUI]
 | Repositório | https://github.com/happySiteCerqueira/happysite |
 | Servidor | AWS Lightsail · IP `3.228.110.68` · usuário `ubuntu` |
 | Pasta no servidor | `/opt/happysite` |
-| Versão | **2.126** |
+| Versão | **2.127** |
 | Onde mudar a versão | `client/src/versao.js` |
 | Credenciais | `C:\Users\Jorlan\.ssh\credenciais-cerqueira-engenharia.txt` ou `cat /opt/happysite/.env` |
 | Secrets do deploy | `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` (GitHub → Settings → Secrets) |

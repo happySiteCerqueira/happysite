@@ -50,6 +50,22 @@ git checkout v2.111
 
 ## Versões
 
+### 2.127 — Segurança: sessões, login, senhas e comprovantes
+
+Correções de uma auditoria de segurança:
+
+- **Segredo dos tokens fora do código.** O segredo que assina os logins estava escrito no código
+  (e o repositório é público). Agora vem de `JWT_SECRET` no servidor, que é obrigatório. O segredo
+  novo foi gerado no servidor, então **todos precisam entrar de novo uma vez**.
+- **Sessão revogável.** Desativar o usuário, trocar ou resetar a senha encerra as sessões abertas
+  na hora, e o perfil passa a valer o do cadastro (não o gravado no token).
+- **Login protegido.** Bloqueio de 15 minutos após várias tentativas erradas; login não aceita mais
+  curingas (`%`). Fim do `admin/admin` e do reset para `1234`: o reset gera senha aleatória.
+- **Senhas fortes.** Mínimo de 10 caracteres com letras e números, sem senhas comuns.
+- **Comprovantes protegidos.** Deixaram de ser links públicos: só abrem para quem está logado e tem
+  acesso à Medição. Upload aceita apenas PDF/PNG/JPG/WEBP (até 10 MB), com nome aleatório.
+- Novo `token_versao` em `usuarios` (coluna adicional; nada foi apagado).
+
 ### 2.126 — Aba "Gastos" passa a se chamar "Pagamentos"
 
 - Em **Financeiro**, a aba **💸 Gastos** agora se chama **💸 Pagamentos** (e os textos que a citam,

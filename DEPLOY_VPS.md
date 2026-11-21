@@ -166,7 +166,7 @@ Abra o navegador e acesse: **https://app.cerqueiraengenharia.com.br**
 - Pode levar 10-30 segundos na primeira vez, enquanto o Caddy emite o certificado HTTPS automático.
 - Se aparecer erro de "site não pode ser acessado", aguarde mais um pouco (o DNS pode ainda estar
   propagando — veja o Passo 3) e tente de novo.
-- Login inicial: usuário `admin`, senha `admin` — troque a senha assim que entrar.
+- Login inicial: usuário `admin`; a senha é a definida em `ADMIN_INITIAL_PASSWORD` (se houver) ou uma senha aleatória exibida **uma única vez** no log (`docker compose logs app`). O sistema exige trocar a senha no primeiro acesso.
 
 ## PASSO 10 — Migrar os dados do sistema antigo (Render/Neon) para o novo
 
