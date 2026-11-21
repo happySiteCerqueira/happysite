@@ -13,7 +13,7 @@ const CATEGORIAS = [
   { chave: 'holerite', rotulo: 'Holerite/Salário' }
 ];
 
-export default function GastosResumo({ mes, renderLancamentos }) {
+export default function GastosResumo({ mes }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState('');
   const [visao, setVisao] = useState('total'); // 'total' | 'categoria'
@@ -100,15 +100,6 @@ export default function GastosResumo({ mes, renderLancamentos }) {
             )}
           </div>
         </>
-      )}
-
-      {renderLancamentos && (
-        <details open style={{ marginTop: 8 }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
-            ☕ Lançamentos diretos por obra (Café e outros)
-          </summary>
-          {renderLancamentos(mes, carregar)}
-        </details>
       )}
     </div>
   );

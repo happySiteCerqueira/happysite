@@ -159,7 +159,7 @@ export default function Financeiro() {
       )}
       {subAba === 'pagamentos' && mostrarPagamentos && <PagamentosAntecipados />}
       {subAba === 'gastos' && mostrarGastos && (
-        <GastosCustos renderLancamentos={(mesLancamentos, aoAlterar) => <Gastos mesExterno={mesLancamentos} onAlterado={aoAlterar} />} />
+        <GastosCustos renderLancamentos={(mesLancamentos) => <Gastos mesExterno={mesLancamentos} />} />
       )}
       {subAba === 'centrocusto' && mostrarCentroCusto && <CentroCusto />}
       {subAba === 'resumo' && mostrarResumo && <Resumo />}
@@ -175,8 +175,8 @@ export default function Financeiro() {
 // valor continuar visível em vez de desaparecer.
 const GASTO_VAZIO = { mes_ciclo: '', obra_id: '', tipo: '', descricao: '', valor: '' };
 
-// Lançamentos diretos por obra (Café e outros). Usado dentro de Gastos > Resumo: recebe o mês do
-// seletor global (mesExterno) e avisa o resumo (onAlterado) para recalcular após cada alteração.
+// Lançamentos diretos por obra (Café e outros). Usado dentro de Pagamentos > Cadastrar: recebe o mês
+// do seletor global (mesExterno). O Resumo recarrega sozinho ao ser aberto (a aba é remontada).
 // Sem mesExterno, funciona sozinho com seletor de mês próprio.
 function Gastos({ mesExterno, onAlterado }) {
   const { usuario } = useAuth();
@@ -270,7 +270,7 @@ function Gastos({ mesExterno, onAlterado }) {
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
           Gastos diretos da obra (Café e outros lançamentos manuais). Entram na{' '}
           <strong>Centro de Custo</strong>, abatendo a receita da obra informada. VA, VT e holerite
-          dos colaboradores vêm das abas Dados e Detalhado.
+          dos colaboradores vêm das abas Cadastrar e Detalhado.
         </div>
       </div>
 

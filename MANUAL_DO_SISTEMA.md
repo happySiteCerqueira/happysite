@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.128** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.129** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -135,8 +135,10 @@ Três sub-abas, sempre sobre o mês de apuração do topo (a primeira é **Cadas
   - **Caju** — o PDF é imagem: OCR no navegador, linhas editáveis, conferência de CPF e do total
     do cabeçalho. Só o Auxílio Alimentação (Fixo + Flexível) é gravado; Mobilidade é descartada.
   - **Café** — card e tabela prontos; *parser pendente de layout PDF*.
+  - **Lançamentos diretos por obra (Café e outros)** — no fim da aba: formulário **➕ Lançar gasto**
+    (mês, obra, tipo, descrição, valor) e a lista do mês, para editar ou excluir. Antes ficava no Resumo.
 - **Resumo** — custo por obra: *Total geral* ou *Detalhado por categoria* (VA, VT, Café, Extras,
-  Holerite/Salário). Os lançamentos manuais de Café e outros ficam abaixo, como sempre foram.
+  Holerite/Salário).
 - **Detalhado** — uma linha por colaborador: regime, obras e % de rateio, VA, VT, Extras, EPI, custo de
   holerite e total. Ações: **+ Extra** e **% Rateio** (ajuste manual, que vale só naquele mês).
 

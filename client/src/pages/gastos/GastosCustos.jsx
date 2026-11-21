@@ -44,9 +44,9 @@ export default function GastosCustos({ renderLancamentos }) {
         </div>
       </div>
 
-      {aba === 'resumo' && <GastosResumo mes={mes} renderLancamentos={renderLancamentos} />}
+      {aba === 'resumo' && <GastosResumo mes={mes} />}
       {aba === 'detalhado' && <GastosDetalhado mes={mes} />}
-      {aba === 'dados' && <GastosDados mesGlobal={mes} />}
+      {aba === 'dados' && <GastosDados mesGlobal={mes} renderLancamentos={renderLancamentos} />}
     </div>
   );
 }

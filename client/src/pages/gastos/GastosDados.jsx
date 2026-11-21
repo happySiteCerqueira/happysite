@@ -30,7 +30,7 @@ const CARTOES = [
   }
 ];
 
-export default function GastosDados({ mesGlobal }) {
+export default function GastosDados({ mesGlobal, renderLancamentos }) {
   // O Holerite usa o módulo "Conciliação" no backend (rota /conciliacao/importar): só mostra o
   // card a quem tem essa permissão.
   const { temAcessoSubaba } = useAuth();
@@ -110,6 +110,15 @@ export default function GastosDados({ mesGlobal }) {
             que ainda não pertencem a nenhuma obra. Os vínculos ficam salvos para os próximos meses.
           </div>
         </div>
+      )}
+
+      {renderLancamentos && (
+        <details open style={{ marginTop: 16 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
+            ☕ Lançamentos diretos por obra (Café e outros)
+          </summary>
+          {renderLancamentos(mesGlobal)}
+        </details>
       )}
     </div>
   );

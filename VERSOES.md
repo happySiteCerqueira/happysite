@@ -50,6 +50,13 @@ git checkout v2.111
 
 ## Versões
 
+### 2.129 — "Lançar gasto" passa do Resumo para Cadastrar
+
+- Os **lançamentos diretos por obra** (formulário **➕ Lançar gasto**, Café e outros, com a lista do
+  mês para editar/excluir) saíram de **Pagamentos → Resumo** e agora ficam no fim de
+  **Pagamentos → Cadastrar**. O Resumo mostra só os totais por obra. Nada mudou no banco nem nos
+  cálculos; o Resumo atualiza ao ser aberto.
+
 ### 2.128 — "Dados" vira "Cadastrar" e passa para a primeira posição
 
 - Em **Financeiro → Pagamentos**, a sub-aba **📥 Dados** agora se chama **📥 Cadastrar** e vem antes
