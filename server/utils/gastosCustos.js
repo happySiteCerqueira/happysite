@@ -85,7 +85,7 @@ function janelaDozeMeses(mes) {
   return { inicio: f(ini), fim: f(fim) };
 }
 
-// DCTF e DAS do mês (lançados à mão em gastos_impostos), rateados por obra.
+// DCTF e DAS do mês, mais o SEGURO (lançados à mão em gastos_impostos), rateados por obra.
 //   • DCTF → proporcional aos dias de alocação de TODOS os colaboradores CLT (tipo CPF, qualquer
 //     regime) em cada obra no mês. Pelo ponto cada pessoa tem o mês inteiro alocado, então o
 //     peso é o percentual de rateio de cada uma.
@@ -113,8 +113,8 @@ async function pesosCltDoMes(mes, colabs) {
 }
 
 async function ratearImpostos(mes, impostos, colabs) {
-  const partes = { dctf: [], das: [] };
-  const avisos = { das_sem_receita: false, dctf_sem_clt: false };
+  const partes = { dctf: [], das: [], seguro: [] };
+  const avisos = { das_sem_receita: false, dctf_sem_clt: false, seguro_sem_clt: false };
   const valorDe = tipo => Number((impostos.find(i => i.tipo === tipo) || {}).valor) || 0;
 
   const montar = (valor, mapa) => {
@@ -127,14 +127,21 @@ async function ratearImpostos(mes, impostos, colabs) {
     }));
   };
 
+  // DCTF e SEGURO usam a mesma base: a quantidade de colaboradores CLT alocados em cada obra.
   const dctf = valorDe('DCTF');
-  if (dctf !== 0) {
+  const seguro = valorDe('SEGURO');
+  if (dctf !== 0 || seguro !== 0) {
     const pesos = await pesosCltDoMes(mes, colabs);
-    if (pesos.size === 0) {
-      avisos.dctf_sem_clt = true;
-      pesos.set(0, { obra_id: null, obra_nome: SEM_OBRA, peso: 1 });
+    const semClt = pesos.size === 0;
+    const pesosDe = () => (semClt ? new Map([[0, { obra_id: null, obra_nome: SEM_OBRA, peso: 1 }]]) : pesos);
+    if (dctf !== 0) {
+      avisos.dctf_sem_clt = semClt;
+      partes.dctf = montar(dctf, pesosDe());
     }
-    partes.dctf = montar(dctf, pesos);
+    if (seguro !== 0) {
+      avisos.seguro_sem_clt = semClt;
+      partes.seguro = montar(seguro, pesosDe());
+    }
   }
 
   const das = valorDe('DAS');
@@ -290,7 +297,7 @@ async function calcularCustosMes(mes, opcoes = {}) {
   const acumular = (obraId, obraNome, campo, valor) => {
     const chave = obraId || 0;
     if (!porObra.has(chave)) {
-      porObra.set(chave, { obra_id: obraId || null, obra: obraNome || SEM_OBRA, va: 0, vt: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0 });
+      porObra.set(chave, { obra_id: obraId || null, obra: obraNome || SEM_OBRA, va: 0, vt: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0, seguro: 0 });
     }
     porObra.get(chave)[campo] += valor;
   };
@@ -370,6 +377,7 @@ async function calcularCustosMes(mes, opcoes = {}) {
   const { partes: partesImpostos, avisos: avisosImpostos } = await ratearImpostos(mes, impostos, colabs);
   for (const p of partesImpostos.dctf) acumular(p.obra_id, p.obra_nome, 'dctf', p.valor);
   for (const p of partesImpostos.das) acumular(p.obra_id, p.obra_nome, 'das', p.valor);
+  for (const p of partesImpostos.seguro) acumular(p.obra_id, p.obra_nome, 'seguro', p.valor);
 
   // Retiradas do mês sem valor (de qualquer pessoa): o EPI delas custa 0 até o preço ser informado.
   const retiradasSemPreco = [...epiSemPreco.values()].reduce((s, n) => s + n, 0);
@@ -378,7 +386,7 @@ async function calcularCustosMes(mes, opcoes = {}) {
     colaboradores: resultado,
     porObra,
     epiSemPreco: retiradasSemPreco,
-    impostos: { dctf: valorImposto('DCTF'), das: valorImposto('DAS'), avisos: avisosImpostos },
+    impostos: { dctf: valorImposto('DCTF'), das: valorImposto('DAS'), seguro: valorImposto('SEGURO'), avisos: avisosImpostos },
     impostosPartes: partesImpostos,
     configAdmissao,
     // Só calculado quando a CERQUEIRA é rateada pelo critério "Qtd. CLT" (utils/cerqueira.js).
@@ -409,13 +417,13 @@ async function montarResumo(mes) {
   const obras = new Map();
   const linhaObra = (id, nome) => {
     const chave = id || 0;
-    if (!obras.has(chave)) obras.set(chave, { obra_id: id || null, obra: nome || SEM_OBRA, va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0, outros: 0 });
+    if (!obras.has(chave)) obras.set(chave, { obra_id: id || null, obra: nome || SEM_OBRA, va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0, seguro: 0, outros: 0 });
     return obras.get(chave);
   };
   for (const o of porObra.values()) {
     const l = linhaObra(o.obra_id, o.obra);
     l.va += o.va; l.vt += o.vt; l.extras += o.extras; l.holerite += o.holerite; l.epi += o.epi;
-    l.admissao += o.admissao; l.aso_periodico += o.aso_periodico; l.dctf += o.dctf; l.das += o.das;
+    l.admissao += o.admissao; l.aso_periodico += o.aso_periodico; l.dctf += o.dctf; l.das += o.das; l.seguro += o.seguro;
   }
 
   const conflitos = [];
@@ -436,9 +444,9 @@ async function montarResumo(mes) {
       ...l,
       va: arredondar(l.va), vt: arredondar(l.vt), cafe: arredondar(l.cafe), ferramentas: arredondar(l.ferramentas),
       extras: arredondar(l.extras), holerite: arredondar(l.holerite), epi: arredondar(l.epi), outros: arredondar(l.outros),
-      admissao: arredondar(l.admissao), aso_periodico: arredondar(l.aso_periodico), dctf: arredondar(l.dctf), das: arredondar(l.das)
+      admissao: arredondar(l.admissao), aso_periodico: arredondar(l.aso_periodico), dctf: arredondar(l.dctf), das: arredondar(l.das), seguro: arredondar(l.seguro)
     };
-    linha.total = arredondar(linha.va + linha.vt + linha.cafe + linha.ferramentas + linha.extras + linha.holerite + linha.epi + linha.outros + linha.admissao + linha.aso_periodico + linha.dctf + linha.das);
+    linha.total = arredondar(linha.va + linha.vt + linha.cafe + linha.ferramentas + linha.extras + linha.holerite + linha.epi + linha.outros + linha.admissao + linha.aso_periodico + linha.dctf + linha.das + linha.seguro);
     return linha;
   }).sort((a, b) => {
     if (!a.obra_id !== !b.obra_id) return a.obra_id ? -1 : 1; // "Sem obra definida" sempre por último
@@ -446,9 +454,9 @@ async function montarResumo(mes) {
   });
 
   const totais = lista.reduce((acc, l) => {
-    for (const k of ['va', 'vt', 'cafe', 'ferramentas', 'extras', 'holerite', 'epi', 'admissao', 'aso_periodico', 'dctf', 'das', 'outros', 'total']) acc[k] = arredondar(acc[k] + l[k]);
+    for (const k of ['va', 'vt', 'cafe', 'ferramentas', 'extras', 'holerite', 'epi', 'admissao', 'aso_periodico', 'dctf', 'das', 'seguro', 'outros', 'total']) acc[k] = arredondar(acc[k] + l[k]);
     return acc;
-  }, { va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0, outros: 0, total: 0 });
+  }, { va: 0, vt: 0, cafe: 0, ferramentas: 0, extras: 0, holerite: 0, epi: 0, admissao: 0, aso_periodico: 0, dctf: 0, das: 0, seguro: 0, outros: 0, total: 0 });
 
   const semObra = colaboradores.filter(c => c.rateio_origem === 'SEM_OBRA');
   return {
@@ -463,9 +471,10 @@ async function montarResumo(mes) {
       epi_sem_preco: epiSemPreco,
       admissao_sem_obra: admissaoSemObra,
       das_sem_receita: impostos.avisos.das_sem_receita,
-      dctf_sem_clt: impostos.avisos.dctf_sem_clt
+      dctf_sem_clt: impostos.avisos.dctf_sem_clt,
+      seguro_sem_clt: impostos.avisos.seguro_sem_clt
     },
-    impostos: { dctf: impostos.dctf, das: impostos.das }
+    impostos: { dctf: impostos.dctf, das: impostos.das, seguro: impostos.seguro }
   };
 }
 

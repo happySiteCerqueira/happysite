@@ -1291,7 +1291,7 @@ async function migrate() {
     CREATE TABLE IF NOT EXISTS gastos_impostos (
       id SERIAL PRIMARY KEY,
       mes_referencia TEXT NOT NULL,
-      tipo TEXT NOT NULL CHECK(tipo IN ('DCTF','DAS')),
+      tipo TEXT NOT NULL CHECK(tipo IN ('DCTF','DAS','SEGURO')),
       valor DOUBLE PRECISION NOT NULL DEFAULT 0,
       observacao TEXT,
       criado_por INTEGER REFERENCES usuarios(id),
@@ -1300,6 +1300,11 @@ async function migrate() {
       excluido INTEGER NOT NULL DEFAULT 0
     );
   `);
+  // v2.135 — SEGURO mensal (rateado pela quantidade de colaboradores CLT por obra). Amplia o CHECK
+  // do tipo: remove a restrição antiga (automática) e recria com o novo conjunto, sem perder dados.
+  await pool.query('ALTER TABLE gastos_impostos DROP CONSTRAINT IF EXISTS gastos_impostos_tipo_check');
+  await pool.query('ALTER TABLE gastos_impostos DROP CONSTRAINT IF EXISTS ck_gastos_impostos_tipo');
+  await pool.query("ALTER TABLE gastos_impostos ADD CONSTRAINT ck_gastos_impostos_tipo CHECK (tipo IN ('DCTF','DAS','SEGURO'))");
   await pool.query('CREATE INDEX IF NOT EXISTS idx_holerite_compl_mes ON holerite_complementar (mes_ciclo)');
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS ux_gastos_impostos_ativo ON gastos_impostos (mes_referencia, tipo) WHERE excluido = 0');
 

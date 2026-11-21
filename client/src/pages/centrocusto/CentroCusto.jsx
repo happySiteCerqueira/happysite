@@ -219,7 +219,7 @@ export default function CentroCusto({ onIrParaCadastrar = null }) {
 
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 10 }}>
           <strong>Entrou</strong> = receita lançada, já <strong>descontada a nota</strong>. <strong>Saiu</strong> = produção + diárias +
-          excedente de folha (salário + férias + 13º acima da produção) + VA, VT, Extras e EPI + admissão + DCTF e DAS +
+          excedente de folha (salário + férias + 13º acima da produção) + VA, VT, Extras e EPI + admissão + DCTF, DAS e Seguro +
           gastos diretos da obra (Ferramentas, Café e outros).
           {dados && dados.cerqueira && dados.cerqueira.incluida
             ? ' Os custos da CERQUEIRA (sócios, equipe administrativa e despesas gerais da matriz) estão incluídos, rateados entre as obras pelo critério escolhido.'

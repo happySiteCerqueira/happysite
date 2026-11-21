@@ -134,6 +134,7 @@ const CATEGORIAS_SAIDA = [
   { chave: 'ADMISSAO', rotulo: 'Admissão & ASO' },
   { chave: 'DCTF', rotulo: 'DCTF' },
   { chave: 'DAS', rotulo: 'DAS' },
+  { chave: 'SEGURO', rotulo: 'Seguro' },
   { chave: 'FERRAMENTAS', rotulo: 'Ferramentas' },
   { chave: 'OUTROS', rotulo: 'Café / Outros' },
   // CERQUEIRA: custos da matriz (sócios, equipe administrativa, despesas gerais). Aparece como
@@ -304,7 +305,7 @@ async function buscarCustosColaboradores(mesInicio, mesFim) {
     // Custos que pertencem à obra e não à pessoa: admissão (ASO + Treinamento, na obra do
     // cadastro), DCTF e DAS (rateados). Entram junto dos benefícios, por obra e tipo.
     for (const o of porObra.values()) {
-      for (const [campo, rotulo, categoria] of [['admissao', 'Admissão (ASO + Treinamento)', 'ADMISSAO'], ['aso_periodico', 'ASO Periódico (Renovação)', 'ADMISSAO'], ['dctf', 'DCTF', 'DCTF'], ['das', 'DAS', 'DAS']]) {
+      for (const [campo, rotulo, categoria] of [['admissao', 'Admissão (ASO + Treinamento)', 'ADMISSAO'], ['aso_periodico', 'ASO Periódico (Renovação)', 'ADMISSAO'], ['dctf', 'DCTF', 'DCTF'], ['das', 'DAS', 'DAS'], ['seguro', 'Seguro', 'SEGURO']]) {
         if (!o[campo]) continue;
         const chave = `${o.obra_id || 0}|${rotulo}`;
         if (!beneficios.has(chave)) {
@@ -846,7 +847,7 @@ async function buscarLinhasDetalhadas(params) {
   }
 
   // ---- Custos por colaborador, admissão e impostos: vêm da engine, mês a mês ----
-  const rotuloImposto = { dctf: 'DCTF', das: 'DAS' };
+  const rotuloImposto = { dctf: 'DCTF', das: 'DAS', seguro: 'Seguro' };
   for (const mes of await mesesDoPeriodo(mes_inicio, mes_fim)) {
     const { colaboradores, impostosPartes, configAdmissao } = await calcularCustosMes(mes);
 
@@ -898,7 +899,8 @@ async function buscarLinhasDetalhadas(params) {
 
     for (const [campo, regraBase, descricaoBase] of [
       ['dctf', 'Proporcional CLT', 'DCTF do mês'],
-      ['das', 'Receita c/ Nota 12m', 'DAS do mês']
+      ['das', 'Receita c/ Nota 12m', 'DAS do mês'],
+      ['seguro', 'Qtd. colaboradores CLT', 'Seguro do mês']
     ]) {
       for (const p of impostosPartes[campo] || []) {
         if (!p.valor) continue;

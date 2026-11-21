@@ -15,7 +15,8 @@ const CATEGORIAS = [
   { chave: 'aso_periodico', rotulo: 'ASO Periódico' },
   { chave: 'holerite', rotulo: 'Holerite/Salário' },
   { chave: 'dctf', rotulo: 'DCTF' },
-  { chave: 'das', rotulo: 'DAS' }
+  { chave: 'das', rotulo: 'DAS' },
+  { chave: 'seguro', rotulo: 'Seguro' }
 ];
 
 export default function GastosResumo({ mes }) {
@@ -116,7 +117,7 @@ function Avisos({ avisos }) {
   const epiSemPreco = avisos.epi_sem_preco || 0;
   const admissaoSemObra = avisos.admissao_sem_obra || 0;
   if (conflitos.length === 0 && semObra.length === 0 && epiSemPreco === 0 && admissaoSemObra === 0
-    && !avisos.das_sem_receita && !avisos.dctf_sem_clt) return null;
+    && !avisos.das_sem_receita && !avisos.dctf_sem_clt && !avisos.seguro_sem_clt) return null;
 
   return (
     <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid #f59e0b', fontSize: 13 }}>
@@ -135,6 +136,12 @@ function Avisos({ avisos }) {
       {avisos.dctf_sem_clt && (
         <div style={{ marginBottom: 10 }}>
           <strong>🧾 DCTF sem colaboradores CLT no mês</strong> — não há base para ratear, então o valor está em
+          “Sem obra definida”.
+        </div>
+      )}
+      {avisos.seguro_sem_clt && (
+        <div style={{ marginBottom: 10 }}>
+          <strong>🛡️ Seguro sem colaboradores CLT no mês</strong> — não há base para ratear, então o valor está em
           “Sem obra definida”.
         </div>
       )}

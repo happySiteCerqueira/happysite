@@ -50,6 +50,15 @@ git checkout v2.111
 
 ## Versões
 
+### 2.135 — Seguro mensal rateado por quantidade de colaboradores CLT
+
+- Novo campo **Seguro (R$)** no card de impostos em **Pagamentos → Cadastrar** (junto de DCTF e DAS), por competência.
+- **Rateio**: pela quantidade de colaboradores CLT (tipo CPF) alocados em cada obra no mês (mesma base do DCTF). Sem CLT
+  no mês, o valor cai em "Sem obra definida" com aviso no Resumo.
+- Aparece como coluna **Seguro** no Resumo e como categoria **Seguro** no Centro de Custo e nos itens da CERQUEIRA.
+  O alerta de pendência continua cobrando só DCTF e DAS.
+- Banco: `gastos_impostos.tipo` passa a aceitar `SEGURO` (a restrição CHECK é recriada, sem perder dados).
+
 ### 2.134 — Vigência da admissão, ASO periódico, descontos discriminados e alerta de DCTF/DAS
 
 - **Data de corte da admissão**: novo card **🩺 Custos de Admissão** em **Pagamentos → Cadastrar** com **"Válido para

@@ -159,7 +159,7 @@ function itensDaMatriz(mes, matriz, engine, gastos) {
       });
     }
   }
-  for (const [campo, regra, rotulo] of [['dctf', 'Proporcional CLT', 'DCTF'], ['das', 'Receita c/ Nota 12m', 'DAS']]) {
+  for (const [campo, regra, rotulo] of [['dctf', 'Proporcional CLT', 'DCTF'], ['das', 'Receita c/ Nota 12m', 'DAS'], ['seguro', 'Qtd. colaboradores CLT', 'Seguro']]) {
     for (const p of engine.impostosPartes[campo] || []) {
       if (p.obra_id !== matriz.id) continue;
       add({ origem: campo.toUpperCase(), colaborador: '', item: rotulo, descricao: `${rotulo} do mês`, regra: `${regra} ${fmtPct(p.percentual)}%`, valor: p.valor });

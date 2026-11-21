@@ -58,17 +58,19 @@ router.get('/impostos', async (req, res) => {
   const por = tipo => linhas.find(l => l.tipo === tipo);
   const dctf = por('DCTF');
   const das = por('DAS');
+  const seguro = por('SEGURO');
   res.json({
     mes,
     dctf: dctf ? { valor: Number(dctf.valor) || 0, observacao: dctf.observacao || '' } : { valor: 0, observacao: '' },
-    das: das ? { valor: Number(das.valor) || 0, observacao: das.observacao || '' } : { valor: 0, observacao: '' }
+    das: das ? { valor: Number(das.valor) || 0, observacao: das.observacao || '' } : { valor: 0, observacao: '' },
+    seguro: seguro ? { valor: Number(seguro.valor) || 0, observacao: seguro.observacao || '' } : { valor: 0, observacao: '' }
   });
 });
 
 router.put('/impostos', permitir('ADM', 'FINANCEIRO'), async (req, res) => {
   const { mes_referencia: mes, tipo } = req.body;
   if (!mes || !MES_VALIDO.test(mes)) return res.status(400).json({ erro: 'Informe o mês (YYYY-MM).' });
-  if (!['DCTF', 'DAS'].includes(tipo)) return res.status(400).json({ erro: 'Tipo inválido (DCTF ou DAS).' });
+  if (!['DCTF', 'DAS', 'SEGURO'].includes(tipo)) return res.status(400).json({ erro: 'Tipo inválido (DCTF, DAS ou SEGURO).' });
   const valor = req.body.valor === '' || req.body.valor == null ? 0 : Number(req.body.valor);
   if (!Number.isFinite(valor) || valor < 0) return res.status(400).json({ erro: 'Informe um valor válido (zero ou maior).' });
   const observacao = req.body.observacao ? String(req.body.observacao).trim() : null;
