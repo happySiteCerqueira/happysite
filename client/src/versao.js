@@ -12,4 +12,4 @@
 // ⚠️ Este arquivo é o ÚNICO lugar onde a versão deve ser escrita. O rodapé do menu lateral lê
 // daqui; qualquer outro ponto que precise do número deve importar esta constante, nunca
 // repetir o valor — duas cópias acabariam divergindo.
-export const VERSAO_SISTEMA = '2.139';
+export const VERSAO_SISTEMA = '2.140';

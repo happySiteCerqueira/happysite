@@ -108,7 +108,13 @@ table th { background: #f9fafb; font-weight: 600; }
   position: sticky;
   top: 0;
   align-self: flex-start;
+  /* 100dvh (altura dinâmica) corrige celular/tablet: o 100vh clássico inclui a área atrás da
+     barra de endereço do navegador (Safari/Chrome mobile), escondendo o rodapé com o "Sair".
+     O 100vh fica como fallback para navegadores antigos que não conhecem dvh. */
   height: 100vh;
+  height: 100dvh;
+  /* Margem segura do iOS (barra home do iPhone/iPad) para o botão Sair nunca ficar coberto. */
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
 
 /* min-height: 0 é obrigatório para que um filho flex com overflow role de verdade; sem isso
@@ -140,14 +146,16 @@ table th { background: #f9fafb; font-weight: 600; }
 
   /* Sidebar passa a ser um menu deslizante (drawer), oculto por padrão.
      "position: fixed" sobrepõe o "sticky" do desktop — aqui a lateral é sobreposta à tela, e
-     não uma coluna ao lado dela. A altura continua 100vh, então o "Sair" também fica sempre
-     visível no celular, com a lista de links rolando por dentro. */
+     não uma coluna ao lado dela. A altura usa 100dvh (com 100vh de fallback) porque no
+     celular/iPad o 100vh inclui a faixa atrás da barra do navegador e escondia o botão
+     "Sair"; com dvh o rodapé fica sempre visível, com a lista de links rolando por dentro. */
   .layout-sidebar {
     position: fixed;
     top: 0;
     left: 0;
     align-self: auto;
     height: 100vh;
+    height: 100dvh;
     width: 260px;
     max-width: 82vw;
     z-index: 200;

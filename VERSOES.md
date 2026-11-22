@@ -50,6 +50,16 @@ git checkout v2.111
 
 ## Versões
 
+### 2.140 — Botão Sair sempre visível no celular e no iPad
+
+- No celular e no iPad, a parte de baixo do menu lateral (nome, perfil, versão e o botão **Sair**)
+  ficava escondida atrás da barra de endereço/ferramentas do navegador, porque a altura `100vh`
+  inclui essa faixa. A lateral agora usa `100dvh` (altura **dinâmica** da janela), que o navegador
+  recalcula quando a barra aparece ou some — o **Sair** fica sempre visível na parte inferior.
+- Acrescentada a margem segura do iOS (`safe-area-inset-bottom`) para o botão não ficar coberto
+  pela barra home do iPhone/iPad.
+- No computador nada muda — lá a barra do navegador não sobrepõe a página.
+
 ### 2.139 — Nome/perfil de volta ao rodapé do menu
 
 - O **nome e o perfil do usuário** voltaram ao rodapé do menu lateral, acima da versão e do botão
