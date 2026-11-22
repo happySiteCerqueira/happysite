@@ -46,7 +46,7 @@ export default function Usuarios() {
   async function alternarMaster(u) {
     const novo = !u.adm_master;
     if (!window.confirm(novo
-      ? `Tornar "${u.nome}" ADM Master? Ele poderá editar o campo "Mês anterior" dos Pagamentos Antecipados e dar/tirar esta marca de outros.`
+      ? `Tornar "${u.nome}" ADM Master? Ele poderá dar/tirar esta marca de outros usuários.`
       : `Tirar a marca de ADM Master de "${u.nome}"?`)) return;
     try {
       await api.put(`/usuarios/${u.id}`, { adm_master: novo });

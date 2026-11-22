@@ -9,6 +9,17 @@ const router = express.Router();
 
 router.use(autenticar, permitir('FINANCEIRO', 'RH', 'ADM'));
 
+// Quem pode editar o campo "Mês anterior": o ADM (acesso total, como em todo o sistema) ou um
+// perfil com a sub-permissão "financeiro.pagamentos.mes_anterior" marcada no Controle de Acesso.
+async function podeEditarMesAnterior(usuario) {
+  if (usuario.perfil === 'ADM') return true;
+  const linha = await db.get(
+    'SELECT permitido FROM perfil_permissoes WHERE perfil = ? AND modulo = ?',
+    usuario.perfil, 'financeiro.pagamentos.mes_anterior'
+  );
+  return !!(linha && linha.permitido);
+}
+
 // Colunas de valores por tipo de pessoa
 const COLUNAS_PF = ['vale', 'fgts', 'taxa', 'pagto', 'vale_extra', 'vale_ex_rh'];
 const COLUNAS_PJ = ['adiantamento'];
@@ -64,7 +75,7 @@ router.get('/planilha', async (req, res) => {
       vale_extra: l.vale_extra || 0,
       adiantamento: l.adiantamento || 0,
       vale_ex_rh: l.vale_ex_rh || 0,
-      // Saldo negativo da Medição do mês anterior (automático), com o ajuste manual do ADM Master.
+      // Saldo negativo da Medição do mês anterior (automático), com o eventual ajuste manual.
       mes_anterior: mAnt.efetivo,
       mes_anterior_auto: mAnt.auto,
       mes_anterior_manual: mAnt.manual !== null,
@@ -76,18 +87,22 @@ router.get('/planilha', async (req, res) => {
   res.json({
     ...resultado,
     colunas: { PF: COLUNAS_PF, PJ: COLUNAS_PJ },
-    pode_editar_mes_anterior: !!req.usuario.adm_master
+    pode_editar_mes_anterior: await podeEditarMesAnterior(req.usuario)
   });
 });
 
-// Edita o "Mês anterior" de uma pessoa/mês — SOMENTE ADM Master. `valor` null/vazio remove o ajuste
+// Edita o "Mês anterior" de uma pessoa/mês — só ADM ou perfil liberado no Controle de Acesso
+// (sub-permissão financeiro.pagamentos.mes_anterior). `valor` null/vazio remove o ajuste
 // e devolve o campo ao cálculo automático. Bloqueia se a medição do mês já estiver paga.
+// Toda alteração exige um `motivo` breve, gravado na trilha de auditoria.
 router.put('/mes-anterior', async (req, res) => {
-  if (!req.usuario.adm_master) {
-    return res.status(403).json({ erro: 'Somente o ADM Master pode editar o Mês anterior.' });
+  if (!(await podeEditarMesAnterior(req.usuario))) {
+    return res.status(403).json({ erro: 'Seu perfil não tem permissão para editar o Mês anterior (veja o Controle de Acesso).' });
   }
   const { colaborador_id, mes_ciclo } = req.body;
   if (!colaborador_id || !mes_ciclo) return res.status(400).json({ erro: 'colaborador_id e mes_ciclo são obrigatórios' });
+  const motivo = typeof req.body.motivo === 'string' ? req.body.motivo.trim() : '';
+  if (!motivo) return res.status(400).json({ erro: 'Escreva brevemente o motivo da alteração.' });
   const pessoa = await db.get('SELECT id FROM colaboradores WHERE id = ?', colaborador_id);
   if (!pessoa) return res.status(404).json({ erro: 'Colaborador/empreiteiro não encontrado' });
 
@@ -122,7 +137,7 @@ router.put('/mes-anterior', async (req, res) => {
   const mapa = await carregarMesAnterior(mes_ciclo);
   const atual = mapa.get(Number(colaborador_id)) || { auto: 0, manual: null, efetivo: 0 };
   await registrar(req.usuario.id, 'EDITAR_MES_ANTERIOR', 'pagamentos_antecipados', existente ? existente.id : null, {
-    colaborador_id, mes_ciclo,
+    colaborador_id, mes_ciclo, motivo,
     antes: existente && existente.mes_anterior_manual !== null ? existente.mes_anterior_manual : 'automático',
     depois: valorNum === null ? 'automático' : valorNum
   });

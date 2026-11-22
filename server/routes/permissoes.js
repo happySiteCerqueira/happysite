@@ -11,6 +11,9 @@ const MODULOS = [
   'conciliacao',
   // Sub-abas granulares (só têm efeito prático se o módulo pai também estiver permitido)
   'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
+  // Dentro de Pagtos. Antecipados: editar o campo "Mês anterior" (desconto automático vindo da
+  // Medição do mês passado). É ação sensível — nasce desligada para todos; o ADM sempre pode.
+  'financeiro.pagamentos.mes_anterior',
   'prestadores.cadastro',
   'epi.cadastrar',
   // Dentro de Advertência: "Dar advertência" é a ação de registrar; o Histórico (consulta) fica

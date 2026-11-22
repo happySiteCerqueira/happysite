@@ -942,8 +942,9 @@ async function migrate() {
     await pool.query('ALTER TABLE usuarios ADD COLUMN token_versao INTEGER NOT NULL DEFAULT 0');
   }
 
-  // "ADM Master": só quem tem esta marca pode editar o campo "Mês anterior" dos Pagamentos
-  // Antecipados e dar/tirar a marca de outros usuários. Na primeira vez, o usuário "admin" é o
+  // "ADM Master": quem tem esta marca pode dar/tirar a marca de outros usuários (a edição do
+  // "Mês anterior" dos Pagamentos Antecipados hoje é controlada pelo Controle de Acesso, via
+  // sub-permissão financeiro.pagamentos.mes_anterior). Na primeira vez, o usuário "admin" é o
   // master; e, se por qualquer motivo (ex.: backup antigo restaurado) ninguém tiver a marca, o
   // primeiro ADM ativo assume — assim o sistema nunca fica sem um master.
   if (!(await colunaExiste('usuarios', 'adm_master'))) {
@@ -957,8 +958,8 @@ async function migrate() {
   );
 
   // Saldo negativo da Medição do mês anterior, que vira desconto no mês seguinte. O valor é
-  // CALCULADO (utils/mesAnterior.js); esta coluna guarda só o ajuste manual do ADM Master
-  // (NULL = usa o valor automático).
+  // CALCULADO (utils/mesAnterior.js); esta coluna guarda só o ajuste manual de quem tem a
+  // permissão financeiro.pagamentos.mes_anterior (NULL = usa o valor automático).
   if (!(await colunaExiste('pagamentos_antecipados', 'mes_anterior_manual'))) {
     await pool.query('ALTER TABLE pagamentos_antecipados ADD COLUMN mes_anterior_manual DOUBLE PRECISION');
   }
@@ -1363,6 +1364,7 @@ async function migrate() {
       'conciliacao',
       // Sub-abas granulares (dentro de módulos que já foram liberados para o perfil)
       'financeiro.receita', 'financeiro.pagamentos', 'financeiro.gastos', 'financeiro.relatorios', 'financeiro.resumo',
+      'financeiro.pagamentos.mes_anterior',
       'prestadores.cadastro',
       'epi.cadastrar',
       'advertencia.aplicar'
@@ -1393,6 +1395,9 @@ async function migrate() {
       'financeiro.gastos': ['FINANCEIRO'],
       'financeiro.relatorios': ['FINANCEIRO'],
       'financeiro.resumo': [],
+      // Editar o "Mês anterior" é sensível: nasce desligado para todos (só o ADM edita até
+      // alguém marcar o perfil no Controle de Acesso).
+      'financeiro.pagamentos.mes_anterior': [],
       'prestadores.cadastro': ['RH'],
       'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR']
     };
@@ -1414,6 +1419,9 @@ async function migrate() {
       'financeiro.gastos': ['FINANCEIRO'],
       'financeiro.relatorios': ['FINANCEIRO'],
       'financeiro.resumo': [],
+      // Sub-permissão nova: editar o "Mês anterior" dos Pagtos. Antecipados. Nasce desligada
+      // para todos os perfis (só o ADM edita) até ser marcada no Controle de Acesso.
+      'financeiro.pagamentos.mes_anterior': [],
       'prestadores.cadastro': ['RH'],
       'epi.cadastrar': ['RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR'],
       // Módulo novo (ASO): garante que já apareça liberado para RH mesmo em bancos que já

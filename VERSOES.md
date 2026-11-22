@@ -50,6 +50,17 @@ git checkout v2.111
 
 ## Versões
 
+### 2.141 — Edição do "Mês anterior" em Pagamentos Antecipados
+
+- Em **Financeiro → Pagamentos Antecipados**, quem tem a permissão vê um botão **✎** ao lado do
+  campo **Mês anterior** (o valor negativo que entra automaticamente do mês anterior). Ao clicar,
+  digita o novo valor (pode ser **0** ou qualquer valor ≥ 0) e confirma com **✓** ou Enter.
+- Antes de salvar, aparece a confirmação **"Tem certeza que deseja alterar o Mês anterior de
+  FULANO para R$ X?"** — útil quando o acerto já foi feito por fora e o valor precisa ser zerado.
+- Nova sub-permissão **"✎ Editar Mês anterior"** (`financeiro.pagamentos.mes_anterior`) no
+  **Controle de Acesso**: nasce **desmarcada para todos os perfis**; bancos existentes ganham a
+  linha automaticamente na próxima subida do servidor.
+
 ### 2.140 — Botão Sair sempre visível no celular e no iPad
 
 - No celular e no iPad, a parte de baixo do menu lateral (nome, perfil, versão e o botão **Sair**)

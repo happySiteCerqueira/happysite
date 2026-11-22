@@ -89,19 +89,32 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
     setSalvandoKey(null);
   }
 
-  // "Mês anterior": saldo negativo da Medição do mês passado, calculado sozinho. Só o ADM Master
-  // edita; quem não é Master vê o valor (com a marca "automático"/"ajustado") sem poder alterar.
+  // "Mês anterior": saldo negativo da Medição do mês passado, calculado sozinho. Só o ADM ou
+  // perfil liberado no Controle de Acesso ("Editar Mês anterior") edita (clica em ✎, digita,
+  // confirma com ✓ e escreve o motivo); quem não tem a permissão vê o valor
+  // (com a marca "automático"/"ajustado") sem poder alterar. Mês com medição PAGA fica fechado.
   function CelulaMesAnterior({ item }) {
     const [valor, setValor] = useState(item.mes_anterior);
+    const [editando, setEditando] = useState(false);
     const key = `${item.colaborador_id}-mes_anterior`;
-    useEffect(() => setValor(item.mes_anterior), [item.mes_anterior]);
+    useEffect(() => { setValor(item.mes_anterior); setEditando(false); }, [item.mes_anterior]);
     const podeEditar = planilha.pode_editar_mes_anterior && !item.bloqueado;
 
     async function salvar(novoValor) {
+      // Confirmação + motivo numa única caixa: Cancelar aborta, OK sem texto não deixa passar.
+      const descricao = novoValor === null
+        ? `voltar ao valor automático (R$ ${Number(item.mes_anterior_auto).toFixed(2)})`
+        : `R$ ${Number(novoValor).toFixed(2)}`;
+      const motivo = window.prompt(
+        `Tem certeza que deseja alterar o "Mês anterior" de ${item.nome} para ${descricao}?\n\n` +
+        'Para confirmar, escreva brevemente o motivo da alteração:'
+      );
+      if (motivo === null) { setValor(item.mes_anterior); setEditando(false); return; }
+      if (!motivo.trim()) { alert('Escreva brevemente o motivo da alteração para confirmar.'); return; }
       setSalvandoKey(key);
       try {
         const { data } = await api.put('/pagamentos-antecipados/mes-anterior', {
-          colaborador_id: item.colaborador_id, mes_ciclo: mes, valor: novoValor
+          colaborador_id: item.colaborador_id, mes_ciclo: mes, valor: novoValor, motivo: motivo.trim()
         });
         setPlanilha(prev => {
           const atualizar = lista => lista.map(i => (i.colaborador_id === item.colaborador_id
@@ -109,11 +122,21 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
             : i));
           return { ...prev, PJ: atualizar(prev.PJ), CPF: atualizar(prev.CPF) };
         });
+        setEditando(false);
       } catch (err) {
         alert(err.response?.data?.erro || 'Erro ao salvar o Mês anterior');
         carregar();
       }
       setSalvandoKey(null);
+    }
+
+    function confirmarEdicao() {
+      const num = Number(valor);
+      if (valor === '' || !Number.isFinite(num) || num < 0) {
+        alert('Informe um valor igual ou maior que zero (pode ser 0).');
+        return;
+      }
+      salvar(num);
     }
 
     const marca = item.mes_anterior_manual
@@ -128,14 +151,26 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
             step="0.01"
             min="0"
             value={valor}
-            disabled={!podeEditar || salvandoKey === key}
-            title={podeEditar ? undefined : (item.bloqueado ? 'Medição deste mês já foi paga — valor bloqueado' : 'Somente o ADM Master pode editar')}
+            disabled={!editando || salvandoKey === key}
+            title={podeEditar
+              ? (editando ? 'Digite o novo valor e confirme com ✓' : 'Clique em ✎ para editar')
+              : (item.bloqueado ? 'Medição deste mês já foi paga — valor bloqueado' : 'Seu perfil não tem permissão para editar (Controle de Acesso)')}
             onChange={e => setValor(e.target.value)}
-            onBlur={() => { if (podeEditar && Number(valor) !== Number(item.mes_anterior)) salvar(valor === '' ? null : valor); }}
-            style={{ width: 90, ...(podeEditar ? {} : { background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' }) }}
+            onKeyDown={e => { if (e.key === 'Enter') confirmarEdicao(); if (e.key === 'Escape') { setValor(item.mes_anterior); setEditando(false); } }}
+            style={{ width: 90, ...(editando ? {} : { background: '#f3f4f6', color: '#6b7280', cursor: 'not-allowed' }) }}
           />
-          {podeEditar && item.mes_anterior_manual && (
-            <button className="btn-secondary btn-sm" title="Voltar ao valor automático" onClick={() => salvar(null)}>↺</button>
+          {podeEditar && !editando && (
+            <button className="btn-secondary btn-sm" title="Editar o Mês anterior" onClick={() => setEditando(true)}>✎</button>
+          )}
+          {podeEditar && editando && (
+            <>
+              <button className="btn-primary btn-sm" title="Salvar o novo valor" disabled={salvandoKey === key} onClick={confirmarEdicao}>✓</button>
+              <button className="btn-secondary btn-sm" title="Cancelar sem salvar" disabled={salvandoKey === key}
+                onClick={() => { setValor(item.mes_anterior); setEditando(false); }}>✗</button>
+            </>
+          )}
+          {podeEditar && !editando && item.mes_anterior_manual && (
+            <button className="btn-secondary btn-sm" title="Voltar ao valor automático" disabled={salvandoKey === key} onClick={() => salvar(null)}>↺</button>
           )}
         </div>
         {marca}
@@ -271,7 +306,10 @@ export default function PagamentosAntecipados({ modo = 'extras' }) {
         automaticamente e não pode ser editado. Valores de pessoas cuja medição do mês já foi paga ficam bloqueados (🔒).
         {!ehHolerite && (
           <> O <strong>Mês anterior</strong> é o saldo negativo da Medição do mês passado (ex.: −2.711,53 em outubro vira 2.711,53 de
-          desconto em novembro) e é preenchido sozinho; só o <strong>ADM Master</strong> pode ajustá-lo (↺ volta ao automático).</>
+          desconto em novembro) e é preenchido sozinho; só o <strong>ADM</strong> e os perfis liberados no <strong>Controle de
+          Acesso</strong> ("Editar Mês anterior") podem ajustá-lo: clique em ✎, digite o novo
+          valor (pode ser 0) e confirme com ✓ escrevendo o motivo da alteração (↺ volta ao automático). A edição só muda o desconto
+          do mês em aberto — a Medição do mês passado continua com o valor negativo arquivado.</>
         )}
       </p>
     </div>

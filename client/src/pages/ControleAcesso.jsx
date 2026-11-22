@@ -20,6 +20,8 @@ const SUBABAS_POR_MODULO = {
   financeiro: [
     { chave: 'financeiro.receita', rotulo: '📥 Receita' },
     { chave: 'financeiro.pagamentos', rotulo: '🧾 Pagtos. Antecipados' },
+    // Ação sensível dentro de Pagtos. Antecipados: editar o desconto "Mês anterior".
+    { chave: 'financeiro.pagamentos.mes_anterior', rotulo: '✎ Editar Mês anterior' },
     { chave: 'financeiro.gastos', rotulo: '💸 Pagamentos' },
     { chave: 'financeiro.relatorios', rotulo: '📈 Relatórios' },
     { chave: 'financeiro.resumo', rotulo: '📊 Resumo' }
