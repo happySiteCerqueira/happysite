@@ -50,6 +50,12 @@ git checkout v2.111
 
 ## Versões
 
+### 2.139 — Nome/perfil de volta ao rodapé do menu
+
+- O **nome e o perfil do usuário** voltaram ao rodapé do menu lateral, acima da versão e do botão
+  **Sair**, como era antes da 2.138 (a mudança para o topo foi um mal-entendido).
+- A barra **📅 Apuração** permanece no menu lateral, entre o logo e o item **📊 Painel**.
+
 ### 2.138 — Apuração movida para o menu lateral
 
 - A barra **📅 Apuração** saiu do topo da área de conteúdo e passou para o **menu lateral**, entre o

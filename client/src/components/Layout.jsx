@@ -90,15 +90,9 @@ export default function Layout() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, flexShrink: 0 }}>
           <img src="/logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: 70, objectFit: 'contain' }} />
         </div>
-        {/* Identificação do usuário logado: fica entre o logo e o menu, sempre visível
-            (flexShrink: 0 evita que seja espremida quando a lista de links rola). */}
-        <div style={{ textAlign: 'center', marginBottom: 16, flexShrink: 0, borderBottom: '1px solid #1e293b', paddingBottom: 12 }}>
-          <div style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>{usuario?.nome}</div>
-          <div style={{ color: '#94a3b8', fontSize: 12 }}>{usuario?.perfil}</div>
-        </div>
-        {/* Data de Apuração: movida da barra superior do conteúdo para cá — fica entre a
-            identificação do usuário e o menu (acima do Painel). flexShrink: 0 evita que seja
-            espremida quando a lista de links rola. */}
+        {/* Data de Apuração: movida da barra superior do conteúdo para cá — fica entre o
+            logo e o menu (acima do Painel). flexShrink: 0 evita que seja espremida quando a
+            lista de links rola. */}
         <div
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap',
@@ -176,13 +170,14 @@ export default function Layout() {
           <NavLink to="/configuracoes" style={linkStyle}>⚙️ Configurações</NavLink>
 
         </nav>
-        {/* Rodapé fixo da lateral (versão e Sair). O nome/perfil do usuário fica no topo, logo
-            abaixo do logo. A classe layout-sidebar-rodape impede que o rodapé encolha ou role
-            junto com a lista de links — ver index.css. */}
+        {/* Rodapé fixo da lateral (nome, perfil e Sair). A classe layout-sidebar-rodape impede
+            que ele encolha ou role junto com a lista de links — ver index.css. */}
         <div className="layout-sidebar-rodape" style={{ color: '#94a3b8', fontSize: 12, marginTop: 16, borderTop: '1px solid #1e293b', paddingTop: 12 }}>
-          {/* Versão do sistema: o valor vem de src/versao.js — fonte única, para não existirem
-              dois números divergentes. */}
-          <div style={{ fontSize: 11, color: '#64748b' }} title="Versão do sistema">
+          <div style={{ color: '#fff', fontWeight: 600 }}>{usuario?.nome}</div>
+          <div>{usuario?.perfil}</div>
+          {/* Versão do sistema: fica entre o perfil e o botão Sair, sempre visível. O valor vem
+              de src/versao.js — fonte única, para não existirem dois números divergentes. */}
+          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }} title="Versão do sistema">
             v{VERSAO_SISTEMA}
           </div>
           <button onClick={logout} className="btn-secondary btn-sm" style={{ marginTop: 8, width: '100%' }}>Sair</button>
