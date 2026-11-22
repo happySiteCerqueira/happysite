@@ -50,6 +50,13 @@ git checkout v2.111
 
 ## Versões
 
+### 2.138 — Apuração movida para o menu lateral
+
+- A barra **📅 Apuração** saiu do topo da área de conteúdo e passou para o **menu lateral**, entre o
+  nome/perfil do usuário e o item **📊 Painel** (abaixo do logo).
+- Funcionalidade inalterada: clicar no mês abre o seletor; quando o mês difere do vigente, o fundo fica
+  amarelo com o botão **↺** para voltar ao mês atual.
+
 ### 2.137 — Tabela fixa no topo de "Lançar gastos"
 
 - **Pagamentos → Cadastrar → Lançar gastos** abre com a tabela **📌 Lançamentos fixos do mês**: DCTF, DAS, SEGURO,

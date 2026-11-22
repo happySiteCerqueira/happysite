@@ -87,61 +87,25 @@ export default function Layout() {
       <aside className={`layout-sidebar${menuAberto ? ' layout-sidebar-aberta' : ''}`}>
         {/* flexShrink: 0 — numa tela baixa (ou com muitos itens no menu) o logo seria espremido
             pelo flex; fixá-lo garante que só a lista de links role. */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12, flexShrink: 0 }}>
           <img src="/logo.png" alt="Logo" style={{ maxWidth: '100%', maxHeight: 70, objectFit: 'contain' }} />
         </div>
-        <nav style={{ flex: 1, overflowY: 'auto' }}>
-          {/* ENCARREGADO só enxerga o EPI — por isso Painel e Obras ficam ocultos para ele. */}
-          {!ehEncarregado && <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>}
-          {!ehEncarregado && <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>}
-          {temPermissao('FINANCEIRO') && <NavLink to="/medicao" style={linkStyle}>💰 Medição</NavLink>}
-
-          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/diarias" style={linkStyle}>📅 Diárias</NavLink>}
-
-          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}
-          {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
-          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
-          {/* Conciliação: confere o PDF de Holerites da contabilidade contra os lançamentos do
-              mês. Mesmos perfis do Financeiro/Pagamentos Antecipados, que é o dado conferido. */}
-          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/conciliacao" style={linkStyle}>🧮 Conciliação</NavLink>}
-          {temPermissao('RH') && <NavLink to="/aso" style={linkStyle}>🩺 Controle de ASO</NavLink>}
-          {temPermissao('RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR') && <NavLink to="/agenda" style={linkStyle}>🗓️ Agenda</NavLink>}
-          {/* Advertência: quem vê o item é definido na tela Controle de Acesso (módulo
-              "advertencia"), e não por uma lista fixa de perfis — por isso usa temAcessoSubaba. */}
-          {temAcessoSubaba('advertencia') && <NavLink to="/advertencia" style={linkStyle}>⚠️ Advertência</NavLink>}
-          {/* Auditoria: exclusiva do ADM master. temPermissao('ADM') só é verdadeiro para o
-              próprio ADM — os demais perfis nem veem o item no menu. */}
-          {temPermissao('ADM') && <NavLink to="/auditoria" style={linkStyle}>🔍 Auditoria</NavLink>}
-
-
-
-          <NavLink to="/configuracoes" style={linkStyle}>⚙️ Configurações</NavLink>
-
-        </nav>
-        {/* Rodapé fixo da lateral (nome, perfil e Sair). A classe layout-sidebar-rodape impede
-            que ele encolha ou role junto com a lista de links — ver index.css. */}
-        <div className="layout-sidebar-rodape" style={{ color: '#94a3b8', fontSize: 12, marginTop: 16, borderTop: '1px solid #1e293b', paddingTop: 12 }}>
-          <div style={{ color: '#fff', fontWeight: 600 }}>{usuario?.nome}</div>
-          <div>{usuario?.perfil}</div>
-          {/* Versão do sistema: fica entre o perfil e o botão Sair, sempre visível. O valor vem
-              de src/versao.js — fonte única, para não existirem dois números divergentes. */}
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }} title="Versão do sistema">
-            v{VERSAO_SISTEMA}
-          </div>
-          <button onClick={logout} className="btn-secondary btn-sm" style={{ marginTop: 8, width: '100%' }}>Sair</button>
+        {/* Identificação do usuário logado: fica entre o logo e o menu, sempre visível
+            (flexShrink: 0 evita que seja espremida quando a lista de links rola). */}
+        <div style={{ textAlign: 'center', marginBottom: 16, flexShrink: 0, borderBottom: '1px solid #1e293b', paddingBottom: 12 }}>
+          <div style={{ color: '#fff', fontWeight: 600, fontSize: 13 }}>{usuario?.nome}</div>
+          <div style={{ color: '#94a3b8', fontSize: 12 }}>{usuario?.perfil}</div>
         </div>
-      </aside>
-      <main className="layout-conteudo">
-        {/* Barra da Data de Apuração: propositalmente bem fina, para não roubar espaço útil da
-            tela. A explicação completa de onde ela vale ficou no "title" (tooltip ao passar o
-            mouse) em vez de ocupar uma linha inteira de texto como antes. */}
+        {/* Data de Apuração: movida da barra superior do conteúdo para cá — fica entre a
+            identificação do usuário e o menu (acima do Painel). flexShrink: 0 evita que seja
+            espremida quando a lista de links rola. */}
         <div
           style={{
-            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap',
             background: mes !== mesVigente ? '#fef3c7' : '#f8fafc',
             border: `1px solid ${mes !== mesVigente ? '#f59e0b' : '#e2e8f0'}`,
-            borderRadius: 6, padding: '2px 8px', marginBottom: 8,
-            fontSize: 12, lineHeight: 1.2, overflowX: 'auto'
+            borderRadius: 6, padding: '4px 8px', marginBottom: 12, flexShrink: 0,
+            fontSize: 12, lineHeight: 1.2
           }}
           title="Mês de apuração usado em Medição, Diárias, Pagamentos Antecipados, Prestadores e Obras. Volta ao mês vigente ao sair e entrar novamente."
         >
@@ -184,6 +148,47 @@ export default function Layout() {
             </button>
           )}
         </div>
+        <nav style={{ flex: 1, overflowY: 'auto' }}>
+          {/* ENCARREGADO só enxerga o EPI — por isso Painel e Obras ficam ocultos para ele. */}
+          {!ehEncarregado && <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>}
+          {!ehEncarregado && <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>}
+          {temPermissao('FINANCEIRO') && <NavLink to="/medicao" style={linkStyle}>💰 Medição</NavLink>}
+
+          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/diarias" style={linkStyle}>📅 Diárias</NavLink>}
+
+          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/prestadores" style={linkStyle}>📇 Prestadores</NavLink>}
+          {temPermissao('RH', 'MESTRE', 'ENGENHEIRO', 'ENCARREGADO', 'APONTADOR') && <NavLink to="/epi" style={linkStyle}>🦺 EPI</NavLink>}
+          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/financeiro" style={linkStyle}>💵 Financeiro</NavLink>}
+          {/* Conciliação: confere o PDF de Holerites da contabilidade contra os lançamentos do
+              mês. Mesmos perfis do Financeiro/Pagamentos Antecipados, que é o dado conferido. */}
+          {temPermissao('FINANCEIRO', 'RH') && <NavLink to="/conciliacao" style={linkStyle}>🧮 Conciliação</NavLink>}
+          {temPermissao('RH') && <NavLink to="/aso" style={linkStyle}>🩺 Controle de ASO</NavLink>}
+          {temPermissao('RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR') && <NavLink to="/agenda" style={linkStyle}>🗓️ Agenda</NavLink>}
+          {/* Advertência: quem vê o item é definido na tela Controle de Acesso (módulo
+              "advertencia"), e não por uma lista fixa de perfis — por isso usa temAcessoSubaba. */}
+          {temAcessoSubaba('advertencia') && <NavLink to="/advertencia" style={linkStyle}>⚠️ Advertência</NavLink>}
+          {/* Auditoria: exclusiva do ADM master. temPermissao('ADM') só é verdadeiro para o
+              próprio ADM — os demais perfis nem veem o item no menu. */}
+          {temPermissao('ADM') && <NavLink to="/auditoria" style={linkStyle}>🔍 Auditoria</NavLink>}
+
+
+
+          <NavLink to="/configuracoes" style={linkStyle}>⚙️ Configurações</NavLink>
+
+        </nav>
+        {/* Rodapé fixo da lateral (versão e Sair). O nome/perfil do usuário fica no topo, logo
+            abaixo do logo. A classe layout-sidebar-rodape impede que o rodapé encolha ou role
+            junto com a lista de links — ver index.css. */}
+        <div className="layout-sidebar-rodape" style={{ color: '#94a3b8', fontSize: 12, marginTop: 16, borderTop: '1px solid #1e293b', paddingTop: 12 }}>
+          {/* Versão do sistema: o valor vem de src/versao.js — fonte única, para não existirem
+              dois números divergentes. */}
+          <div style={{ fontSize: 11, color: '#64748b' }} title="Versão do sistema">
+            v{VERSAO_SISTEMA}
+          </div>
+          <button onClick={logout} className="btn-secondary btn-sm" style={{ marginTop: 8, width: '100%' }}>Sair</button>
+        </div>
+      </aside>
+      <main className="layout-conteudo">
         <Outlet />
       </main>
 
