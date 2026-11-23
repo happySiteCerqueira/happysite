@@ -50,6 +50,14 @@ git checkout v2.111
 
 ## Versões
 
+### 2.144 — Sincronização de permissões ao retornar ao app
+
+- O app atualiza a lista de permissões do perfil quando volta ao primeiro plano, incluindo no PWA
+  instalado na tela inicial. Mudanças feitas no Controle de Acesso passam a aparecer sem exigir
+  logout e novo login.
+- As regras de acesso não mudaram: no padrão, MESTRE consulta o histórico de Advertência; a ação
+  de aplicar advertência continua separada e liberada para RH.
+
 ### 2.143 — Modernização visual do Painel
 
 - O Painel ganhou cabeçalho executivo com saudação e filtros em pílulas, além de cartões para

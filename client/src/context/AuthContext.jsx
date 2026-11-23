@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../api/api';
 
 const AuthContext = createContext();
@@ -13,9 +13,9 @@ export function AuthProvider({ children }) {
   // Para ADM, fica undefined/ignorado (sempre tem acesso a tudo).
   const [permissoesModulo, setPermissoesModulo] = useState([]);
 
-  function carregarPermissoes() {
+  const carregarPermissoes = useCallback(() => {
     api.get('/permissoes/minhas').then(res => setPermissoesModulo(res.data || [])).catch(() => setPermissoesModulo([]));
-  }
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('hs_token');
@@ -32,7 +32,21 @@ export function AuthProvider({ children }) {
     } else {
       setCarregando(false);
     }
-  }, []);
+  }, [carregarPermissoes]);
+
+  useEffect(() => {
+    let estavaVisivel = document.visibilityState === 'visible';
+    const sincronizarAoRetornar = () => {
+      const estaVisivel = document.visibilityState === 'visible';
+      if (estaVisivel && !estavaVisivel && navigator.onLine !== false && localStorage.getItem('hs_token')) {
+        carregarPermissoes();
+      }
+      estavaVisivel = estaVisivel;
+    };
+
+    document.addEventListener('visibilitychange', sincronizarAoRetornar);
+    return () => document.removeEventListener('visibilitychange', sincronizarAoRetornar);
+  }, [carregarPermissoes]);
 
   async function login(login, senha) {
     const res = await api.post('/auth/login', { login, senha });

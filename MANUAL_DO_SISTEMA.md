@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.143** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.144** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -323,6 +323,10 @@ por último, semelhança ≥ 92%.
 | **🔍 Auditoria** | Trilha de tudo que foi alterado (só ADM) |
 | **📋 Cadastro** | Colaboradores/PJ, manual ou por planilha, e preços específicos |
 | **⚙️ Configurações** | Serviços padrão, Usuários, Backup, Controle de Acesso, **Manuais** |
+
+As permissões do **Controle de Acesso** são sincronizadas ao entrar na sessão e quando o app
+instalado retorna ao primeiro plano. Em **Advertência**, consultar o histórico e registrar medidas
+são permissões separadas; por padrão, **MESTRE** pode consultar e somente **RH** pode registrar.
 
 ---
 
