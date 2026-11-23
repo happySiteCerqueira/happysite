@@ -50,6 +50,14 @@ git checkout v2.111
 
 ## Versões
 
+### 2.142 — Resumo financeiro executivo com gráficos interativos
+
+- **Financeiro → Resumo** compara Entradas, Saídas e Saldo Líquido em gráficos mensais e por obra,
+  com pílulas para combinar as séries e um switch para incluir os custos rateados da CERQUEIRA.
+- Os quatro cartões mostram Receita Líquida, Saídas Totais, Saldo Líquido e Margem Média; os períodos
+  disponíveis são Mês atual, Últimos 6 meses, Últimos 12 meses e Ano.
+- Os valores usam a consolidação oficial do Centro de Custo. A visão de entradas por serviço foi mantida.
+
 ### 2.141 — Edição do "Mês anterior" em Pagamentos Antecipados
 
 - Em **Financeiro → Pagamentos Antecipados**, quem tem a permissão vê um botão **✎** ao lado do

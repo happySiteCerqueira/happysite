@@ -4,6 +4,7 @@ const db = require('../db/database');
 const { autenticar, permitir } = require('../utils/auth');
 const { permissaoModulo } = require('../utils/permissaoModulo');
 const { registrar, registrarSnapshot } = require('../utils/auditoria');
+const relatorios = require('./relatorios');
 
 const router = express.Router();
 
@@ -17,6 +18,7 @@ const SERVICOS_VALIDOS = ['Pintura', 'Produção', 'Diárias', 'Reforma N', 'Ref
 // Mantido apenas como valor padrão de importação para compatibilidade; hoje quem decide o desconto
 // é o campo "com_nota" (true = desconta 11%, false = valor líquido = valor bruto).
 const SERVICOS_SEM_DESCONTO_PADRAO = ['Diárias', 'Reforma S'];
+const MES_VALIDO = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 // Normaliza texto para comparação tolerante: remove acentos, espaços extras e ignora maiúsc/minúsc.
 function normalizarTexto(texto) {
@@ -62,6 +64,120 @@ function parseReceita(r) {
     com_nota: !!r.com_nota
   };
 }
+
+function deslocarMes(mes, deslocamento) {
+  const [ano, numeroMes] = mes.split('-').map(Number);
+  const data = new Date(Date.UTC(ano, numeroMes - 1 + deslocamento, 1));
+  return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function ultimoDiaMes(mes) {
+  const [ano, numeroMes] = mes.split('-').map(Number);
+  return new Date(Date.UTC(ano, numeroMes, 0)).toISOString().slice(0, 10);
+}
+
+function margemPercentual(saldo, entrada) {
+  return entrada > 0 ? Math.round((saldo / entrada) * 10000) / 100 : null;
+}
+
+// ---- Resumo executivo: usa a consolidação oficial do Centro de Custo -----------------------
+router.get('/resumo-executivo', permissaoModulo('financeiro.resumo'), async (req, res) => {
+  const mesCiclo = req.query.mes_ciclo || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  if (!MES_VALIDO.test(mesCiclo)) return res.status(400).json({ erro: 'Informe mes_ciclo no formato YYYY-MM.' });
+
+  let mesInicio = req.query.mes_inicio;
+  let mesFim = req.query.mes_fim;
+  if (!mesInicio && !mesFim) {
+    mesFim = mesCiclo;
+    mesInicio = deslocarMes(mesFim, -5);
+  } else if (!mesInicio || !mesFim || !MES_VALIDO.test(mesInicio) || !MES_VALIDO.test(mesFim)) {
+    return res.status(400).json({ erro: 'Informe mes_inicio e mes_fim válidos no formato YYYY-MM.' });
+  }
+  if (mesInicio > mesFim) return res.status(400).json({ erro: 'mes_inicio não pode ser posterior a mes_fim.' });
+
+  const quantidadeMeses = (Number(mesFim.slice(0, 4)) - Number(mesInicio.slice(0, 4))) * 12
+    + Number(mesFim.slice(5, 7)) - Number(mesInicio.slice(5, 7)) + 1;
+  if (quantidadeMeses > 120) return res.status(400).json({ erro: 'O período máximo do resumo é de 120 meses.' });
+
+  let incluirCerqueira = true;
+  if (req.query.incluir_cerqueira !== undefined) {
+    const valor = String(req.query.incluir_cerqueira).trim().toLowerCase();
+    if (!['true', 'false', '1', '0'].includes(valor)) {
+      return res.status(400).json({ erro: 'incluir_cerqueira deve ser true ou false.' });
+    }
+    incluirCerqueira = ['true', '1'].includes(valor);
+  }
+
+  const meses = [];
+  for (let mes = mesInicio; mes <= mesFim; mes = deslocarMes(mes, 1)) meses.push(mes);
+
+  const porMes = [];
+  const obras = new Map();
+  for (const mes of meses) {
+    const consolidado = await relatorios.calcularSaudeObras({
+      mes_inicio: mes,
+      mes_fim: mes,
+      data_inicio: `${mes}-01`,
+      data_fim: ultimoDiaMes(mes),
+      incluir_cerqueira: incluirCerqueira ? '1' : '0',
+      criterio: req.query.criterio
+    });
+
+    porMes.push({
+      mes_ciclo: mes,
+      label_mes: `${['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][Number(mes.slice(5, 7)) - 1]}/${mes.slice(2, 4)}`,
+      entrada_liquida: consolidado.totais.entrada_liquida,
+      saida_total: consolidado.totais.saida,
+      saldo_liquido: consolidado.totais.saldo,
+      margem_percentual: margemPercentual(consolidado.totais.saldo, consolidado.totais.entrada_liquida)
+    });
+
+    for (const obra of consolidado.obras) {
+      if (!obra.obra_id || obra.eh_matriz || obra.sem_obra_definida) continue;
+      const acumulada = obras.get(obra.obra_id) || {
+        obra_id: obra.obra_id,
+        obra_nome: obra.obra,
+        entrada_liquida: 0,
+        saida_total: 0,
+        saldo_liquido: 0
+      };
+      acumulada.entrada_liquida = Math.round((acumulada.entrada_liquida + obra.total_entrada_liquida) * 100) / 100;
+      acumulada.saida_total = Math.round((acumulada.saida_total + obra.total_saida) * 100) / 100;
+      acumulada.saldo_liquido = Math.round((acumulada.entrada_liquida - acumulada.saida_total) * 100) / 100;
+      obras.set(obra.obra_id, acumulada);
+    }
+  }
+
+  const porServico = await db.all(
+    `SELECT servico, SUM(valor_liquido) AS entrada_liquida, SUM(valor_bruto) AS entrada_bruta, COUNT(*)::int AS qtd
+     FROM financeiro_receitas
+     WHERE excluido = 0 AND data_medicao >= ?::date AND data_medicao <= ?::date
+     GROUP BY servico ORDER BY SUM(valor_liquido) DESC, servico`,
+    `${mesInicio}-01`, ultimoDiaMes(mesFim)
+  );
+  const listaObras = [...obras.values()].map(obra => ({
+    ...obra,
+    margem_percentual: margemPercentual(obra.saldo_liquido, obra.entrada_liquida)
+  })).sort((a, b) => b.saldo_liquido - a.saldo_liquido || a.obra_nome.localeCompare(b.obra_nome, 'pt-BR'));
+
+  res.json({
+    mes_inicio: mesInicio,
+    mes_fim: mesFim,
+    incluir_cerqueira: incluirCerqueira,
+    evolucao_mensal: porMes,
+    por_obra: listaObras,
+    por_servico: porServico.map(servico => ({
+      ...servico,
+      entrada_liquida: Number(servico.entrada_liquida) || 0,
+      entrada_bruta: Number(servico.entrada_bruta) || 0,
+      // O Centro de Custo não atribui folha, impostos e gastos operacionais a um serviço de receita.
+      saida_total: null,
+      saldo_liquido: null,
+      margem_percentual: null
+    }))
+  });
+});
+
 
 // ---- Nomes de obras já cadastradas (usado como sugestão/autocomplete no formulário) ----
 router.get('/obras-sugestoes', async (req, res) => {

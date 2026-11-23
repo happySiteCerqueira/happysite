@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.134** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.142** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -119,10 +119,21 @@ daquele mês (produção, diárias, antecipados).
 | **💸 Pagamentos** (antes "Gastos"; permissão `financeiro.gastos`) | Custos por colaborador rateados por obra (VA, VT, Extras, EPI, Holerite) + Café direto da obra. Ver abaixo |
 | **🏗️ Centro de Custo** | O que entrou × o que saiu de cada obra: saldo e margem (antiga "Saúde financeira") |
 | **📈 Relatórios** | Mudou para a tela de **Medição** (aba Relatórios) |
-| **📊 Resumo** | Gráficos de receita por mês/obra/serviço (só ADM) |
+| **📊 Resumo** | Indicadores e gráficos executivos de entradas, saídas, saldo e receita por serviço |
 
 > Holerite e Pagamentos Antecipados são **a mesma planilha** (`pagamentos_antecipados`) vista por
 > duas abas. Nada mudou no banco — só os nomes na tela ficaram certos.
+
+#### Resumo Executivo — Financeiro → Resumo
+
+O Resumo compara a receita líquida e os custos consolidados do Centro de Custo. As pílulas **Entradas**,
+**Saídas** e **Saldo Líquido** combinam as séries nos gráficos de evolução mensal e comparativo por obra;
+sempre permanece pelo menos uma série ativa. A tela também mantém o detalhamento de entradas por serviço.
+
+Os períodos são **Mês atual** (mês selecionado em 📅 Apuração), **Últimos 6 meses**, **Últimos 12 meses**
+ou **Ano** (do início do ano até o mês selecionado). Os indicadores são Receita Líquida, Saídas Totais,
+Saldo Líquido e média das margens mensais disponíveis. O switch **Incluir custos CERQUEIRA** usa o critério
+de rateio do Centro de Custo salvo neste navegador (padrão: **Híbrido 50/50**).
 
 #### Pagamentos (antes "Gastos") — custo por colaborador rateado entre as obras
 

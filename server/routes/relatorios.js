@@ -514,8 +514,8 @@ async function buscarPendenciasImpostos(mesInicio, mesFim) {
 //   mes_inicio / mes_fim   (YYYY-MM)    → aplicados aos custos (mes_ciclo).
 // A tela envia os dois a partir do mesmo período escolhido, para que os dois lados fiquem
 // sempre comparando o mesmo intervalo de tempo.
-router.get('/saude-obras', async (req, res) => {
-  const { data_inicio, data_fim, mes_inicio, mes_fim } = req.query;
+async function calcularSaudeObras(params) {
+  const { data_inicio, data_fim, mes_inicio, mes_fim } = params;
 
   const [entradas, producao, diarias, diariasSemObra, custosColab, gastosDiretos] = await Promise.all([
     buscarEntradas(data_inicio, data_fim),
@@ -656,8 +656,8 @@ router.get('/saude-obras', async (req, res) => {
   //   • sem "Incluir custos CERQUEIRA": ela aparece em linha própria, com os seus custos;
   //   • com: cada obra de produção absorve a sua fatia (bloco "CERQUEIRA (Rateio Matriz / Adm)") e a
   //     linha da matriz some (ou fica só com o que não teve base de rateio).
-  const incluirCerqueira = req.query.incluir_cerqueira === '1';
-  const cerq = await calcularCerqueira({ mes_inicio, mes_fim, criterio: req.query.criterio, ratear: incluirCerqueira });
+  const incluirCerqueira = params.incluir_cerqueira === '1' || params.incluir_cerqueira === true;
+  const cerq = await calcularCerqueira({ mes_inicio, mes_fim, criterio: params.criterio, ratear: incluirCerqueira });
   if (cerq.matriz) {
     const chaveMatriz = normalizarNomeObra(cerq.matriz.nome);
     const existente = mapa.get(chaveMatriz);
@@ -719,7 +719,11 @@ router.get('/saude-obras', async (req, res) => {
     nao_rateado: cerq.naoRateado,
     por_mes: cerq.meses.map(m => ({ mes: m.mes, total: m.total, rotulo_criterio: m.rotulo_criterio }))
   };
-  res.json(resposta);
+  return resposta;
+}
+
+router.get('/saude-obras', async (req, res) => {
+  res.json(await calcularSaudeObras(req.query));
 });
 
 // ===========================================================================================
@@ -959,5 +963,7 @@ router.get('/centro-custo/linhas', async (req, res) => {
   const linhas = await buscarLinhasDetalhadas(req.query);
   res.json({ categorias: categoriasSaida(req.query.incluir_cerqueira === '1'), linhas });
 });
+
+router.calcularSaudeObras = calcularSaudeObras;
 
 module.exports = router;

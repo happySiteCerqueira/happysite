@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/api';
 import { useAuth } from '../context/AuthContext';
 import { useApuracao } from '../context/ApuracaoContext';
 import Modal from '../components/Modal';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, Line, ReferenceLine
 } from 'recharts';
 import PagamentosAntecipados from './PagamentosAntecipados';
 import GastosCustos from './gastos/GastosCustos';
@@ -1123,16 +1123,11 @@ function Entrada() {
   );
 }
 
-// ---- Cores usadas nos gráficos ----
-const CORES_MESES = [
-  '#2563eb', '#0891b2', '#16a34a', '#65a30d', '#ca8a04', '#ea580c',
-  '#dc2626', '#db2777', '#9333ea', '#7c3aed', '#4f46e5', '#0284c7'
-];
-const NOMES_MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
 function formatarMoeda(valor) {
   return `R$ ${Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+const RESUMO_SEM_DADOS = [];
 
 function TooltipPersonalizado({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
@@ -1148,316 +1143,241 @@ function TooltipPersonalizado({ active, payload, label }) {
   );
 }
 
-// Dropdown com checkboxes (multi-seleção "boxpoint"): ao marcar/desmarcar já aplica o filtro
-// na hora, sem precisar de botão de confirmação. Fecha ao clicar fora.
-function DropdownMultiSelect({ rotulo, opcoes, selecionados, onAlternar, onLimpar }) {
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef(null);
+function mesComDeslocamento(mes, deslocamento) {
+  const [ano, numeroMes] = mes.split('-').map(Number);
+  const data = new Date(Date.UTC(ano, numeroMes - 1 + deslocamento, 1));
+  return `${data.getUTCFullYear()}-${String(data.getUTCMonth() + 1).padStart(2, '0')}`;
+}
 
-  useEffect(() => {
-    function aoClicarFora(e) {
-      if (ref.current && !ref.current.contains(e.target)) setAberto(false);
-    }
-    document.addEventListener('mousedown', aoClicarFora);
-    return () => document.removeEventListener('mousedown', aoClicarFora);
-  }, []);
-
-  const qtd = selecionados.length;
-
+function GraficoResumo({ dados, categoria, serie, idGradiente, formatarCategoria }) {
+  const saldoIsolado = serie.saldo && !serie.entrada && !serie.saida;
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>{rotulo}</label>
-      <button
-        type="button"
-        className="btn-secondary btn-sm"
-        onClick={() => setAberto(a => !a)}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 160, justifyContent: 'space-between' }}
-      >
-        <span>{qtd === 0 ? 'Todos' : `${qtd} selecionado${qtd > 1 ? 's' : ''}`}</span>
-        <span style={{ fontSize: 10 }}>▾</span>
-      </button>
-
-      {aberto && (
-        <div
-          style={{
-            position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#fff',
-            border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-            zIndex: 20, minWidth: 220, maxHeight: 260, overflowY: 'auto', padding: 8
-          }}
-        >
-          {qtd > 0 && (
-            <div
-              onClick={onLimpar}
-              style={{ padding: '4px 6px', fontSize: 12, color: '#2563eb', cursor: 'pointer', fontWeight: 600, borderBottom: '1px solid #f0f0f0', marginBottom: 4 }}
-            >
-              Limpar seleção
-            </div>
-          )}
-          {opcoes.length === 0 && <div style={{ padding: '4px 6px', fontSize: 12, color: '#9ca3af' }}>Nenhuma opção</div>}
-          {opcoes.map(op => (
-            <label
-              key={op}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', fontSize: 13, cursor: 'pointer', borderRadius: 4 }}
-              onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              <input
-                type="checkbox"
-                checked={selecionados.includes(op)}
-                onChange={() => onAlternar(op)}
-              />
-              {op}
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
+    <ResponsiveContainer width="100%" height={310}>
+      <BarChart data={dados} margin={{ top: 8, right: 12, left: 4, bottom: 8 }}>
+        <defs>
+          <linearGradient id={`${idGradiente}-entrada`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10b981" />
+            <stop offset="100%" stopColor="#059669" />
+          </linearGradient>
+          <linearGradient id={`${idGradiente}-saida`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fb7185" />
+            <stop offset="100%" stopColor="#dc2626" />
+          </linearGradient>
+          <linearGradient id={`${idGradiente}-saldo-positivo`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2563eb" />
+            <stop offset="100%" stopColor="#10b981" />
+          </linearGradient>
+          <linearGradient id={`${idGradiente}-saldo-negativo`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fb7185" />
+            <stop offset="100%" stopColor="#dc2626" />
+          </linearGradient>
+        </defs>
+        <CartesianGrid vertical={false} stroke="#e9eef5" strokeDasharray="3 5" />
+        <XAxis dataKey={categoria} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={formatarCategoria} tickLine={false} axisLine={{ stroke: '#cbd5e1' }} />
+        <YAxis yAxisId="base" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={valor => `R$${(valor / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} width={66} />
+        {serie.saldo && !saldoIsolado && <YAxis yAxisId="saldo" orientation="right" hide domain={['auto', 'auto']} />}
+        <Tooltip content={<TooltipPersonalizado />} cursor={{ fill: '#f8fafc' }} />
+        <Legend verticalAlign="top" height={32} wrapperStyle={{ fontSize: 12 }} />
+        {saldoIsolado && <ReferenceLine y={0} yAxisId="base" stroke="#334155" strokeWidth={2} />}
+        {serie.entrada && <Bar yAxisId="base" name="Entradas" dataKey="entrada_liquida" fill={`url(#${idGradiente}-entrada)`} radius={[6, 6, 0, 0]} maxBarSize={42} />}
+        {serie.saida && <Bar yAxisId="base" name="Saídas" dataKey="saida_total" fill={`url(#${idGradiente}-saida)`} radius={[6, 6, 0, 0]} maxBarSize={42} />}
+        {saldoIsolado && (
+          <Bar yAxisId="base" name="Saldo Líquido" dataKey="saldo_liquido" radius={[6, 6, 0, 0]} maxBarSize={42}>
+            {dados.map((item, indice) => (
+              <Cell key={`${item[categoria]}-${indice}`} fill={item.saldo_liquido >= 0 ? `url(#${idGradiente}-saldo-positivo)` : `url(#${idGradiente}-saldo-negativo)`} />
+            ))}
+          </Bar>
+        )}
+        {serie.saldo && !saldoIsolado && (
+          <Line yAxisId="saldo" name="Saldo Líquido" dataKey="saldo_liquido" type="monotone" stroke="#2563eb" strokeWidth={3} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#2563eb' }} />
+        )}
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
 function Resumo() {
-  // ---- Gráfico principal: valor líquido por ano/mês (todo o histórico) ----
-
-  const [dadosPorMesAno, setDadosPorMesAno] = useState([]);
-  const [anoSelecionado, setAnoSelecionado] = useState('TODOS');
-  const [carregandoPrincipal, setCarregandoPrincipal] = useState(true);
-
-  useEffect(() => {
-    setCarregandoPrincipal(true);
-    api.get('/financeiro/resumo/por-mes-ano')
-      .then(res => setDadosPorMesAno(res.data))
-      .finally(() => setCarregandoPrincipal(false));
-  }, []);
-
-  const anosDisponiveis = [...new Set(dadosPorMesAno.map(d => d.ano))].sort();
-
-  const dadosGraficoPrincipal = (anoSelecionado === 'TODOS' ? dadosPorMesAno : dadosPorMesAno.filter(d => d.ano === anoSelecionado))
-    .map(d => ({
-      label: anoSelecionado === 'TODOS' ? `${NOMES_MESES_CURTOS[Number(d.mes) - 1]}/${d.ano.slice(2)}` : NOMES_MESES_CURTOS[Number(d.mes) - 1],
-      valor_liquido: d.valor_liquido,
-      valor_bruto: d.valor_bruto,
-      mes: d.mes
-    }));
-
-  const totalGeralLiquido = dadosPorMesAno.reduce((s, d) => s + d.valor_liquido, 0);
-  const totalGeralBruto = dadosPorMesAno.reduce((s, d) => s + d.valor_bruto, 0);
-  const totalGeralQtd = dadosPorMesAno.reduce((s, d) => s + d.qtd, 0);
-
-  // ---- Gráfico configurável ----
-  const [obras, setObras] = useState([]);
-  const [filtros, setFiltros] = useState({ data_inicio: '', data_fim: '' });
-  const [servicosSelecionados, setServicosSelecionados] = useState([]);
-  const [obrasSelecionadas, setObrasSelecionadas] = useState([]);
-  const [respostaConfiguravel, setRespostaConfiguravel] = useState({ agrupadoPor: null, dados: [] });
-  const [carregandoConfiguravel, setCarregandoConfiguravel] = useState(false);
+  const { mes: mesApuracao } = useApuracao();
+  const [periodo, setPeriodo] = useState('6m');
+  const [series, setSeries] = useState({ entrada: true, saida: true, saldo: true });
+  const [incluirCerqueira, setIncluirCerqueira] = useState(() => {
+    try { return localStorage.getItem('hs_resumo_cerqueira') !== '0'; } catch { return true; }
+  });
+  const [criterio] = useState(() => {
+    try { return localStorage.getItem('hs_cc_criterio') || 'HIBRIDO_50_50'; } catch { return 'HIBRIDO_50_50'; }
+  });
+  const [dados, setDados] = useState(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState('');
+  const intervalo = useMemo(() => {
+    if (periodo === 'mes') return { inicio: mesApuracao, fim: mesApuracao };
+    if (periodo === 'ano') return { inicio: `${mesApuracao.slice(0, 4)}-01`, fim: mesApuracao };
+    const quantidade = periodo === '12m' ? 12 : 6;
+    return { inicio: mesComDeslocamento(mesApuracao, 1 - quantidade), fim: mesApuracao };
+  }, [periodo, mesApuracao]);
 
   useEffect(() => {
-    api.get('/financeiro/receitas/obras-distintas').then(res => setObras(res.data));
-  }, []);
-
-  function alternarServico(s) {
-    setServicosSelecionados(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
-  }
-  function alternarObra(o) {
-    setObrasSelecionadas(prev => prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o]);
-  }
-
-  function carregarConfiguravel() {
-    setCarregandoConfiguravel(true);
-    api.get('/financeiro/resumo/configuravel', {
+    let vigente = true;
+    setCarregando(true);
+    setErro('');
+    api.get('/financeiro/resumo-executivo', {
       params: {
-        data_inicio: filtros.data_inicio || undefined,
-        data_fim: filtros.data_fim || undefined,
-        servicos: servicosSelecionados.length > 0 ? servicosSelecionados : undefined,
-        obras: obrasSelecionadas.length > 0 ? obrasSelecionadas : undefined
-      },
-      paramsSerializer: { indexes: null }
+        mes_ciclo: mesApuracao,
+        mes_inicio: intervalo.inicio,
+        mes_fim: intervalo.fim,
+        incluir_cerqueira: incluirCerqueira,
+        criterio
+      }
     })
-      .then(res => setRespostaConfiguravel(res.data))
-      .finally(() => setCarregandoConfiguravel(false));
-  }
-  useEffect(carregarConfiguravel, [filtros, servicosSelecionados, obrasSelecionadas]);
+      .then(res => { if (vigente) setDados(res.data); })
+      .catch(e => {
+        if (vigente) setErro(e.response?.data?.erro || 'Não foi possível carregar o resumo financeiro.');
+      })
+      .finally(() => { if (vigente) setCarregando(false); });
+    return () => { vigente = false; };
+  }, [mesApuracao, intervalo, incluirCerqueira, criterio]);
 
-  const dadosConfiguravel = respostaConfiguravel.dados || [];
-  const agrupadoPor = respostaConfiguravel.agrupadoPor; // null | 'obra' | 'servico'
+  const evolucao = dados?.evolucao_mensal || RESUMO_SEM_DADOS;
+  const obras = dados?.por_obra || RESUMO_SEM_DADOS;
+  const servicos = dados?.por_servico || RESUMO_SEM_DADOS;
+  const totais = useMemo(() => {
+    const receita = evolucao.reduce((soma, item) => soma + item.entrada_liquida, 0);
+    const saidas = evolucao.reduce((soma, item) => soma + item.saida_total, 0);
+    const margens = evolucao.filter(item => item.margem_percentual !== null).map(item => item.margem_percentual);
+    return {
+      receita,
+      saidas,
+      saldo: evolucao.reduce((soma, item) => soma + item.saldo_liquido, 0),
+      margemMedia: margens.length ? margens.reduce((soma, valor) => soma + valor, 0) / margens.length : null
+    };
+  }, [evolucao]);
 
-  // Monta os dados do gráfico: quando há agrupamento (obra ou serviço), cada mês vira uma
-  // linha com uma chave por grupo (para o Recharts desenhar uma barra colorida por grupo).
-  let dadosGraficoConfiguravel = [];
-  let gruposComparacao = [];
-  if (agrupadoPor) {
-    const porMes = {};
-    dadosConfiguravel.forEach(d => {
-      if (!porMes[d.mes_ano]) porMes[d.mes_ano] = { mes_ano: d.mes_ano };
-      porMes[d.mes_ano][d.grupo] = d.valor_liquido;
-    });
-    gruposComparacao = [...new Set(dadosConfiguravel.map(d => d.grupo))];
-    dadosGraficoConfiguravel = Object.values(porMes)
-      .sort((a, b) => a.mes_ano.localeCompare(b.mes_ano))
-      .map(d => {
-        const [ano, mes] = d.mes_ano.split('-');
-        return { ...d, label: `${NOMES_MESES_CURTOS[Number(mes) - 1]}/${ano.slice(2)}` };
-      });
-  } else {
-    dadosGraficoConfiguravel = dadosConfiguravel.map(d => {
-      const [ano, mes] = d.mes_ano.split('-');
-      return {
-        label: `${NOMES_MESES_CURTOS[Number(mes) - 1]}/${ano.slice(2)}`,
-        valor_liquido: d.valor_liquido,
-        valor_bruto: d.valor_bruto
-      };
+  function alternarSerie(chave) {
+    setSeries(atual => {
+      if (atual[chave] && Object.values(atual).filter(Boolean).length === 1) return atual;
+      return { ...atual, [chave]: !atual[chave] };
     });
   }
 
-  const totalConfLiquido = dadosConfiguravel.reduce((s, d) => s + d.valor_liquido, 0);
-  const totalConfBruto = dadosConfiguravel.reduce((s, d) => s + d.valor_bruto, 0);
-  const totalConfQtd = dadosConfiguravel.reduce((s, d) => s + d.qtd, 0);
-
-  function limparFiltros() {
-    setFiltros({ data_inicio: '', data_fim: '' });
-    setServicosSelecionados([]);
-    setObrasSelecionadas([]);
+  function alternarCerqueira() {
+    setIncluirCerqueira(atual => {
+      const novo = !atual;
+      try { localStorage.setItem('hs_resumo_cerqueira', novo ? '1' : '0'); } catch { /* armazenamento opcional */ }
+      return novo;
+    });
   }
 
+  const nomeMesFim = rotuloMes(intervalo.fim);
+  const saidaOuSaldoAtivo = series.saida || series.saldo;
   return (
     <div>
-      {/* Cards de totais gerais */}
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 20 }}>
-        <div className="card" style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}>
-          <div style={{ fontSize: 12, opacity: 0.85 }}>Total Líquido (geral)</div>
-          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>{formatarMoeda(totalGeralLiquido)}</div>
-        </div>
-        <div className="card">
-          <div style={{ fontSize: 12, color: '#6b7280' }}>Total Bruto (geral)</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{formatarMoeda(totalGeralBruto)}</div>
-        </div>
-        <div className="card">
-          <div style={{ fontSize: 12, color: '#6b7280' }}>Qtd. de Entradas</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{totalGeralQtd}</div>
-        </div>
-        <div className="card">
-          <div style={{ fontSize: 12, color: '#6b7280' }}>Desconto médio estimado</div>
-          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: '#dc2626' }}>
-            {totalGeralBruto > 0 ? `${(100 - (totalGeralLiquido / totalGeralBruto) * 100).toFixed(1)}%` : '-'}
+      <div className="card resumo-controles">
+        <div>
+          <div className="resumo-controles-titulo">Séries do gráfico</div>
+          <div className="resumo-pilulas" aria-label="Séries financeiras exibidas">
+            {[
+              { chave: 'entrada', rotulo: 'Entradas', classe: 'resumo-pill-entrada' },
+              { chave: 'saida', rotulo: 'Saídas', classe: 'resumo-pill-saida' },
+              { chave: 'saldo', rotulo: 'Saldo Líquido', classe: 'resumo-pill-saldo' }
+            ].map(item => (
+              <button
+                key={item.chave}
+                type="button"
+                className={`resumo-pill ${item.classe}`}
+                aria-pressed={series[item.chave]}
+                aria-disabled={series[item.chave] && Object.values(series).filter(Boolean).length === 1}
+                onClick={() => alternarSerie(item.chave)}
+              >
+                <span className="resumo-pill-indicador" aria-hidden="true">{series[item.chave] ? '✓' : ''}</span>
+                {item.rotulo}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
-
-      {/* Gráfico principal: valor líquido por ano/mês */}
-      <div className="card" style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>📊 Entradas por Ano/Mês (Valor Líquido)</h3>
-          <select value={anoSelecionado} onChange={e => setAnoSelecionado(e.target.value)}>
-            <option value="TODOS">Todos os anos</option>
-            {anosDisponiveis.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </div>
-
-        {carregandoPrincipal ? (
-          <p style={{ color: '#9ca3af' }}>Carregando...</p>
-        ) : dadosGraficoPrincipal.length === 0 ? (
-          <p style={{ color: '#9ca3af' }}>Nenhum dado encontrado.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={340}>
-            <BarChart data={dadosGraficoPrincipal} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<TooltipPersonalizado />} />
-              <Legend />
-              <Bar name="Valor Líquido" dataKey="valor_liquido" radius={[6, 6, 0, 0]}>
-                {dadosGraficoPrincipal.map((_, i) => (
-                  <Cell key={i} fill={CORES_MESES[i % CORES_MESES.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* Gráfico configurável */}
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>⚙️ Gráfico Configurável</h3>
-        <p style={{ color: '#6b7280', fontSize: 12, marginTop: -6 }}>
-          Selecione 2 ou mais Obras (ou Serviços) para comparar o desempenho entre eles lado a lado no gráfico.
-        </p>
-
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+        <div className="resumo-controles-filtros">
+          {saidaOuSaldoAtivo && (
+            <button type="button" className="resumo-switch" role="switch" aria-checked={incluirCerqueira} onClick={alternarCerqueira}>
+              <span className="resumo-switch-trilho" aria-hidden="true" />
+              Incluir custos CERQUEIRA
+            </button>
+          )}
           <div className="flex-col gap-2">
-            <label style={{ fontSize: 12, color: '#6b7280' }}>Data Início</label>
-            <input type="date" value={filtros.data_inicio} onChange={e => setFiltros({ ...filtros, data_inicio: e.target.value })} />
-          </div>
-          <div className="flex-col gap-2">
-            <label style={{ fontSize: 12, color: '#6b7280' }}>Data Fim</label>
-            <input type="date" value={filtros.data_fim} onChange={e => setFiltros({ ...filtros, data_fim: e.target.value })} />
-          </div>
-
-          <DropdownMultiSelect
-            rotulo="Serviço"
-            opcoes={SERVICOS}
-            selecionados={servicosSelecionados}
-            onAlternar={alternarServico}
-            onLimpar={() => setServicosSelecionados([])}
-          />
-
-          <DropdownMultiSelect
-            rotulo="Obra"
-            opcoes={obras}
-            selecionados={obrasSelecionadas}
-            onAlternar={alternarObra}
-            onLimpar={() => setObrasSelecionadas([])}
-          />
-
-          <button className="btn-secondary btn-sm" onClick={limparFiltros}>Limpar filtros</button>
-        </div>
-
-        {agrupadoPor && (
-          <div style={{ marginBottom: 12, fontSize: 12, color: '#2563eb', fontWeight: 600 }}>
-            📊 Comparando por {agrupadoPor === 'obra' ? 'Obra' : 'Serviço'}: {gruposComparacao.join(', ')}
-          </div>
-        )}
-
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', marginBottom: 16 }}>
-          <div className="card" style={{ background: '#f0fdf4' }}>
-            <div style={{ fontSize: 12, color: '#15803d' }}>Total Líquido (filtro)</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#15803d' }}>{formatarMoeda(totalConfLiquido)}</div>
-          </div>
-          <div className="card" style={{ background: '#eff6ff' }}>
-            <div style={{ fontSize: 12, color: '#1d4ed8' }}>Total Bruto (filtro)</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#1d4ed8' }}>{formatarMoeda(totalConfBruto)}</div>
-          </div>
-          <div className="card">
-            <div style={{ fontSize: 12, color: '#6b7280' }}>Qtd. de Entradas (filtro)</div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{totalConfQtd}</div>
+            <label htmlFor="resumo-periodo">Período (até {nomeMesFim})</label>
+            <select id="resumo-periodo" value={periodo} onChange={e => setPeriodo(e.target.value)}>
+              <option value="mes">Mês atual</option>
+              <option value="6m">Últimos 6 meses</option>
+              <option value="12m">Últimos 12 meses</option>
+              <option value="ano">Ano</option>
+            </select>
           </div>
         </div>
-
-        {carregandoConfiguravel ? (
-          <p style={{ color: '#9ca3af' }}>Carregando...</p>
-        ) : dadosGraficoConfiguravel.length === 0 ? (
-          <p style={{ color: '#9ca3af' }}>Nenhum dado encontrado para os filtros selecionados.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <BarChart data={dadosGraficoConfiguravel} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip content={<TooltipPersonalizado />} />
-              <Legend />
-              {agrupadoPor ? (
-                gruposComparacao.map((grupo, i) => (
-                  <Bar key={grupo} name={grupo} dataKey={grupo} fill={CORES_MESES[i % CORES_MESES.length]} radius={[6, 6, 0, 0]} />
-                ))
-              ) : (
-                <>
-                  <Bar name="Valor Líquido" dataKey="valor_liquido" fill="#16a34a" radius={[6, 6, 0, 0]} />
-                  <Bar name="Valor Bruto" dataKey="valor_bruto" fill="#93c5fd" radius={[6, 6, 0, 0]} />
-                </>
-              )}
-            </BarChart>
-          </ResponsiveContainer>
-        )}
       </div>
+
+      <div className="resumo-kpis">
+        <div className="resumo-kpi resumo-kpi-entrada">
+          <div className="resumo-kpi-label">Receita Líquida</div>
+          <div className="resumo-kpi-valor">{formatarMoeda(totais.receita)}</div>
+        </div>
+        <div className="resumo-kpi resumo-kpi-saida">
+          <div className="resumo-kpi-label">Saídas Totais</div>
+          <div className="resumo-kpi-valor">{formatarMoeda(totais.saidas)}</div>
+        </div>
+        <div className="resumo-kpi resumo-kpi-saldo">
+          <div className="resumo-kpi-label">Saldo Líquido</div>
+          <div className={`resumo-kpi-valor ${totais.saldo < 0 ? 'negativo' : ''}`}>{formatarMoeda(totais.saldo)}</div>
+        </div>
+        <div className="resumo-kpi resumo-kpi-margem">
+          <div className="resumo-kpi-label">Margem Média %</div>
+          <div className="resumo-kpi-valor">
+            {totais.margemMedia === null ? '—' : `${totais.margemMedia.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`}
+          </div>
+        </div>
+      </div>
+
+      {erro && <div role="alert" className="card resumo-erro">{erro}</div>}
+      {carregando && <div className="card resumo-carregando">Carregando resumo executivo...</div>}
+      {!carregando && !erro && (
+        <>
+          <div className="resumo-graficos">
+            <section className="card">
+              <h3 className="resumo-grafico-titulo">Evolução Mensal</h3>
+              <p className="resumo-grafico-subtitulo">Consolidado pelo Centro de Custo · {rotuloMes(intervalo.inicio)} a {rotuloMes(intervalo.fim)}</p>
+              {evolucao.length === 0
+                ? <p className="resumo-sem-dados">Nenhum dado no período selecionado.</p>
+                : <GraficoResumo dados={evolucao} categoria="label_mes" serie={series} idGradiente="resumo-mes" />}
+            </section>
+            <section className="card">
+              <h3 className="resumo-grafico-titulo">Comparativo por Obra</h3>
+              <p className="resumo-grafico-subtitulo">Obras de produção no período selecionado</p>
+              {obras.length === 0
+                ? <p className="resumo-sem-dados">Nenhuma obra de produção no período.</p>
+                : <GraficoResumo dados={obras} categoria="obra_nome" serie={series} idGradiente="resumo-obra" formatarCategoria={nome => nome.length > 14 ? `${nome.slice(0, 12)}…` : nome} />}
+            </section>
+          </div>
+
+          <section className="card resumo-servicos">
+            <h3 className="resumo-grafico-titulo">Entradas por Serviço</h3>
+            <p className="resumo-grafico-subtitulo">Receita líquida agrupada por serviço no mesmo período</p>
+            {servicos.length === 0 ? <p className="resumo-sem-dados">Nenhuma entrada por serviço no período.</p> : (
+              <ResponsiveContainer width="100%" height={Math.max(230, servicos.length * 52)}>
+                <BarChart data={servicos} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
+                  <defs>
+                    <linearGradient id="resumo-servicos" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#34d399" />
+                      <stop offset="100%" stopColor="#059669" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid horizontal={false} stroke="#e9eef5" strokeDasharray="3 5" />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={valor => `R$${(valor / 1000).toFixed(0)}k`} tickLine={false} axisLine={{ stroke: '#cbd5e1' }} />
+                  <YAxis type="category" dataKey="servico" width={105} tick={{ fontSize: 12, fill: '#475569' }} tickLine={false} axisLine={false} />
+                  <Tooltip content={<TooltipPersonalizado />} cursor={{ fill: '#f8fafc' }} />
+                  <Bar name="Entradas" dataKey="entrada_liquida" fill="url(#resumo-servicos)" radius={[0, 7, 7, 0]} maxBarSize={30} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }
