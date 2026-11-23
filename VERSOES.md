@@ -50,6 +50,10 @@ git checkout v2.111
 
 ## Versões
 
+### 2.146 — Produção no Painel
+
+- O total de produção do mês deixa de aparecer no cabeçalho e nos indicadores, permanecendo na Visão Geral.
+
 ### 2.145 — Acesso à Visão Geral do Painel
 
 - O ADM pode liberar a Visão Geral do Painel por perfil em Configurações → Controle de Acesso.

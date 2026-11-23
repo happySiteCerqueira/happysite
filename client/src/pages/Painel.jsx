@@ -101,6 +101,7 @@ export default function Painel() {
   const primeiroNome = usuario?.nome?.trim().split(/\s+/)[0] || '';
   const hora = new Date().getHours();
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const mostrandoGeral = podeVerGeral && aba === 'geral';
 
   return (
     <div className="painel-dashboard">
@@ -112,7 +113,7 @@ export default function Painel() {
             <p>
               {carregando
                 ? 'Carregando os indicadores do painel...'
-                : `${obras.length} obras ativas · ${formatarMoedaPainel(producaoTotal)} em produção em ${nomeMesExtenso(mes)}`}
+                : `${obras.length} obras ativas${mostrandoGeral ? ` · ${formatarMoedaPainel(producaoTotal)} em produção em ${nomeMesExtenso(mes)}` : ''}`}
             </p>
           </div>
           {podeVerGeral && (
@@ -136,12 +137,14 @@ export default function Painel() {
             <div className="painel-kpi-valor">{obras.length}</div>
             <div className="painel-kpi-nota">Carteira operacional</div>
           </div>
-          <div className="painel-kpi painel-kpi-producao">
-            <span className="painel-kpi-icone" aria-hidden="true">↗</span>
-            <div className="painel-kpi-label">Produção no mês</div>
-            <div className="painel-kpi-valor">{formatarMoedaPainel(producaoTotal)}</div>
-            <div className="painel-kpi-nota">{nomeMesExtenso(mes)}</div>
-          </div>
+          {mostrandoGeral && (
+            <div className="painel-kpi painel-kpi-producao">
+              <span className="painel-kpi-icone" aria-hidden="true">↗</span>
+              <div className="painel-kpi-label">Produção no mês</div>
+              <div className="painel-kpi-valor">{formatarMoedaPainel(producaoTotal)}</div>
+              <div className="painel-kpi-nota">{nomeMesExtenso(mes)}</div>
+            </div>
+          )}
           <div className="painel-kpi painel-kpi-experiencia">
             <span className="painel-kpi-icone" aria-hidden="true">👷</span>
             <div className="painel-kpi-label">Em experiência</div>
@@ -158,8 +161,8 @@ export default function Painel() {
       )}
 
       {carregando && <div className="card painel-carregando">Carregando painel...</div>}
-      {!carregando && podeVerGeral && aba === 'geral' && <AbaVisaoGeral obras={obras} producaoTotal={producaoTotal} />}
-      {!carregando && (aba === 'indicadores' || !podeVerGeral) && (
+      {!carregando && mostrandoGeral && <AbaVisaoGeral obras={obras} producaoTotal={producaoTotal} />}
+      {!carregando && !mostrandoGeral && (
         <AbaIndicadores mes={mes} setMes={setMes} dados={dados} obras={obras} recarregar={carregar} />
       )}
     </div>
