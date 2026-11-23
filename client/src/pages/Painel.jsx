@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/api';
+import Modal from '../components/Modal';
 import PredioDesenho from '../components/PredioDesenho';
 import { useAuth } from '../context/AuthContext';
 
@@ -67,6 +68,10 @@ function formatarDataSimples(dataStr) {
   return `${dia}/${mes}/${ano}`;
 }
 
+function formatarMoedaPainel(valor) {
+  return `R$ ${Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function Painel() {
   const { usuario } = useAuth();
   const ehAdm = usuario?.perfil === 'ADM';
@@ -88,25 +93,72 @@ export default function Painel() {
   useEffect(carregar, [mes]);
 
   const obras = dados?.obras || [];
+  const producaoTotal = obras.reduce((total, obra) => total + (Number(obra.total_mes) || 0), 0);
+  const experiencia = dados?.colaboradores_experiencia || [];
+  const asoProximos = dados?.aso_proximos_30_dias || [];
+  const alertas = experiencia.filter(c => c.alerta || c.decisao_pendente).length
+    + asoProximos.filter(c => c.alerta || c.sem_aso).length;
+  const primeiroNome = usuario?.nome?.trim().split(/\s+/)[0] || '';
+  const hora = new Date().getHours();
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
 
   return (
-    <div>
-      <h2>📊 Painel</h2>
-
-      {ehAdm && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <button className={aba === 'geral' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('geral')}>
-            🏗️ Visão Geral
-          </button>
-          <button className={aba === 'indicadores' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'} onClick={() => setAba('indicadores')}>
-            📈 Indicadores do Mês
-          </button>
+    <div className="painel-dashboard">
+      <header className="painel-cabecalho">
+        <div>
+          <div>
+            <div className="painel-eyebrow">HappySite · Visão executiva</div>
+            <h2>{saudacao}{primeiroNome ? `, ${primeiroNome}` : ''}</h2>
+            <p>
+              {carregando
+                ? 'Carregando os indicadores do painel...'
+                : `${obras.length} obras ativas · ${formatarMoedaPainel(producaoTotal)} em produção em ${nomeMesExtenso(mes)}`}
+            </p>
+          </div>
+          {ehAdm && (
+            <div className="painel-pilulas" role="group" aria-label="Visualizações do painel">
+              <button type="button" className={`painel-pill ${aba === 'geral' ? 'ativo' : ''}`} aria-pressed={aba === 'geral'} onClick={() => setAba('geral')}>
+                🏗️ Visão Geral
+              </button>
+              <button type="button" className={`painel-pill ${aba === 'indicadores' ? 'ativo' : ''}`} aria-pressed={aba === 'indicadores'} onClick={() => setAba('indicadores')}>
+                📈 Indicadores do Mês
+              </button>
+            </div>
+          )}
         </div>
+      </header>
+
+      {!carregando && (
+        <section className="painel-kpis" aria-label="Resumo da empresa">
+          <div className="painel-kpi painel-kpi-obras">
+            <span className="painel-kpi-icone" aria-hidden="true">🏗️</span>
+            <div className="painel-kpi-label">Obras ativas</div>
+            <div className="painel-kpi-valor">{obras.length}</div>
+            <div className="painel-kpi-nota">Carteira operacional</div>
+          </div>
+          <div className="painel-kpi painel-kpi-producao">
+            <span className="painel-kpi-icone" aria-hidden="true">↗</span>
+            <div className="painel-kpi-label">Produção no mês</div>
+            <div className="painel-kpi-valor">{formatarMoedaPainel(producaoTotal)}</div>
+            <div className="painel-kpi-nota">{nomeMesExtenso(mes)}</div>
+          </div>
+          <div className="painel-kpi painel-kpi-experiencia">
+            <span className="painel-kpi-icone" aria-hidden="true">👷</span>
+            <div className="painel-kpi-label">Em experiência</div>
+            <div className="painel-kpi-valor">{experiencia.length}</div>
+            <div className="painel-kpi-nota">{experiencia.filter(c => c.alerta || c.decisao_pendente).length} ponto(s) de atenção</div>
+          </div>
+          <div className="painel-kpi painel-kpi-aso">
+            <span className="painel-kpi-icone" aria-hidden="true">🩺</span>
+            <div className="painel-kpi-label">ASOs próximos 30 dias</div>
+            <div className="painel-kpi-valor">{asoProximos.length}</div>
+            <div className="painel-kpi-nota">{alertas} alerta(s) no painel</div>
+          </div>
+        </section>
       )}
 
-      {carregando && <div style={{ color: '#6b7280' }}>Carregando...</div>}
-
-      {!carregando && ehAdm && aba === 'geral' && <AbaVisaoGeral obras={obras} />}
+      {carregando && <div className="card painel-carregando">Carregando painel...</div>}
+      {!carregando && ehAdm && aba === 'geral' && <AbaVisaoGeral obras={obras} producaoTotal={producaoTotal} />}
       {!carregando && (aba === 'indicadores' || !ehAdm) && (
         <AbaIndicadores mes={mes} setMes={setMes} dados={dados} obras={obras} recarregar={carregar} />
       )}
@@ -115,40 +167,68 @@ export default function Painel() {
 }
 
 
-function AbaVisaoGeral({ obras }) {
+function AbaVisaoGeral({ obras, producaoTotal }) {
   return (
-    <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+    <div className="painel-obras-grid">
       {obras.map(o => {
         const producaoMensal = o.producao_mensal || [];
-        const totalProducao = producaoMensal.reduce((s, m) => s + m.total, 0);
+        const totalHistorico = producaoMensal.reduce((s, m) => s + m.total, 0);
         const maxProd = Math.max(...producaoMensal.map(m => m.total), 1);
-        const ALTURA_DISPONIVEL = 320;
-        const LARGURA_DISPONIVEL = 260;
+        const ALTURA_DISPONIVEL = 250;
+        const LARGURA_DISPONIVEL = 280;
         const escala = calcularEscala(o, ALTURA_DISPONIVEL, LARGURA_DISPONIVEL);
+        const producaoMes = Number(o.total_mes) || 0;
+        const participacao = producaoTotal > 0 ? Math.max(0, Math.min(100, Math.round((producaoMes / producaoTotal) * 100))) : 0;
+        const quantidadeServicos = (o.servicos || []).length;
         return (
-          <Link key={o.id} to={`/obras/${o.id}`} className="card" style={{ display: 'block' }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>{o.nome}</div>
-            <div style={{ height: ALTURA_DISPONIVEL, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <Link key={o.id} to={`/obras/${o.id}`} className="painel-obra-card">
+            <div className="painel-obra-cabecalho">
+              <div>
+                <span className="painel-status-obra"><span aria-hidden="true"></span> Ativa</span>
+                <h3>{o.nome}</h3>
+                {o.endereco && <p>{o.endereco}</p>}
+              </div>
+              <span className="painel-obra-atalho" aria-label="Abrir detalhes da obra">↗</span>
+            </div>
+            <div className="painel-obra-miniatura" style={{ height: ALTURA_DISPONIVEL }}>
               <PredioDesenho obra={o} modoMedicao="apartamento" marcacoes={{}} pessoasPorId={{}} escala={escala} />
             </div>
 
-            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
-              Produção acumulada: R$ {totalProducao.toFixed(2)}
+            <div className="painel-obra-metricas">
+              <div>
+                <span>Produção no mês</span>
+                <strong>{formatarMoedaPainel(producaoMes)}</strong>
+              </div>
+              <div>
+                <span>Serviços ativos</span>
+                <strong>{quantidadeServicos}</strong>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 3, alignItems: 'end', height: 40 }}>
+            <div className="painel-progresso-legenda">
+              <span>Participação na produção</span>
+              <strong>{participacao}%</strong>
+            </div>
+            <div className="painel-progresso-trilho" role="img" aria-label={`${participacao}% da produção total no mês`}>
+              <span style={{ width: `${participacao}%` }} />
+            </div>
+            <div className="painel-historico-cabecalho">
+              <span>Produção nos últimos 6 meses</span>
+              <span>{formatarMoedaPainel(totalHistorico)}</span>
+            </div>
+            <div className="painel-historico-barras">
               {producaoMensal.map(m => (
                 <div key={m.mes_ciclo} title={`${m.mes_ciclo}: R$ ${m.total.toFixed(2)}`}
-                  style={{
-                    width: 10, background: '#2563eb', borderRadius: 2,
-                    height: `${Math.max(4, (m.total / maxProd) * 40)}px`
-                  }} />
+                  className="painel-historico-barra">
+                  <span style={{ height: `${Math.max(4, (m.total / maxProd) * 32)}px` }} />
+                </div>
               ))}
-              {producaoMensal.length === 0 && <span style={{ fontSize: 11, color: '#9ca3af' }}>Sem produção lançada ainda</span>}
+              {producaoMensal.length === 0 && <span className="painel-sem-dados">Sem produção lançada ainda</span>}
             </div>
+            <span className="painel-obra-cta">Abrir obra <span aria-hidden="true">→</span></span>
           </Link>
         );
       })}
-      {obras.length === 0 && <div style={{ color: '#6b7280' }}>Nenhuma obra ativa.</div>}
+      {obras.length === 0 && <div className="painel-vazio">Nenhuma obra ativa.</div>}
     </div>
   );
 }
@@ -200,15 +280,15 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
   }
 
   return (
-    <div>
-      <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Mês de referência:</label>
-        <input type="month" value={mes} onChange={e => setMes(e.target.value)} />
-        <span style={{ color: '#6b7280', fontSize: 13 }}>{nomeMesExtenso(mes)}</span>
+    <div className="painel-indicadores">
+      <div className="painel-periodo-card">
+        <label htmlFor="painel-mes">Mês de referência</label>
+        <input id="painel-mes" type="month" value={mes} onChange={e => setMes(e.target.value)} />
+        <span>{nomeMesExtenso(mes)}</span>
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h4 style={{ marginTop: 0 }}>🧪 Colaboradores em Experiência</h4>
+      <div className="card painel-secao">
+        <h4 className="painel-secao-titulo">🧪 Colaboradores em Experiência</h4>
         {erroExperiencia && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 8, borderRadius: 6, marginBottom: 8, fontSize: 13 }}>{erroExperiencia}</div>}
         {colaboradoresExperiencia.length === 0 && (
           <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum colaborador em período de experiência no momento.</p>
@@ -217,7 +297,7 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
           <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum colaborador precisando de atenção no momento.</p>
         )}
         {colaboradoresExperiencia.length > 0 && listaExperienciaExibida.length > 0 && (
-          <table>
+          <table className="painel-tabela">
             <thead>
               <tr>
                 <th>Colaborador</th>
@@ -232,28 +312,18 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
               {listaExperienciaExibida.map(c => (
                 <tr
                   key={c.id}
-                  style={c.alerta ? { background: '#fef3c7' } : undefined}
+                  className={c.alerta ? 'painel-linha-alerta' : ''}
                 >
-                  <td style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    borderLeft: c.alerta ? '4px solid #f59e0b' : '4px solid transparent'
-                  }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 3, background: c.cor, display: 'inline-block' }}></span>
+                  <td className="painel-colaborador">
+                    <span className="painel-pessoa-cor" style={{ background: c.cor }}></span>
                     {c.nome}
                     {c.alerta && (
-                      <span
-                        title={`Faltam ${c.dias_restantes} dia(s) para o próximo vencimento`}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          background: '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700,
-                          padding: '2px 8px', borderRadius: 10, marginLeft: 4
-                        }}
-                      >
+                      <span className="painel-badge painel-badge-aviso" title={`Faltam ${c.dias_restantes} dia(s) para o próximo vencimento`}>
                         ⚠️ Faltam {c.dias_restantes} dia{c.dias_restantes === 1 ? '' : 's'}
                       </span>
                     )}
                   </td>
-                  <td style={{ color: '#6b7280' }}>{c.funcao || '-'}</td>
+                  <td className="painel-texto-secundario">{c.funcao || '-'}</td>
                   <td>{formatarDataSimples(c.data_admissao)}</td>
                   <td>{formatarDataSimples(c.data_45_dias)}</td>
                   <td>{formatarDataSimples(c.data_90_dias)}</td>
@@ -316,8 +386,8 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
         )}
       </div>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <h4 style={{ marginTop: 0 }}>🩺 Controle de ASO</h4>
+      <div className="card painel-secao">
+        <h4 className="painel-secao-titulo">🩺 Controle de ASO</h4>
         {colaboradoresAso.length === 0 && (
           <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum ASO vencendo nos próximos 30 dias.</p>
         )}
@@ -325,7 +395,7 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
           <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum ASO precisando de atenção imediata no momento.</p>
         )}
         {colaboradoresAso.length > 0 && listaAsoExibida.length > 0 && (
-          <table>
+          <table className="painel-tabela">
             <thead>
               <tr>
                 <th>Colaborador</th>
@@ -336,30 +406,19 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
             </thead>
             <tbody>
               {listaAsoExibida.map(c => (
-                <tr key={c.id} style={c.alerta ? { background: '#fef3c7' } : undefined}>
-                  <td style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    borderLeft: c.alerta ? '4px solid #f59e0b' : '4px solid transparent'
-                  }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 3, background: c.cor, display: 'inline-block' }}></span>
+                <tr key={c.id} className={c.alerta ? 'painel-linha-alerta' : ''}>
+                  <td className="painel-colaborador">
+                    <span className="painel-pessoa-cor" style={{ background: c.cor }}></span>
                     {c.nome}
                     {c.sem_aso && (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        background: '#dc2626', color: '#fff', fontSize: 11, fontWeight: 700,
-                        padding: '2px 8px', borderRadius: 10, marginLeft: 4
-                      }}>
+                      <span className="painel-badge painel-badge-critico">
                         ⚠️ Nunca registrado
                       </span>
                     )}
                     {!c.sem_aso && c.alerta && (
                       <span
+                        className={`painel-badge ${c.dias_restantes < 0 ? 'painel-badge-critico' : 'painel-badge-aviso'}`}
                         title={c.dias_restantes >= 0 ? `Faltam ${c.dias_restantes} dia(s) para o vencimento` : `Vencido há ${-c.dias_restantes} dia(s)`}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                          background: c.dias_restantes < 0 ? '#dc2626' : '#f59e0b', color: '#fff', fontSize: 11, fontWeight: 700,
-                          padding: '2px 8px', borderRadius: 10, marginLeft: 4
-                        }}
                       >
                         {c.dias_restantes < 0
                           ? `⚠️ Vencido há ${-c.dias_restantes} dia${-c.dias_restantes === 1 ? '' : 's'}`
@@ -367,7 +426,7 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
                       </span>
                     )}
                   </td>
-                  <td style={{ color: '#6b7280' }}>{c.funcao || '-'}</td>
+                  <td className="painel-texto-secundario">{c.funcao || '-'}</td>
                   <td>{c.sem_aso ? '-' : formatarDataSimples(c.data_vencimento)}</td>
                   <td>
                     {c.sem_aso ? (
@@ -402,9 +461,9 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
         />
       )}
 
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card">
-          <h4 style={{ marginTop: 0 }}>🎂 Aniversariantes do mês</h4>
+      <div className="painel-info-grid">
+        <div className="card painel-info-card">
+          <h4 className="painel-secao-titulo">🎂 Aniversariantes do mês</h4>
           {aniversariantesNascimento.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum aniversariante este mês.</p>}
           {aniversariantesNascimento.map(p => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
@@ -415,8 +474,8 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
           ))}
         </div>
 
-        <div className="card">
-          <h4 style={{ marginTop: 0 }}>🏢 Aniversário de empresa (admissão)</h4>
+        <div className="card painel-info-card">
+          <h4 className="painel-secao-titulo">🏢 Aniversário de empresa (admissão)</h4>
           {aniversariantesEmpresa.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum aniversário de empresa este mês.</p>}
           {aniversariantesEmpresa.map(p => (
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
@@ -427,8 +486,8 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
           ))}
         </div>
 
-        <div className="card">
-          <h4 style={{ marginTop: 0 }}>⚠️ Estoque de EPI baixo</h4>
+        <div className="card painel-info-card">
+          <h4 className="painel-secao-titulo">⚠️ Estoque de EPI baixo</h4>
           {estoqueBaixo.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhum item com estoque baixo.</p>}
           {estoqueBaixo.map(item => (
             <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
@@ -440,8 +499,8 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
           ))}
         </div>
 
-        <div className="card">
-          <h4 style={{ marginTop: 0 }}>🏆 Funcionário do mês (por serviço)</h4>
+        <div className="card painel-info-card">
+          <h4 className="painel-secao-titulo">🏆 Funcionário do mês (por serviço)</h4>
           {funcionariosDoMes.length === 0 && <p style={{ color: '#9ca3af', fontSize: 13 }}>Nenhuma produção lançada neste mês.</p>}
           {funcionariosDoMes.map((f, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
@@ -453,9 +512,9 @@ function AbaIndicadores({ mes, setMes, dados, obras, recarregar }) {
         </div>
       </div>
 
-      <div className="card">
-        <h4 style={{ marginTop: 0 }}>🏗️ Obras — serviços medidos no mês</h4>
-        <table>
+      <div className="card painel-secao">
+        <h4 className="painel-secao-titulo">🏗️ Obras — serviços medidos no mês</h4>
+        <table className="painel-tabela">
           <thead>
             <tr><th>Obra</th><th>Serviço</th><th>Quantidade</th><th>Valor</th></tr>
           </thead>
@@ -507,28 +566,25 @@ function ModalRenovarAsoPainel({ colaborador, onFechar, onRenovar }) {
   const titulo = colaborador.sem_aso ? 'Registrar 1º ASO' : 'Renovar ASO';
 
   return (
-    <div className="modal-overlay" onClick={onFechar}>
-      <div className="modal-content" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
-        <h4 style={{ marginTop: 0 }}>{titulo} — {colaborador.nome}</h4>
-        {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
+    <Modal
+      titulo={`${titulo} — ${colaborador.nome}`}
+      onFechar={onFechar}
+      onSalvar={confirmar}
+      salvando={salvando}
+      textoSalvar="Confirmar"
+      largura="min(420px, 95vw)"
+    >
+      {erro && <div style={{ background: '#fee2e2', color: '#991b1b', padding: 10, borderRadius: 6, marginBottom: 12 }}>{erro}</div>}
 
-        <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12 }}>Data do {colaborador.sem_aso ? 'primeiro' : 'novo'} ASO</label>
-          <input type="date" value={dataNovoAso} onChange={e => setDataNovoAso(e.target.value)} />
-        </div>
-
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 16 }}>
-          <input type="checkbox" checked={confirmado} onChange={e => setConfirmado(e.target.checked)} />
-          Confirmo que o {colaborador.sem_aso ? 'ASO' : 'novo ASO'} foi realmente realizado nesta data.
-        </label>
-
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-success" disabled={salvando} onClick={confirmar} style={{ flex: 1, fontWeight: 700 }}>
-            {salvando ? 'Salvando...' : `✔ Confirmar ${colaborador.sem_aso ? 'registro' : 'renovação'}`}
-          </button>
-          <button className="btn-secondary" onClick={onFechar} style={{ flex: 1 }}>Cancelar</button>
-        </div>
+      <div className="flex-col gap-2" style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 12 }}>Data do {colaborador.sem_aso ? 'primeiro' : 'novo'} ASO</label>
+        <input type="date" value={dataNovoAso} onChange={e => setDataNovoAso(e.target.value)} />
       </div>
-    </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+        <input type="checkbox" checked={confirmado} onChange={e => setConfirmado(e.target.checked)} />
+        Confirmo que o {colaborador.sem_aso ? 'ASO' : 'novo ASO'} foi realmente realizado nesta data.
+      </label>
+    </Modal>
   );
 }

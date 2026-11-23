@@ -50,6 +50,14 @@ git checkout v2.111
 
 ## Versões
 
+### 2.143 — Modernização visual do Painel
+
+- O Painel ganhou cabeçalho executivo com saudação e filtros em pílulas, além de cartões para
+  obras ativas, produção do mês, colaboradores em experiência e ASOs próximos.
+- A visão geral das obras agora apresenta miniatura, serviços ativos, participação na produção
+  mensal e histórico recente em cartões responsivos; os indicadores mantêm os mesmos dados e ações.
+- O fluxo de registro e renovação de ASO passou a usar o componente compartilhado `<Modal>`.
+
 ### 2.142 — Resumo financeiro executivo com gráficos interativos
 
 - **Financeiro → Resumo** compara Entradas, Saídas e Saldo Líquido em gráficos mensais e por obra,

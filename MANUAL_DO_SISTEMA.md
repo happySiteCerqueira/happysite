@@ -1,6 +1,6 @@
 # MANUAL DO SISTEMA — HappySite
 
-> **Versão 2.142** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
+> **Versão 2.143** · Sistema de gestão da **Cerqueira Engenharia** (construção civil)
 > Em produção: https://app.cerqueiraengenharia.com.br
 >
 > Este documento explica **como cada parte funciona por dentro**: telas, regras de negócio,
@@ -45,9 +45,13 @@ Pagamentos Antecipados, Prestadores e Obras. Ele volta ao mês vigente ao sair e
 ## 2. Módulos — como cada um funciona
 
 ### 📊 Painel
-Visão geral: obras ativas com miniatura do prédio, colaboradores em período de experiência,
-ASOs a vencer e os números do mês. O quadro de **aniversário de empresa** mostra só quem completa
-**1 ano ou mais** no mês selecionado (admissão recente, com 0 ano, não aparece).
+Visão executiva com saudação, filtros em pílulas e cartões com obras ativas, produção do mês,
+colaboradores em experiência e ASOs próximos. Na visão geral, os cartões de obras mostram a
+miniatura do prédio, serviços ativos, participação na produção do mês e o histórico recente de
+produção; selecionar um cartão abre os detalhes da obra. Os indicadores do mês mantêm os quadros
+de experiência, ASO, aniversariantes, estoque baixo e produção por serviço. O quadro de
+**aniversário de empresa** mostra só quem completa **1 ano ou mais** no mês selecionado (admissão
+recente, com 0 ano, não aparece).
 
 ### 🏢 Obras
 
