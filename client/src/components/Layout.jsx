@@ -143,8 +143,7 @@ export default function Layout() {
           )}
         </div>
         <nav style={{ flex: 1, overflowY: 'auto' }}>
-          {/* ENCARREGADO só enxerga o EPI — por isso Painel e Obras ficam ocultos para ele. */}
-          {!ehEncarregado && <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>}
+          {(!ehEncarregado || temAcessoSubaba('painel.visao_geral')) && <NavLink to="/" style={linkStyle} end>📊 Painel</NavLink>}
           {!ehEncarregado && <NavLink to="/obras" style={linkStyle}>🏢 Obras</NavLink>}
           {temPermissao('FINANCEIRO') && <NavLink to="/medicao" style={linkStyle}>💰 Medição</NavLink>}
 

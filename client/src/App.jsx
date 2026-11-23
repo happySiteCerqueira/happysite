@@ -24,11 +24,9 @@ import Conciliacao from './pages/Conciliacao';
 
 
 
-// Tela inicial depende do perfil: o ENCARREGADO só acessa o EPI, então vai direto para lá.
-// Os demais continuam caindo no Painel normalmente.
 function TelaInicial() {
-  const { usuario } = useAuth();
-  if (usuario?.perfil === 'ENCARREGADO') return <Navigate to="/epi" replace />;
+  const { usuario, temAcessoSubaba } = useAuth();
+  if (usuario?.perfil === 'ENCARREGADO' && !temAcessoSubaba('painel.visao_geral')) return <Navigate to="/epi" replace />;
   return <Painel />;
 }
 
@@ -46,8 +44,6 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/trocar-senha" element={<TrocarSenha />} />
       <Route path="/" element={<Privado><Layout /></Privado>}>
-        {/* ENCARREGADO só tem acesso ao EPI: ao entrar, cai direto nessa tela em vez do
-            Painel (que não é liberado para ele). */}
         <Route index element={<TelaInicial />} />
         <Route path="obras" element={<Obras />} />
         <Route path="obras/:id" element={<ObraDetalhe />} />

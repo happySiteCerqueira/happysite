@@ -73,10 +73,10 @@ function formatarMoedaPainel(valor) {
 }
 
 export default function Painel() {
-  const { usuario } = useAuth();
-  const ehAdm = usuario?.perfil === 'ADM';
+  const { usuario, temAcessoSubaba } = useAuth();
+  const podeVerGeral = temAcessoSubaba('painel.visao_geral');
 
-  const [aba, setAba] = useState('indicadores'); // Sempre abre em 'indicadores' por padrão (ADM também pode alternar para 'geral').
+  const [aba, setAba] = useState('indicadores');
   const [mes, setMes] = useState(mesAtual());
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -115,7 +115,7 @@ export default function Painel() {
                 : `${obras.length} obras ativas · ${formatarMoedaPainel(producaoTotal)} em produção em ${nomeMesExtenso(mes)}`}
             </p>
           </div>
-          {ehAdm && (
+          {podeVerGeral && (
             <div className="painel-pilulas" role="group" aria-label="Visualizações do painel">
               <button type="button" className={`painel-pill ${aba === 'geral' ? 'ativo' : ''}`} aria-pressed={aba === 'geral'} onClick={() => setAba('geral')}>
                 🏗️ Visão Geral
@@ -158,8 +158,8 @@ export default function Painel() {
       )}
 
       {carregando && <div className="card painel-carregando">Carregando painel...</div>}
-      {!carregando && ehAdm && aba === 'geral' && <AbaVisaoGeral obras={obras} producaoTotal={producaoTotal} />}
-      {!carregando && (aba === 'indicadores' || !ehAdm) && (
+      {!carregando && podeVerGeral && aba === 'geral' && <AbaVisaoGeral obras={obras} producaoTotal={producaoTotal} />}
+      {!carregando && (aba === 'indicadores' || !podeVerGeral) && (
         <AbaIndicadores mes={mes} setMes={setMes} dados={dados} obras={obras} recarregar={carregar} />
       )}
     </div>

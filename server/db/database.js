@@ -1360,6 +1360,7 @@ async function migrate() {
   const permCountRes = await pool.query('SELECT COUNT(*)::int c FROM perfil_permissoes');
   if (permCountRes.rows[0].c === 0) {
     const MODULOS = [
+      'painel.visao_geral',
       'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda', 'advertencia',
       'conciliacao',
       // Sub-abas granulares (dentro de módulos que já foram liberados para o perfil)
@@ -1372,6 +1373,7 @@ async function migrate() {
     const PERFIS = ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
     // Espelha as regras atuais do Layout.jsx/telas (temPermissao(...)):
     const PADRAO = {
+      'painel.visao_geral': [],
       // ENCARREGADO tem acesso APENAS ao módulo EPI — por isso não aparece nas demais listas.
       obras: ['RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'APONTADOR'],
       medicao: ['FINANCEIRO'],
@@ -1414,6 +1416,7 @@ async function migrate() {
     // Garante que sub-permissões novas existam mesmo em bancos já semeados anteriormente
     // (não sobrescreve valores já definidos, apenas insere as chaves que ainda não existem).
     const SUBMODULOS_PADRAO = {
+      'painel.visao_geral': [],
       'financeiro.receita': ['FINANCEIRO'],
       'financeiro.pagamentos': ['FINANCEIRO', 'RH'],
       'financeiro.gastos': ['FINANCEIRO'],

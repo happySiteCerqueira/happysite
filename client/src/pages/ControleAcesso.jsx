@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/api';
 
 const NOMES_MODULOS = {
+  'painel.visao_geral': '🏗️ Painel — Visão Geral',
   obras: '🏢 Obras',
   medicao: '💰 Medição',
   diarias: '📅 Diárias',
@@ -39,7 +40,7 @@ const SUBABAS_POR_MODULO = {
 };
 
 // Ordem em que os módulos (com suas sub-abas) devem aparecer na tabela
-const ORDEM_MODULOS = ['obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'conciliacao', 'aso', 'agenda', 'advertencia'];
+const ORDEM_MODULOS = ['painel.visao_geral', 'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'conciliacao', 'aso', 'agenda', 'advertencia'];
 
 export default function ControleAcesso() {
   const [modulos, setModulos] = useState([]);

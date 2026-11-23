@@ -327,6 +327,8 @@ por último, semelhança ≥ 92%.
 As permissões do **Controle de Acesso** são sincronizadas ao entrar na sessão e quando o app
 instalado retorna ao primeiro plano. Em **Advertência**, consultar o histórico e registrar medidas
 são permissões separadas; por padrão, **MESTRE** pode consultar e somente **RH** pode registrar.
+Em **Painel — Visão Geral**, o ADM pode liberar essa visualização por perfil; ela vem desativada
+para os demais perfis. Os indicadores do painel continuam disponíveis como antes.
 
 ---
 

@@ -50,6 +50,11 @@ git checkout v2.111
 
 ## Versões
 
+### 2.145 — Acesso à Visão Geral do Painel
+
+- O ADM pode liberar a Visão Geral do Painel por perfil em Configurações → Controle de Acesso.
+- A permissão começa desativada para os demais perfis, preservando o acesso anterior.
+
 ### 2.144 — Sincronização de permissões ao retornar ao app
 
 - O app atualiza a lista de permissões do perfil quando volta ao primeiro plano, incluindo no PWA

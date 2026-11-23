@@ -6,6 +6,7 @@ const { registrar } = require('../utils/auditoria');
 const router = express.Router();
 
 const MODULOS = [
+  'painel.visao_geral',
   'obras', 'medicao', 'diarias', 'prestadores', 'epi', 'financeiro', 'aso', 'agenda', 'advertencia',
   // Conciliação: confronto do PDF de Holerites da contabilidade com os lançamentos do sistema.
   'conciliacao',
