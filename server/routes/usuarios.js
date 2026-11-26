@@ -11,12 +11,12 @@ const router = express.Router();
 router.use(autenticar, permitir('ADM'));
 
 router.get('/', async (req, res) => {
-  const usuarios = await db.all('SELECT id, nome, login, perfil, ativo, precisa_trocar_senha, adm_master, criado_em FROM usuarios ORDER BY nome');
+  const usuarios = await db.all('SELECT id, nome, login, email, perfil, ativo, precisa_trocar_senha, adm_master, criado_em FROM usuarios ORDER BY nome');
   res.json(usuarios);
 });
 
 router.post('/', async (req, res) => {
-  const { nome, login, senha, perfil } = req.body;
+  const { nome, login, email, senha, perfil } = req.body;
   if (!nome || !login || !senha || !perfil) return res.status(400).json({ erro: 'Preencha todos os campos' });
   const perfisValidos = ['ADM', 'RH', 'FINANCEIRO', 'ENGENHEIRO', 'MESTRE', 'ENCARREGADO', 'APONTADOR'];
   if (!perfisValidos.includes(perfil)) return res.status(400).json({ erro: 'Perfil inválido' });
@@ -27,22 +27,38 @@ router.post('/', async (req, res) => {
   // reconhecido no momento do login sem diferenciar caixa (ver server/routes/auth.js).
   const existe = await db.get('SELECT id FROM usuarios WHERE LOWER(login) = LOWER(?)', login);
   if (existe) return res.status(400).json({ erro: 'Login já existe' });
+  const emailNormalizado = String(email || '').trim().toLowerCase();
+  if (emailNormalizado && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
+    return res.status(400).json({ erro: 'E-mail inválido' });
+  }
+  if (emailNormalizado) {
+    const emailExiste = await db.get('SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?)', emailNormalizado);
+    if (emailExiste) return res.status(400).json({ erro: 'E-mail já cadastrado' });
+  }
 
   const hash = bcrypt.hashSync(senha, 10);
   const info = await db.run(
-    'INSERT INTO usuarios (nome, login, senha_hash, perfil, precisa_trocar_senha) VALUES (?,?,?,?,1)',
-    nome, login, hash, perfil
+    'INSERT INTO usuarios (nome, login, email, senha_hash, perfil, precisa_trocar_senha) VALUES (?,?,?,?,?,1)',
+    nome, login, emailNormalizado || null, hash, perfil
   );
 
-  await registrar(req.usuario.id, 'CRIAR', 'usuarios', info.lastInsertRowid, { nome, login, perfil });
+  await registrar(req.usuario.id, 'CRIAR', 'usuarios', info.lastInsertRowid, { nome, login, email: emailNormalizado || null, perfil });
   res.json({ id: info.lastInsertRowid });
 });
 
 router.put('/:id', async (req, res) => {
-  const { nome, perfil, ativo } = req.body;
+  const { nome, email, perfil, ativo } = req.body;
   const id = req.params.id;
   const usuario = await db.get('SELECT * FROM usuarios WHERE id = ?', id);
   if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado' });
+  const novoEmail = email === undefined ? usuario.email : String(email || '').trim().toLowerCase();
+  if (novoEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novoEmail)) {
+    return res.status(400).json({ erro: 'E-mail inválido' });
+  }
+  if (novoEmail) {
+    const emailExiste = await db.get('SELECT id FROM usuarios WHERE LOWER(email) = LOWER(?) AND id <> ?', novoEmail, id);
+    if (emailExiste) return res.status(400).json({ erro: 'E-mail já cadastrado' });
+  }
 
   const novoAtivo = ativo === undefined ? usuario.ativo : (ativo ? 1 : 0);
   const novoPerfil = perfil ?? usuario.perfil;
@@ -71,8 +87,8 @@ router.put('/:id', async (req, res) => {
   // Desativar derruba as sessões abertas; reativar não "ressuscita" tokens antigos.
   const derrubarSessoes = novoAtivo !== usuario.ativo;
   await db.run(
-    `UPDATE usuarios SET nome = ?, perfil = ?, ativo = ?, adm_master = ?${derrubarSessoes ? ', token_versao = token_versao + 1' : ''} WHERE id = ?`,
-    nome ?? usuario.nome, novoPerfil, novoAtivo, novoMaster, id
+    `UPDATE usuarios SET nome = ?, email = ?, perfil = ?, ativo = ?, adm_master = ?${derrubarSessoes ? ', token_versao = token_versao + 1' : ''} WHERE id = ?`,
+    nome ?? usuario.nome, novoEmail || null, novoPerfil, novoAtivo, novoMaster, id
   );
   invalidarCacheUsuario(id);
 

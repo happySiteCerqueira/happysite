@@ -21,6 +21,8 @@ import Agenda from './pages/Agenda';
 import Auditoria from './pages/Auditoria';
 import Advertencia from './pages/Advertencia';
 import Conciliacao from './pages/Conciliacao';
+import FamiliaApp from './FamiliaApp';
+import FamiliaLogin from './FamiliaLogin';
 
 
 
@@ -41,6 +43,8 @@ function Privado({ children }) {
 export default function App() {
   return (
     <Routes>
+      <Route path="/familia/login" element={<FamiliaLogin />} />
+      <Route path="/familia/*" element={<FamiliaApp />} />
       <Route path="/login" element={<Login />} />
       <Route path="/trocar-senha" element={<TrocarSenha />} />
       <Route path="/" element={<Privado><Layout /></Privado>}>

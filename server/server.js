@@ -68,6 +68,7 @@ app.use('/api/auditoria', require('./routes/auditoria'));
 app.use('/api/advertencias', require('./routes/advertencias'));
 app.use('/api/conciliacao', require('./routes/conciliacao'));
 app.use('/api/manuais', require('./routes/manuais'));
+app.use('/api/familia', require('./routes/familia'));
 
 
 
@@ -80,7 +81,7 @@ if (fs.existsSync(clientBuildPath)) {
   // cache HTTP, o navegador nem chega a perguntar ao servidor se existe versão nova — foi o que
   // fazia o app instalado no celular continuar preso numa versão antiga, só voltando ao normal
   // se o usuário desinstalasse e instalasse de novo.
-  const SEM_CACHE = ['index.html', 'sw-push.js', 'sw.js', 'manifest.webmanifest', 'registerSW.js'];
+  const SEM_CACHE = ['index.html', 'sw-push.js', 'sw.js', 'manifest.webmanifest', 'manifest-familia.json', 'registerSW.js'];
   app.use(express.static(clientBuildPath, {
     setHeaders: (res, caminho) => {
       const arquivo = path.basename(caminho);

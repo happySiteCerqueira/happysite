@@ -9,6 +9,7 @@ if (fs.existsSync(envPath)) {
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const { MODELOS_ADVERTENCIA_PADRAO } = require('./modelosAdvertenciaPadrao');
+const { migrarFamilia } = require('./familiaMigration');
 
 // Remove espaços/quebras de linha acidentais no início/fim (comum ao colar em painéis de hospedagem)
 const databaseUrl = (process.env.DATABASE_URL || '').trim();
@@ -116,11 +117,13 @@ async function constraintContem(tabela, constraintNomeLike, trecho) {
 }
 
 async function migrate() {
+  await migrarFamilia(pool);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS usuarios (
       id SERIAL PRIMARY KEY,
       nome TEXT NOT NULL,
       login TEXT NOT NULL UNIQUE,
+      email TEXT,
       senha_hash TEXT NOT NULL,
       perfil TEXT NOT NULL CHECK(perfil IN ('ADM','RH','FINANCEIRO','ENGENHEIRO','MESTRE','ENCARREGADO','APONTADOR')),
       precisa_trocar_senha INTEGER NOT NULL DEFAULT 1,
@@ -934,6 +937,9 @@ async function migrate() {
   }
   if (!(await colunaExiste('usuarios', 'assinatura_atualizada_em'))) {
     await pool.query('ALTER TABLE usuarios ADD COLUMN assinatura_atualizada_em TIMESTAMP');
+  }
+  if (!(await colunaExiste('usuarios', 'email'))) {
+    await pool.query('ALTER TABLE usuarios ADD COLUMN email TEXT');
   }
 
   // Revogação de sessões: trocar/resetar a senha ou desativar o usuário incrementa este contador,

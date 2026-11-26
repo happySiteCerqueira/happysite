@@ -8,7 +8,7 @@ export default function Usuarios() {
   const { usuario: eu } = useAuth();
   const souMaster = !!eu?.adm_master;
   const [usuarios, setUsuarios] = useState([]);
-  const [novo, setNovo] = useState({ nome: '', login: '', senha: '', perfil: 'RH' });
+  const [novo, setNovo] = useState({ nome: '', login: '', email: '', senha: '', perfil: 'RH' });
   const [erro, setErro] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -22,7 +22,7 @@ export default function Usuarios() {
     setErro(''); setMsg('');
     try {
       await api.post('/usuarios', novo);
-      setNovo({ nome: '', login: '', senha: '', perfil: 'RH' });
+      setNovo({ nome: '', login: '', email: '', senha: '', perfil: 'RH' });
       setMsg('Usuário criado com sucesso!');
       carregar();
     } catch (err) {
@@ -40,6 +40,18 @@ export default function Usuarios() {
     if (!window.confirm(`Alterar o perfil de "${u.nome}" de ${u.perfil} para ${novoPerfil}?`)) return;
     await api.put(`/usuarios/${u.id}`, { perfil: novoPerfil });
     carregar();
+  }
+
+  async function alterarEmail(u, email) {
+    const normalizado = email.trim().toLowerCase();
+    if (normalizado === (u.email || '')) return;
+    try {
+      await api.put(`/usuarios/${u.id}`, { email: normalizado });
+      carregar();
+    } catch (err) {
+      alert(err.response?.data?.erro || 'Não foi possível atualizar o e-mail.');
+      carregar();
+    }
   }
 
 
@@ -81,6 +93,10 @@ export default function Usuarios() {
             <input value={novo.login} onChange={e => setNovo({ ...novo, login: e.target.value })} required />
           </div>
           <div className="flex-col gap-2">
+            <label>E-mail (também usado para o acesso familiar)</label>
+            <input type="email" value={novo.email} onChange={e => setNovo({ ...novo, email: e.target.value })} placeholder="opcional@exemplo.com" />
+          </div>
+          <div className="flex-col gap-2">
             <label>Senha provisória (mín. 10, letras e números)</label>
             <input value={novo.senha} onChange={e => setNovo({ ...novo, senha: e.target.value })} required />
           </div>
@@ -98,13 +114,25 @@ export default function Usuarios() {
         <h3>Usuários cadastrados</h3>
         <table>
           <thead>
-            <tr><th>Nome</th><th>Login</th><th>Perfil</th><th>ADM Master</th><th>Status</th><th>1º acesso?</th><th>Ações</th></tr>
+            <tr><th>Nome</th><th>Login</th><th>E-mail</th><th>Perfil</th><th>ADM Master</th><th>Status</th><th>1º acesso?</th><th>Ações</th></tr>
           </thead>
           <tbody>
             {usuarios.map(u => (
               <tr key={u.id}>
                 <td>{u.nome}</td>
                 <td>{u.login}</td>
+                <td>
+                  <input
+                    key={`${u.id}-${u.email || ''}`}
+                    type="email"
+                    defaultValue={u.email || ''}
+                    placeholder="Não informado"
+                    aria-label={`E-mail de ${u.nome}`}
+                    onBlur={e => alterarEmail(u, e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                    style={{ minWidth: 220 }}
+                  />
+                </td>
                 <td>
                   <select value={u.perfil} onChange={e => alterarPerfil(u, e.target.value)} style={{ fontSize: 13 }}>
                     {PERFIS.map(p => <option key={p} value={p}>{p}</option>)}

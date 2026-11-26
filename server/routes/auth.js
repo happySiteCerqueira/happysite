@@ -21,7 +21,12 @@ router.post('/login', async (req, res) => {
 
   // Login reconhecido sem diferenciar maiúsculas/minúsculas (comparação exata em minúsculas, sem
   // curingas), mas a senha continua exigindo correspondência exata (bcrypt logo abaixo).
-  const usuario = await db.get('SELECT * FROM usuarios WHERE LOWER(login) = LOWER(?) AND ativo = 1 ORDER BY id LIMIT 1', login);
+  const usuario = await db.get(
+    `SELECT * FROM usuarios
+     WHERE (LOWER(login) = LOWER(?) OR LOWER(email) = LOWER(?)) AND ativo = 1
+     ORDER BY CASE WHEN LOWER(login) = LOWER(?) THEN 0 ELSE 1 END, id LIMIT 1`,
+    login, login, login
+  );
   const ok = bcrypt.compareSync(senha, usuario ? usuario.senha_hash : HASH_FALSO);
   if (!usuario || !ok) {
     registrarFalha(req.ip, login);
@@ -39,6 +44,7 @@ router.post('/login', async (req, res) => {
       id: usuario.id,
       nome: usuario.nome,
       login: usuario.login,
+      email: usuario.email,
       perfil: usuario.perfil,
       adm_master: !!usuario.adm_master && usuario.perfil === 'ADM',
       precisa_trocar_senha: !!usuario.precisa_trocar_senha
@@ -82,7 +88,7 @@ router.post('/trocar-senha', autenticar, async (req, res) => {
 
 router.get('/me', autenticar, async (req, res) => {
   const usuario = await db.get(
-    'SELECT id, nome, login, perfil, precisa_trocar_senha, adm_master FROM usuarios WHERE id = ?',
+    'SELECT id, nome, login, email, perfil, precisa_trocar_senha, adm_master FROM usuarios WHERE id = ?',
     req.usuario.id
   );
   if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado' });
