@@ -2,6 +2,7 @@
   "name": "Família Cerqueira",
   "short_name": "Família Cerqueira",
   "description": "Gestão familiar de contas, gastos, planejamento e investimentos",
+  "id": "/familia",
   "start_url": "/familia",
   "scope": "/familia",
   "display": "standalone",
@@ -10,8 +11,8 @@
   "lang": "pt-BR",
   "orientation": "any",
   "icons": [
-    { "src": "/pwa-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/pwa-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/pwa-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/familia-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/familia-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/familia-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

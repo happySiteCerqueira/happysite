@@ -81,7 +81,7 @@ if (fs.existsSync(clientBuildPath)) {
   // cache HTTP, o navegador nem chega a perguntar ao servidor se existe versão nova — foi o que
   // fazia o app instalado no celular continuar preso numa versão antiga, só voltando ao normal
   // se o usuário desinstalasse e instalasse de novo.
-  const SEM_CACHE = ['index.html', 'sw-push.js', 'sw.js', 'manifest.webmanifest', 'manifest-familia.json', 'registerSW.js'];
+  const SEM_CACHE = ['index.html', 'familia.html', 'sw-push.js', 'sw.js', 'manifest.webmanifest', 'manifest-familia.json', 'registerSW.js'];
   app.use(express.static(clientBuildPath, {
     setHeaders: (res, caminho) => {
       const arquivo = path.basename(caminho);
@@ -107,7 +107,8 @@ if (fs.existsSync(clientBuildPath)) {
     // Mesmo motivo do bloco acima: o HTML da aplicação nunca pode ficar em cache, senão o
     // navegador continua carregando a lista de arquivos JS/CSS de um build antigo.
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
+    const pagina = /^\/familia(?:\/|$)/.test(req.path) ? 'familia.html' : 'index.html';
+    res.sendFile(path.join(clientBuildPath, pagina));
   });
 }
 

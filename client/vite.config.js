@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { fileURLToPath } from 'node:url'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -19,7 +20,7 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw-push.js',
-      includeAssets: ['logo.png', 'apple-touch-icon.png'],
+      includeAssets: ['logo.png', 'apple-touch-icon.png', 'familia-180.png', 'familia-192.png', 'familia-512.png', 'manifest-familia.json'],
       manifest: {
         // "name" é o nome exibido na tela de instalação do Android ("Instalar Cerqueira Eng.?")
         // e "short_name" é o que fica embaixo do ícone na tela inicial (precisa ser curto).
@@ -43,7 +44,18 @@ export default defineConfig({
         // Chamadas de API nunca entram no precache (dados sempre vêm frescos do servidor).
         globIgnores: ['**/api/**']
       }
-    })
+    }),
+    {
+      name: 'familia-manifest',
+      enforce: 'post',
+      transformIndexHtml: {
+        order: 'post',
+        handler(html, ctx) {
+          if (!ctx.filename.endsWith('familia.html')) return html
+          return html.replace(/<link rel="manifest" href="\/manifest\.webmanifest">/g, '')
+        }
+      }
+    }
   ],
   server: {
     port: 5173,
@@ -54,6 +66,12 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        familia: fileURLToPath(new URL('./familia.html', import.meta.url))
+      }
+    },
     // Gera .map junto com os arquivos JS de produção: não muda nada para o usuário final
     // (o navegador só baixa o .map se o DevTools estiver aberto), mas permite localizar a linha
     // exata do código-fonte original quando um erro minificado aparecer no console (ex:

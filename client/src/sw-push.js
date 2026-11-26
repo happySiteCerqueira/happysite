@@ -16,9 +16,14 @@ cleanupOutdatedCaches();
 // comportamento padrão de um SPA. SEM isto, o app instalado no celular fica presa numa versão
 // antiga e só volta a atualizar se for desinstalado e instalado de novo.
 // As rotas /api e /comprovantes são excluídas para irem SEMPRE à rede (dados sempre frescos).
+const rotaFamilia = /^\/familia(?:\/|\?|$)/;
+registerRoute(new NavigationRoute(
+  createHandlerBoundToURL('familia.html'),
+  { allowlist: [rotaFamilia] }
+));
 registerRoute(new NavigationRoute(
   createHandlerBoundToURL('index.html'),
-  { denylist: [/^\/api/, /^\/comprovantes/] }
+  { denylist: [/^\/api/, /^\/comprovantes/, rotaFamilia] }
 ));
 
 // A versão nova assume o controle imediatamente, sem esperar todas as abas fecharem.

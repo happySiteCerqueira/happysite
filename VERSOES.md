@@ -50,6 +50,10 @@ git checkout v2.111
 
 ## Versões
 
+### 2.148 — Ícone próprio para Família
+
+- O módulo Família tem ícone e identificação próprios para seu atalho, sem alterar os da Cerqueira.
+
 ### 2.147 — Atalho do módulo Família
 
 - O aplicativo acessado por `/familia` sugere o nome Família Cerqueira ao criar um atalho.
