@@ -1,19 +1,11 @@
 const { autenticar } = require('./auth');
 
-function emailsPermitidos() {
-  return new Set(
-    String(process.env.FAMILIA_ALLOWED_EMAILS || '')
-      .split(',')
-      .map(email => email.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
+const EMAILS_PERMITIDOS = new Set(['nessalohn@gmail.com', 'jorlansantos.fmu@gmail.com']);
 
 function requireFamiliaAuth(req, res, next) {
   autenticar(req, res, () => {
-    const login = String(req.usuario?.email || req.usuario?.login || '').trim().toLowerCase();
-    const autorizados = emailsPermitidos();
-    if (!login || !autorizados.has(login)) {
+    const email = String(req.usuario?.email || '').trim().toLowerCase();
+    if (!EMAILS_PERMITIDOS.has(email)) {
       return res.status(403).json({ erro: 'Acesso restrito' });
     }
     next();
