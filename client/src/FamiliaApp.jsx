@@ -8,6 +8,7 @@ import Lancamentos, { FormLancamento } from './familia/Lancamentos';
 import Previsao from './familia/Previsao';
 import Investimentos from './familia/Investimentos';
 import Importar from './familia/Importar';
+import { configurarIdentidadeFamilia } from './familia/identidade';
 import './familia/familia.css';
 
 const ABAS = [
@@ -18,20 +19,6 @@ const ABAS = [
   { id: 'investimentos', nome: 'Investir', titulo: 'Investimentos', icone: '↗' },
   { id: 'importar', nome: 'Importar', titulo: 'Importar', icone: '⇧' }
 ];
-
-function ajustarManifest() {
-  document.title = 'Controle Financeiro Familiar';
-  document.querySelectorAll('meta[name="theme-color"]').forEach(el => { el.content = '#102b2a'; });
-  const tituloApple = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-  if (tituloApple) tituloApple.content = 'Financeiro';
-  let manifest = document.querySelector('link[rel="manifest"]');
-  if (!manifest) {
-    manifest = document.createElement('link');
-    manifest.rel = 'manifest';
-    document.head.appendChild(manifest);
-  }
-  manifest.href = '/manifest-familia.json';
-}
 
 export default function FamiliaApp() {
   const { usuario, carregando: carregandoAuth, logout } = useAuth();
@@ -46,7 +33,7 @@ export default function FamiliaApp() {
   const [colapsado, setColapsado] = useState(false);
   const [novoLancamento, setNovoLancamento] = useState(false);
 
-  useEffect(ajustarManifest, []);
+  useEffect(configurarIdentidadeFamilia, []);
   const carregarBootstrap = useCallback(async () => {
     setCarregando(true); setErro('');
     try {

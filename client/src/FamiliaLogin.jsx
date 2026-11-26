@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { configurarIdentidadeFamilia } from './familia/identidade';
 import './familia/familia.css';
 
 export default function FamiliaLogin() {
@@ -10,18 +11,7 @@ export default function FamiliaLogin() {
   const [enviando, setEnviando] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    document.title = 'Controle Financeiro Familiar';
-    const temas = document.querySelectorAll('meta[name="theme-color"]');
-    temas.forEach(el => { el.content = '#102b2a'; });
-    let manifest = document.querySelector('link[rel="manifest"]');
-    if (!manifest) {
-      manifest = document.createElement('link');
-      manifest.rel = 'manifest';
-      document.head.appendChild(manifest);
-    }
-    manifest.href = '/manifest-familia.json';
-  }, []);
+  useEffect(configurarIdentidadeFamilia, []);
 
   async function entrar(evento) {
     evento.preventDefault();

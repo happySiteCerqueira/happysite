@@ -50,6 +50,10 @@ git checkout v2.111
 
 ## Versões
 
+### 2.147 — Atalho do módulo Família
+
+- O aplicativo acessado por `/familia` sugere o nome Família Cerqueira ao criar um atalho.
+
 ### 2.146 — Produção no Painel
 
 - O total de produção do mês deixa de aparecer no cabeçalho e nos indicadores, permanecendo na Visão Geral.
